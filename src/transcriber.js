@@ -8,27 +8,40 @@ function getClient() {
   return openai;
 }
 
-// Descarga el audio de Twilio (requiere auth) y lo transcribe con Whisper
-async function transcribe(mediaUrl) {
+// Meta Cloud API: recibe un media_id, resuelve la URL de descarga y transcribe con Whisper
+async function transcribe(mediaId) {
   try {
-    // Twilio media URLs requieren Basic Auth con SID:Token
-    const credentials = Buffer.from(
-      `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
-    ).toString('base64');
+    const token = process.env.META_ACCESS_TOKEN;
+    if (!token) throw new Error('META_ACCESS_TOKEN no configurado');
 
-    const response = await fetch(mediaUrl, {
-      headers: { Authorization: `Basic ${credentials}` },
+    // Paso 1: obtener la URL de descarga del audio
+    const metaRes = await fetch(
+      `https://graph.facebook.com/v19.0/${mediaId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!metaRes.ok) {
+      const errText = await metaRes.text();
+      throw new Error(`Meta media info error ${metaRes.status}: ${errText}`);
+    }
+    const metaData = await metaRes.json();
+    const downloadUrl = metaData.url;
+    if (!downloadUrl) throw new Error('Meta no devolvió URL de descarga');
+
+    // Paso 2: descargar el archivo de audio con el Bearer token
+    const audioRes = await fetch(downloadUrl, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (!response.ok) {
-      throw new Error(`Twilio media download failed: ${response.status}`);
+    if (!audioRes.ok) {
+      throw new Error(`Audio download failed: ${audioRes.status}`);
     }
 
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await audioRes.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Paso 3: transcribir con Whisper
+    // Meta suele mandar audio/ogg o audio/mpeg; Whisper acepta ambos
     const transcription = await getClient().audio.transcriptions.create({
-      file: await toFile(buffer, 'audio.ogg'),
+      file: await toFile(buffer, 'audio.ogg', { type: 'audio/ogg' }),
       model: 'whisper-1',
       language: 'es', // Forzar español para evitar que detecte portugués
     });

@@ -35,45 +35,76 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Webhook principal de Twilio
+// ── Webhook de verificación de Meta (GET) ────────────────────────────────
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
+    console.log('Webhook de Meta verificado OK');
+    return res.status(200).send(challenge);
+  }
+  res.sendStatus(403);
+});
+
+// ── Webhook principal de Meta (POST) ─────────────────────────────────────
 app.post('/webhook', async (req, res) => {
-  // Responder inmediatamente para evitar timeout de 15s de Twilio
-  res.type('text/xml').send('<Response/>');
+  // Meta requiere 200 inmediato
+  res.sendStatus(200);
 
   try {
-    const { From, Body, NumMedia, MediaUrl0, MediaContentType0 } = req.body;
-    let text = Body || '';
+    const entry = req.body?.entry?.[0];
+    const change = entry?.changes?.[0]?.value;
 
-    // Si mandaron audio, transcribir con Whisper
-    if (parseInt(NumMedia) > 0 && MediaContentType0?.startsWith('audio/')) {
-      console.log(`Audio recibido de ${From}, transcribiendo...`);
-      text = await transcribe(MediaUrl0);
-      console.log(`Transcripción: "${text}"`);
+    // Ignorar notificaciones de estado (delivered, read, etc.)
+    if (!change?.messages?.length) return;
+
+    const msg = change.messages[0];
+    const From = msg.from; // número sin "whatsapp:", ej: "5493877599185"
+    const fromKey = `whatsapp:+${From}`; // formato interno consistente
+
+    let text = '';
+
+    // Texto normal
+    if (msg.type === 'text') {
+      text = msg.text?.body || '';
     }
 
-    // Ignorar mensajes vacíos (stickers, imágenes sin texto, etc.)
+    // Audio → transcribir con Whisper
+    if (msg.type === 'audio') {
+      const mediaId = msg.audio?.id;
+      if (mediaId) {
+        console.log(`Audio recibido de ${From}, transcribiendo...`);
+        text = await transcribe(mediaId);
+        console.log(`Transcripción: "${text}"`);
+      }
+    }
+
+    // Ignorar stickers, imágenes sin texto, etc.
     if (!text.trim()) {
-      await sendMessage(From, 'Por ahora solo puedo leer texto y audios. ¿Me lo podés escribir?');
+      await sendMessage(fromKey, 'Por ahora solo puedo leer texto y audios. ¿Me lo podés escribir?');
       return;
     }
 
-    console.log(`Mensaje de ${From}: "${text.substring(0, 100)}..."`);
+    console.log(`Mensaje de ${fromKey}: "${text.substring(0, 100)}"`);
 
     // ── Comandos de admin desde el WhatsApp de David ──────────────────────
-    if (From === process.env.DAVID_PHONE) {
+    const davidPhone = (process.env.DAVID_PHONE || '').replace('whatsapp:', '').replace('+', '');
+    if (From === davidPhone) {
       const cmd = text.trim().toUpperCase();
       const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
       if (cmd === 'PENDIENTES') {
         const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
         if (pendientes.length === 0) {
-          await sendMessage(From, '✅ No hay demos pendientes de revisión.');
+          await sendMessage(fromKey, '✅ No hay demos pendientes de revisión.');
         } else {
           const lista = pendientes.map(c => {
             const nombre = c.report?.cliente?.nombre || c.phone;
             return `• *${nombre}*\n  ${appUrl}/admin/review/${encodeURIComponent(c.phone)}`;
           }).join('\n\n');
-          await sendMessage(From, `📋 *Demos pendientes (${pendientes.length}):*\n\n${lista}`);
+          await sendMessage(fromKey, `📋 *Demos pendientes (${pendientes.length}):*\n\n${lista}`);
         }
         return;
       }
@@ -87,7 +118,7 @@ app.post('/webhook', async (req, res) => {
         } else {
           const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
           if (pendientes.length === 0) {
-            await sendMessage(From, '⚠️ No hay demos pendientes para aprobar.');
+            await sendMessage(fromKey, '⚠️ No hay demos pendientes para aprobar.');
             return;
           }
           targetPhone = pendientes[0].phone;
@@ -97,7 +128,7 @@ app.post('/webhook', async (req, res) => {
         db.updateDemoStatus(targetPhone, 'approved');
         db.appendTimelineEvent(targetPhone, { event: 'demo_approved', note: 'Aprobado desde WhatsApp' });
         orchestrator.sendApprovedDemoToClient(targetPhone).catch(console.error);
-        await sendMessage(From, `✅ *Aprobado.* Mandando demo a ${nombre}...`);
+        await sendMessage(fromKey, `✅ *Aprobado.* Mandando demo a ${nombre}...`);
         return;
       }
 
@@ -110,19 +141,19 @@ app.post('/webhook', async (req, res) => {
         } else {
           const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
           if (pendientes.length === 0) {
-            await sendMessage(From, '⚠️ No hay demos pendientes.');
+            await sendMessage(fromKey, '⚠️ No hay demos pendientes.');
             return;
           }
           targetPhone = pendientes[0].phone;
         }
         db.updateDemoStatus(targetPhone, 'rejected');
         db.appendTimelineEvent(targetPhone, { event: 'demo_rejected', note: 'Rechazado desde WhatsApp' });
-        await sendMessage(From, `❌ Demo rechazado.`);
+        await sendMessage(fromKey, `❌ Demo rechazado.`);
         return;
       }
 
       if (cmd === 'AYUDA' || cmd === 'HELP') {
-        await sendMessage(From,
+        await sendMessage(fromKey,
           `*Comandos disponibles:*\n\n` +
           `• *PENDIENTES* — ver demos que esperan tu aprobación\n` +
           `• *APROBAR* — aprobar el demo más reciente y mandárselo al cliente\n` +
@@ -136,62 +167,50 @@ app.post('/webhook', async (req, res) => {
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    const result = await handleMessage(From, text);
+    const result = await handleMessage(fromKey, text);
 
     // Si se acaba de confirmar el proyecto, generar y enviar reporte
     if (result.stage === 'done' && result.previousStage === 'confirming') {
       try {
-        const conv = db.getConversation(From);
-        const report = await generateReport(conv.history, From);
+        const conv = db.getConversation(fromKey);
+        const report = await generateReport(conv.history, fromKey);
 
-        // Guardar reporte en la DB
-        db.upsertConversation(From, { report });
+        db.upsertConversation(fromKey, { report });
 
-        // Mandar reporte a David por WhatsApp (aviso rápido)
         const waReport = formatReportWhatsApp(report);
         await sendMessage(process.env.DAVID_PHONE, waReport);
 
-        // Mandar reporte a David por email
         const htmlReport = formatReportEmail(report);
         await sendEmailReport(report, htmlReport);
 
-        console.log(`Reporte enviado para ${From}`);
+        console.log(`Reporte enviado para ${fromKey}`);
 
-        // Notificar al cliente que viene una propuesta visual
-        await sendMessage(From,
+        await sendMessage(fromKey,
           '🎨 ¡Perfecto! Ya le pasé todo a David. En los próximos minutos te mando una propuesta visual personalizada con lo que charlamos. ¡Fijate el WhatsApp!');
 
-        // Disparar en background la generación de demos + notificación de review
-        orchestrator.processNewReport(From, report).catch(err =>
+        orchestrator.processNewReport(fromKey, report).catch(err =>
           console.error('Error en orchestrator.processNewReport:', err));
       } catch (err) {
         console.error('Error generando/enviando reporte:', err);
         await sendMessage(process.env.DAVID_PHONE,
-          `⚠️ Error generando reporte para ${From}: ${err.message}`);
+          `⚠️ Error generando reporte para ${fromKey}: ${err.message}`);
       }
     }
 
-    // Si hay una modificación post-reporte, notificar a David con contexto completo
+    // Si hay una modificación post-reporte, notificar a David
     if (result.stage === 'done' && result.previousStage === 'done' && text) {
-      const conv = db.getConversation(From);
-      const nombre = conv?.report?.cliente?.nombre || From;
+      const conv = db.getConversation(fromKey);
+      const nombre = conv?.report?.cliente?.nombre || fromKey;
       const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
       await sendMessage(process.env.DAVID_PHONE,
-        `📝 *Cambio pedido por ${nombre}*\n📱 ${From}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(From)}`);
-      db.appendTimelineEvent(From, { event: 'client_requested_change', note: text.slice(0, 200) });
+        `📝 *Cambio pedido por ${nombre}*\n📱 ${fromKey}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(fromKey)}`);
+      db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: text.slice(0, 200) });
     }
 
-    // Enviar respuesta al cliente
-    await sendMessage(From, result.reply);
+    await sendMessage(fromKey, result.reply);
 
   } catch (err) {
     console.error('Error en webhook:', err);
-    try {
-      await sendMessage(req.body.From,
-        'Perdón, tuve un problema técnico. ¿Podés repetir lo que me dijiste?');
-    } catch (sendErr) {
-      console.error('Error enviando mensaje de error:', sendErr);
-    }
   }
 });
 
