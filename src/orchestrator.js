@@ -69,6 +69,8 @@ async function processNewReport(phone, report) {
     }
 
     // 4. Subir a Drive si está configurado
+    // Nota: las cuentas de servicio no tienen cuota de almacenamiento propia.
+    // Si falla el upload, los demos siguen sirviendo desde /demos/{slug}/ en Railway.
     if (folderInfo) {
       try {
         console.log(`[orchestrator] Subiendo archivos a Drive folder: ${folderInfo.id}`);
@@ -89,11 +91,9 @@ async function processNewReport(phone, report) {
         }
         console.log(`[orchestrator] Todos los archivos subidos a Drive`);
       } catch (err) {
-        console.error('[orchestrator] Error subiendo a Drive:', err.message, err.stack);
-        try {
-          await sendMessage(process.env.DAVID_PHONE,
-            `⚠️ *Error subiendo archivos a Drive*\nCarpeta: ${folderInfo.id}\nError: ${err.message}`);
-        } catch(e) {}
+        // Las cuentas de servicio no tienen cuota de almacenamiento — esto es esperable.
+        // Los demos se sirven igual desde Railway en /demos/{slug}/.
+        console.warn(`[orchestrator] Drive upload no disponible (sin cuota en service account): ${err.message}`);
       }
     }
 
