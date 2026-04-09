@@ -31,16 +31,27 @@ async function init() {
       context TEXT DEFAULT '{}',
       report TEXT,
       followup_sent INTEGER DEFAULT 0,
+      drive_folder_id TEXT,
+      demo_status TEXT DEFAULT 'none',
+      client_stage TEXT DEFAULT 'lead',
+      timeline TEXT DEFAULT '[]',
+      notes TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
-  // Migración: agregar columna si la DB ya existía sin ella
-  try {
-    db.run('ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0');
-  } catch (e) {
-    // Columna ya existe, ignorar
+  // Migraciones idempotentes: agregar columnas si la DB ya existía sin ellas
+  const migrations = [
+    'ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0',
+    'ALTER TABLE conversations ADD COLUMN drive_folder_id TEXT',
+    "ALTER TABLE conversations ADD COLUMN demo_status TEXT DEFAULT 'none'",
+    "ALTER TABLE conversations ADD COLUMN client_stage TEXT DEFAULT 'lead'",
+    "ALTER TABLE conversations ADD COLUMN timeline TEXT DEFAULT '[]'",
+    "ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''",
+  ];
+  for (const sql of migrations) {
+    try { db.run(sql); } catch (e) { /* columna ya existe */ }
   }
 
   save();
@@ -69,6 +80,7 @@ function getConversation(phone) {
     history: JSON.parse(row.history),
     context: JSON.parse(row.context),
     report: row.report ? JSON.parse(row.report) : null,
+    timeline: row.timeline ? JSON.parse(row.timeline) : [],
   };
 }
 
@@ -168,7 +180,79 @@ function markAbandoned(phone) {
   save();
 }
 
+// ---------- CRM / Demos ----------
+
+function updateDemoStatus(phone, status) {
+  db.run('UPDATE conversations SET demo_status = ?, updated_at = datetime(\'now\') WHERE phone = ?',
+    [status, phone]);
+  save();
+}
+
+function updateClientStage(phone, clientStage) {
+  db.run('UPDATE conversations SET client_stage = ?, updated_at = datetime(\'now\') WHERE phone = ?',
+    [clientStage, phone]);
+  save();
+}
+
+function setDriveFolderId(phone, folderId) {
+  db.run('UPDATE conversations SET drive_folder_id = ?, updated_at = datetime(\'now\') WHERE phone = ?',
+    [folderId, phone]);
+  save();
+}
+
+function setNotes(phone, notes) {
+  db.run('UPDATE conversations SET notes = ?, updated_at = datetime(\'now\') WHERE phone = ?',
+    [notes, phone]);
+  save();
+}
+
+function appendTimelineEvent(phone, event) {
+  const current = getConversation(phone);
+  const timeline = current?.timeline || [];
+  timeline.push({ date: new Date().toISOString(), ...event });
+  db.run('UPDATE conversations SET timeline = ?, updated_at = datetime(\'now\') WHERE phone = ?',
+    [JSON.stringify(timeline), phone]);
+  save();
+}
+
+function listAllClients() {
+  const results = [];
+  const stmt = db.prepare('SELECT * FROM conversations ORDER BY updated_at DESC');
+  while (stmt.step()) {
+    const row = stmt.getAsObject();
+    results.push({
+      ...row,
+      history: JSON.parse(row.history),
+      context: JSON.parse(row.context),
+      report: row.report ? JSON.parse(row.report) : null,
+      timeline: row.timeline ? JSON.parse(row.timeline) : [],
+    });
+  }
+  stmt.free();
+  return results;
+}
+
+function getClientsByStage(clientStage) {
+  const results = [];
+  const stmt = db.prepare('SELECT * FROM conversations WHERE client_stage = ? ORDER BY updated_at DESC');
+  stmt.bind([clientStage]);
+  while (stmt.step()) {
+    const row = stmt.getAsObject();
+    results.push({
+      ...row,
+      history: JSON.parse(row.history),
+      context: JSON.parse(row.context),
+      report: row.report ? JSON.parse(row.report) : null,
+      timeline: row.timeline ? JSON.parse(row.timeline) : [],
+    });
+  }
+  stmt.free();
+  return results;
+}
+
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
+  updateDemoStatus, updateClientStage, setDriveFolderId, setNotes,
+  appendTimelineEvent, listAllClients, getClientsByStage,
 };

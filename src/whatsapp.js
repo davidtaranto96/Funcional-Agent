@@ -46,4 +46,14 @@ async function sendMessage(to, body) {
   }
 }
 
-module.exports = { sendMessage };
+// Mandar mensaje con media (imagen, PDF, etc.) — mediaUrl debe ser público
+async function sendMediaMessage(to, body, mediaUrl) {
+  await client.messages.create({
+    from: process.env.TWILIO_WHATSAPP_NUMBER,
+    to,
+    body: body || '',
+    mediaUrl: Array.isArray(mediaUrl) ? mediaUrl : [mediaUrl],
+  });
+}
+
+module.exports = { sendMessage, sendMediaMessage };

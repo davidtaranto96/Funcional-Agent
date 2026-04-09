@@ -24,4 +24,22 @@ async function sendReport(report, html) {
   }
 }
 
-module.exports = { sendReport };
+// Envío genérico: permite pasar destinatario, asunto, html y adjuntos opcionales
+async function sendEmail({ to, subject, html, attachments }) {
+  const payload = {
+    from: process.env.RESEND_FROM || 'WPanalista <onboarding@resend.dev>',
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    html,
+  };
+  if (attachments && attachments.length) {
+    payload.attachments = attachments;
+  }
+  const { error } = await getClient().emails.send(payload);
+  if (error) {
+    console.error('Error enviando email:', error);
+    throw new Error(`Email failed: ${error.message}`);
+  }
+}
+
+module.exports = { sendReport, sendEmail };

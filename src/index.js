@@ -1,16 +1,34 @@
 require('dotenv').config();
 
+const path = require('path');
 const express = require('express');
+const session = require('express-session');
 const { handleMessage } = require('./agent');
 const { transcribe } = require('./transcriber');
 const { sendMessage } = require('./whatsapp');
 const { sendReport: sendEmailReport } = require('./mailer');
 const { generateReport, formatReportWhatsApp, formatReportEmail } = require('./reports');
 const db = require('./db');
+const orchestrator = require('./orchestrator');
+const adminRouter = require('./admin');
 
 const app = express();
 app.use(express.urlencoded({ extended: false })); // Twilio manda form-encoded
 app.use(express.json()); // Para el endpoint /context
+
+// Sesiones para el panel admin
+app.use(session({
+  secret: process.env.ADMIN_SESSION_SECRET || 'change-me-in-env',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+}));
+
+// Servir los demos estáticos (landing HTML, mockups PNG, PDFs)
+app.use('/demos', express.static(path.join(__dirname, '..', 'data', 'demos')));
+
+// Montar panel admin
+app.use('/admin', adminRouter);
 
 // Health check para Railway
 app.get('/health', (req, res) => {
@@ -52,7 +70,7 @@ app.post('/webhook', async (req, res) => {
         // Guardar reporte en la DB
         db.upsertConversation(From, { report });
 
-        // Mandar reporte a David por WhatsApp
+        // Mandar reporte a David por WhatsApp (aviso rápido)
         const waReport = formatReportWhatsApp(report);
         await sendMessage(process.env.DAVID_PHONE, waReport);
 
@@ -61,6 +79,10 @@ app.post('/webhook', async (req, res) => {
         await sendEmailReport(report, htmlReport);
 
         console.log(`Reporte enviado para ${From}`);
+
+        // Disparar en background la generación de demos + notificación de review
+        orchestrator.processNewReport(From, report).catch(err =>
+          console.error('Error en orchestrator.processNewReport:', err));
       } catch (err) {
         console.error('Error generando/enviando reporte:', err);
         await sendMessage(process.env.DAVID_PHONE,
