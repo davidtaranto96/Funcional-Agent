@@ -43,6 +43,10 @@ async function processNewReport(phone, report) {
         console.log(`[orchestrator] Carpeta Drive creada: ${folderInfo.webViewLink}`);
       } catch (err) {
         console.error('[orchestrator] No pude crear carpeta Drive:', err.message);
+        try {
+          await sendMessage(process.env.DAVID_PHONE,
+            `⚠️ *No se pudo crear carpeta en Drive*\nCliente: ${report.cliente?.nombre || phone}\nError: ${err.message}`);
+        } catch(e) {}
       }
     } else {
       console.log('[orchestrator] Drive no configurado, se saltea');

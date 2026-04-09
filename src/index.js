@@ -370,6 +370,18 @@ async function checkStaleConversations() {
 // Inicializar DB y arrancar servidor
 const PORT = process.env.PORT || 3000;
 
+// Test de Drive — GET /drive-test
+app.get('/drive-test', async (req, res) => {
+  const drive = require('./drive');
+  if (!drive.isConfigured()) return res.json({ ok: false, error: 'Drive no configurado' });
+  try {
+    const folder = await drive.createClientFolder('test-health-check', 'test000');
+    res.json({ ok: true, folder });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
 db.init().then(() => {
   app.listen(PORT, () => {
     console.log(`WPanalista corriendo en puerto ${PORT}`);
