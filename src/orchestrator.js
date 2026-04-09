@@ -71,19 +71,29 @@ async function processNewReport(phone, report) {
     // 4. Subir a Drive si está configurado
     if (folderInfo) {
       try {
+        console.log(`[orchestrator] Subiendo archivos a Drive folder: ${folderInfo.id}`);
         await drive.uploadJSON(folderInfo.id, 'reporte.json', report);
+        console.log(`[orchestrator] reporte.json subido`);
         if (landingHTML) {
           await drive.uploadFile(folderInfo.id, 'landing.html',
             Buffer.from(landingHTML, 'utf-8'), 'text/html');
+          console.log(`[orchestrator] landing.html subido`);
         }
         if (whatsappPng) {
           await drive.uploadFile(folderInfo.id, 'whatsapp-mockup.html', whatsappPng, 'text/html');
+          console.log(`[orchestrator] whatsapp-mockup.html subido`);
         }
         if (pdfBuffer) {
           await drive.uploadFile(folderInfo.id, 'propuesta.pdf', pdfBuffer, 'application/pdf');
+          console.log(`[orchestrator] propuesta.pdf subido`);
         }
+        console.log(`[orchestrator] Todos los archivos subidos a Drive`);
       } catch (err) {
-        console.error('[orchestrator] Error subiendo a Drive:', err.message);
+        console.error('[orchestrator] Error subiendo a Drive:', err.message, err.stack);
+        try {
+          await sendMessage(process.env.DAVID_PHONE,
+            `⚠️ *Error subiendo archivos a Drive*\nCarpeta: ${folderInfo.id}\nError: ${err.message}`);
+        } catch(e) {}
       }
     }
 
