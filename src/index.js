@@ -241,11 +241,15 @@ app.post('/webhook', async (req, res) => {
           console.log(`[index] Email de reporte enviado`);
         } catch (e) { console.error('[index] Error email reporte:', e.message); }
 
-        // Confirmar al cliente
-        await sendMessage(fromKey,
-          '🎨 ¡Perfecto! Ya le pasé todo a David. En los próximos minutos te mando una propuesta visual personalizada con lo que charlamos. ¡Fijate el WhatsApp!');
+        // Confirmar al cliente (puede fallar en sandbox con números no registrados — no es crítico)
+        try {
+          await sendMessage(fromKey,
+            '🎨 ¡Perfecto! Ya le pasé todo a David. En los próximos minutos te mando una propuesta visual personalizada con lo que charlamos. ¡Fijate el WhatsApp!');
+        } catch (e) {
+          console.error('[index] No pude confirmar al cliente (sandbox?):', e.message);
+        }
 
-        // Arrancar generación de demos en background
+        // Arrancar generación de demos en background (siempre, independiente de errores anteriores)
         console.log(`[index] Lanzando orchestrator para ${fromKey}...`);
         orchestrator.processNewReport(fromKey, report).catch(err => {
           console.error('Error en orchestrator.processNewReport:', err);
@@ -272,7 +276,11 @@ app.post('/webhook', async (req, res) => {
       db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: text.slice(0, 200) });
     }
 
-    await sendMessage(fromKey, result.reply);
+    try {
+      await sendMessage(fromKey, result.reply);
+    } catch (e) {
+      console.error('[index] Error enviando respuesta al cliente:', e.message);
+    }
 
   } catch (err) {
     console.error('Error en webhook:', err);
