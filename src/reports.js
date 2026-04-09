@@ -13,7 +13,7 @@ async function generateReport(history, phone) {
     max_tokens: 2048,
     system: `Sos un extractor de información. Analizá la conversación y devolvé ÚNICAMENTE un JSON válido (sin markdown, sin backticks) con esta estructura:
 {
-  "cliente": { "nombre": "", "telefono": "" },
+  "cliente": { "nombre": "", "telefono": "", "email": "", "contacto_extra": "" },
   "proyecto": {
     "tipo": "",
     "descripcion": "",
@@ -30,7 +30,9 @@ async function generateReport(history, phone) {
   },
   "resumen_ejecutivo": ""
 }
-Completá lo que puedas extraer de la conversación. Dejá vacío lo que no se mencionó. El resumen_ejecutivo es un párrafo breve para David (el desarrollador).`,
+Completá lo que puedas extraer de la conversación. Dejá vacío lo que no se mencionó.
+IMPORTANTE: Extraé el nombre del cliente si lo mencionó en la conversación. Si mencionó un email o forma de contacto, poné en "email" o "contacto_extra".
+El resumen_ejecutivo es un párrafo breve para David (el desarrollador).`,
     messages: [{ role: 'user', content: conversationText }],
   });
 
@@ -51,9 +53,14 @@ function formatReportWhatsApp(report) {
     ? proyecto.funcionalidades.map(f => `  • ${f}`).join('\n')
     : '  No especificadas';
 
+  const contacto = [
+    cliente.email ? `✉️ ${cliente.email}` : null,
+    cliente.contacto_extra ? `📌 ${cliente.contacto_extra}` : null,
+  ].filter(Boolean).join('\n');
+
   return `📋 *Nuevo requisito — ${cliente.nombre || 'Sin nombre'}*
 📱 ${cliente.telefono}
-
+${contacto ? contacto + '\n' : ''}
 *Qué necesitan:* ${proyecto.descripcion || 'No especificado'}
 
 *Tipo:* ${proyecto.tipo || 'No especificado'}
@@ -89,6 +96,8 @@ function formatReportEmail(report) {
     Nuevo requisito — ${cliente.nombre || 'Sin nombre'}
   </h2>
   <p><strong>Teléfono:</strong> ${cliente.telefono}</p>
+  ${cliente.email ? `<p><strong>Email:</strong> ${cliente.email}</p>` : ''}
+  ${cliente.contacto_extra ? `<p><strong>Contacto extra:</strong> ${cliente.contacto_extra}</p>` : ''}
 
   <h3>Proyecto</h3>
   <table style="width: 100%; border-collapse: collapse;">

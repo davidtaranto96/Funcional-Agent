@@ -12,17 +12,9 @@ const app = express();
 app.use(express.urlencoded({ extended: false })); // Twilio manda form-encoded
 app.use(express.json()); // Para el endpoint /context
 
-// Último error para debug (borrar en producción)
-let lastError = null;
-
 // Health check para Railway
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Debug endpoint temporal
-app.get('/debug', (req, res) => {
-  res.json({ lastError: lastError ? { message: lastError.message, stack: lastError.stack } : null });
 });
 
 // Webhook principal de Twilio
@@ -86,7 +78,6 @@ app.post('/webhook', async (req, res) => {
     await sendMessage(From, result.reply);
 
   } catch (err) {
-    lastError = err;
     console.error('Error en webhook:', err);
     try {
       await sendMessage(req.body.From,
@@ -110,6 +101,45 @@ app.post('/context', (req, res) => {
   db.setContext(normalizedPhone, context);
 
   res.json({ ok: true, phone: normalizedPhone });
+});
+
+// Resetear conversación de un cliente
+app.post('/reset', (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Se requiere phone' });
+
+  const normalizedPhone = phone.startsWith('whatsapp:') ? phone : `whatsapp:${phone}`;
+  db.upsertConversation(normalizedPhone, {
+    history: [],
+    stage: 'greeting',
+    context: {},
+    report: null,
+  });
+
+  res.json({ ok: true, phone: normalizedPhone, message: 'Conversación reiniciada' });
+});
+
+// Mensaje proactivo: David dispara el primer contacto al cliente
+app.post('/start', async (req, res) => {
+  const { phone, context } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Se requiere phone' });
+
+  const normalizedPhone = phone.startsWith('whatsapp:') ? phone : `whatsapp:${phone}`;
+
+  // Guardar contexto si viene
+  if (context) {
+    db.setContext(normalizedPhone, context);
+  }
+
+  try {
+    // Generar saludo inicial del agente
+    const result = await handleMessage(normalizedPhone, '[El cliente fue contactado proactivamente por David]');
+    await sendMessage(normalizedPhone, result.reply);
+    res.json({ ok: true, phone: normalizedPhone, message: result.reply });
+  } catch (err) {
+    console.error('Error en /start:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Inicializar DB y arrancar servidor
