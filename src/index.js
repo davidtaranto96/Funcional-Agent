@@ -142,6 +142,32 @@ app.post('/start', async (req, res) => {
   }
 });
 
+// Follow-up automático para conversaciones sin respuesta
+async function checkStaleConversations() {
+  try {
+    // 24hs sin respuesta → mensaje de seguimiento al cliente
+    const stale = db.getStaleConversations(24);
+    for (const conv of stale) {
+      console.log(`Follow-up automático para ${conv.phone}`);
+      await sendMessage(conv.phone,
+        'Hola! Te escribo de nuevo de parte de David. ¿Pudiste pensar un poco más sobre el proyecto? Si tenés alguna duda o querés retomar la charla, acá estoy 😊');
+      db.markFollowupSent(conv.phone);
+    }
+
+    // 48hs después del follow-up (72hs total) → notificar a David
+    const abandoned = db.getAbandonedConversations(48);
+    for (const conv of abandoned) {
+      const nombre = conv.context?.nombre || conv.phone;
+      console.log(`Cliente frío: ${conv.phone}`);
+      await sendMessage(process.env.DAVID_PHONE,
+        `❄️ *Cliente sin respuesta — ${nombre}*\n📱 ${conv.phone}\nNo respondió después de 72hs. Quizás quieras contactarlo directamente.`);
+      db.markAbandoned(conv.phone);
+    }
+  } catch (err) {
+    console.error('Error en follow-up check:', err);
+  }
+}
+
 // Inicializar DB y arrancar servidor
 const PORT = process.env.PORT || 3000;
 
@@ -151,6 +177,10 @@ db.init().then(() => {
     console.log(`Webhook: POST /webhook`);
     console.log(`Contexto: POST /context`);
   });
+
+  // Chequear conversaciones sin respuesta cada hora
+  setInterval(checkStaleConversations, 60 * 60 * 1000);
+  console.log('Follow-up checker activo (cada 1 hora)');
 }).catch(err => {
   console.error('Error inicializando la base de datos:', err);
   process.exit(1);

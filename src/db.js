@@ -30,10 +30,18 @@ async function init() {
       stage TEXT DEFAULT 'greeting',
       context TEXT DEFAULT '{}',
       report TEXT,
+      followup_sent INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
   `);
+
+  // Migración: agregar columna si la DB ya existía sin ella
+  try {
+    db.run('ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0');
+  } catch (e) {
+    // Columna ya existe, ignorar
+  }
 
   save();
 }
@@ -100,4 +108,67 @@ function setContext(phone, context) {
   save();
 }
 
-module.exports = { init, getConversation, upsertConversation, setContext };
+// Conversaciones sin respuesta del cliente hace más de X horas
+// Solo en fases activas (gathering/confirming) y sin follow-up enviado
+function getStaleConversations(hoursAgo) {
+  const results = [];
+  const stmt = db.prepare(`
+    SELECT * FROM conversations
+    WHERE stage IN ('gathering', 'confirming')
+    AND followup_sent = 0
+    AND updated_at <= datetime('now', ?)
+  `);
+  stmt.bind([`-${hoursAgo} hours`]);
+
+  while (stmt.step()) {
+    const row = stmt.getAsObject();
+    results.push({
+      ...row,
+      history: JSON.parse(row.history),
+      context: JSON.parse(row.context),
+      report: row.report ? JSON.parse(row.report) : null,
+    });
+  }
+  stmt.free();
+  return results;
+}
+
+// Conversaciones con follow-up enviado hace más de X horas (para notificar a David)
+function getAbandonedConversations(hoursAfterFollowup) {
+  const results = [];
+  const stmt = db.prepare(`
+    SELECT * FROM conversations
+    WHERE stage IN ('gathering', 'confirming')
+    AND followup_sent = 1
+    AND updated_at <= datetime('now', ?)
+  `);
+  stmt.bind([`-${hoursAfterFollowup} hours`]);
+
+  while (stmt.step()) {
+    const row = stmt.getAsObject();
+    results.push({
+      ...row,
+      history: JSON.parse(row.history),
+      context: JSON.parse(row.context),
+    });
+  }
+  stmt.free();
+  return results;
+}
+
+function markFollowupSent(phone) {
+  db.run('UPDATE conversations SET followup_sent = ?, updated_at = datetime(\'now\') WHERE phone = ?',
+    [1, phone]);
+  save();
+}
+
+function markAbandoned(phone) {
+  db.run('UPDATE conversations SET followup_sent = ?, updated_at = datetime(\'now\') WHERE phone = ?',
+    [2, phone]);
+  save();
+}
+
+module.exports = {
+  init, getConversation, upsertConversation, setContext,
+  getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
+};
