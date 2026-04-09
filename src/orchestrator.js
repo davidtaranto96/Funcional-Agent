@@ -57,7 +57,8 @@ async function processNewReport(phone, report) {
       fs.writeFileSync(path.join(localDir, 'landing.html'), landingHTML, 'utf-8');
     }
     if (whatsappPng) {
-      fs.writeFileSync(path.join(localDir, 'whatsapp.png'), whatsappPng);
+      // whatsappPng es un Buffer HTML (sin puppeteer), se guarda como .html
+      fs.writeFileSync(path.join(localDir, 'whatsapp.html'), whatsappPng);
     }
     if (pdfBuffer) {
       fs.writeFileSync(path.join(localDir, 'propuesta.pdf'), pdfBuffer);
@@ -72,7 +73,7 @@ async function processNewReport(phone, report) {
             Buffer.from(landingHTML, 'utf-8'), 'text/html');
         }
         if (whatsappPng) {
-          await drive.uploadFile(folderInfo.id, 'whatsapp-mockup.png', whatsappPng, 'image/png');
+          await drive.uploadFile(folderInfo.id, 'whatsapp-mockup.html', whatsappPng, 'text/html');
         }
         if (pdfBuffer) {
           await drive.uploadFile(folderInfo.id, 'propuesta.pdf', pdfBuffer, 'application/pdf');
@@ -149,7 +150,7 @@ async function sendApprovedDemoToClient(phone) {
   const nombre = conv.report.cliente?.nombre || 'Hola';
   const slug = phoneSlug(phone);
   const landingUrl = `${getAppUrl()}/demos/${slug}/landing.html`;
-  const mockupUrl = `${getAppUrl()}/demos/${slug}/whatsapp.png`;
+  const mockupUrl = `${getAppUrl()}/demos/${slug}/whatsapp.html`;
   const localDir = localDemoDir(phone);
 
   // 1. Mensaje inicial al cliente
@@ -167,11 +168,11 @@ async function sendApprovedDemoToClient(phone) {
     console.error('Error WA landing:', err.message);
   }
 
-  // 3. Imagen del mockup de WhatsApp (si tenemos el PNG)
-  const pngPath = path.join(localDir, 'whatsapp.png');
-  if (fs.existsSync(pngPath)) {
+  // 3. Link al mockup de WhatsApp (HTML interactivo)
+  const mockupPath = path.join(localDir, 'whatsapp.html');
+  if (fs.existsSync(mockupPath)) {
     try {
-      await sendMediaMessage(phone, 'Así se vería el asistente en tu negocio:', mockupUrl);
+      await sendMessage(phone, `📱 *Así se vería el asistente en tu negocio:*\n${mockupUrl}`);
     } catch (err) {
       console.error('Error WA mockup:', err.message);
     }

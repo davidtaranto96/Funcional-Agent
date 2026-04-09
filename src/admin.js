@@ -290,7 +290,7 @@ router.get('/review/:phone', requireAuth, (req, res) => {
   const slug = phoneSlug(phone);
   const nombre = conv.report?.cliente?.nombre || phone;
   const landingUrl = `/demos/${slug}/landing.html`;
-  const mockupUrl = `/demos/${slug}/whatsapp.png`;
+  const mockupUrl = `/demos/${slug}/whatsapp.html`;
   const pdfUrl = `/demos/${slug}/propuesta.pdf`;
 
   const body = `
@@ -320,7 +320,8 @@ router.get('/review/:phone', requireAuth, (req, res) => {
       </div>
       <div class="bg-white rounded-xl border border-slate-200 p-4">
         <h2 class="font-semibold mb-3">Mockup WhatsApp</h2>
-        <img src="${mockupUrl}" class="w-full border border-slate-200 rounded" alt="WhatsApp mockup">
+        <iframe src="${mockupUrl}" class="w-full h-[600px] border border-slate-200 rounded bg-gray-900"></iframe>
+        <a href="${mockupUrl}" target="_blank" class="text-xs text-blue-600 mt-2 inline-block">Abrir en nueva pestaña →</a>
       </div>
       <div class="bg-white rounded-xl border border-slate-200 p-4">
         <h2 class="font-semibold mb-3">Mini-propuesta PDF</h2>

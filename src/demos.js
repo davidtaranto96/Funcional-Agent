@@ -1,6 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const PDFDocument = require('pdfkit');
-const nodeHtmlToImage = require('node-html-to-image');
 
 let anthropic;
 function getAnthropic() {
@@ -47,11 +46,11 @@ DEVOLVÉ ÚNICAMENTE EL HTML, sin markdown, sin backticks, sin explicaciones.`;
   return html;
 }
 
-// ============ 2. Mockup de WhatsApp como PNG ============
+// ============ 2. Mockup de WhatsApp como HTML ============
+// (Sin puppeteer — se sirve directo como página web, sin conversión a PNG)
 async function generateWhatsappMockup(report) {
   const { cliente, proyecto } = report;
 
-  // Pedirle a Claude una conversación de ejemplo corta
   const prompt = `Armá una conversación corta de WhatsApp (máximo 6 mensajes alternados) entre un cliente y el asistente automático de "${cliente.nombre || 'este negocio'}", relacionada con este proyecto:
 
 Tipo: ${proyecto.tipo || 'negocio'}
@@ -86,56 +85,66 @@ Tono argentino, con "vos", mensajes cortos y realistas. El bot debe sonar útil 
     const isBot = m.from === 'bot';
     const bg = isBot ? '#ffffff' : '#dcf8c6';
     const align = isBot ? 'flex-start' : 'flex-end';
-    const safe = (m.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<div style="display:flex;justify-content:${align};margin:6px 0;">
-      <div style="max-width:75%;background:${bg};padding:8px 12px;border-radius:8px;box-shadow:0 1px 1px rgba(0,0,0,0.08);font-size:15px;line-height:1.35;">${safe}</div>
+    const safe = (m.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const time = `${12 + Math.floor(Math.random() * 3)}:${String(Math.floor(Math.random() * 59)).padStart(2,'0')}`;
+    return `<div style="display:flex;justify-content:${align};margin:4px 0;">
+      <div style="max-width:78%;background:${bg};padding:8px 12px 6px;border-radius:${isBot ? '0 8px 8px 8px' : '8px 0 8px 8px'};box-shadow:0 1px 2px rgba(0,0,0,0.12);font-size:15px;line-height:1.4;">
+        ${safe}
+        <div style="font-size:11px;color:#999;text-align:right;margin-top:2px;">${time} ${isBot ? '' : '✓✓'}</div>
+      </div>
     </div>`;
   }).join('');
 
-  const businessName = (cliente.nombre || 'Tu Negocio').replace(/</g, '&lt;');
+  const businessName = (cliente.nombre || 'Tu Negocio').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const initial = businessName.charAt(0).toUpperCase();
 
+  // Devuelve HTML como Buffer (se guarda como whatsapp.html)
   const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><style>
-  body { margin:0; padding:0; background:#e5ddd5; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
-  .phone { width:720px; min-height:1280px; background:#e5ddd5; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><circle cx='10' cy='10' r='1' fill='%23d4ccc1'/></svg>"); padding:0; display:flex; flex-direction:column; }
-  .header { background:#075e54; color:white; padding:20px 16px; display:flex; align-items:center; gap:12px; }
-  .avatar { width:48px; height:48px; border-radius:50%; background:#25d366; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:bold; color:white; }
-  .name { font-size:18px; font-weight:600; }
-  .status { font-size:12px; opacity:0.85; }
-  .chat { flex:1; padding:14px; }
-  .footer { background:#f0f0f0; padding:12px 16px; display:flex; align-items:center; gap:10px; }
-  .input { flex:1; background:white; border-radius:20px; padding:10px 16px; color:#888; font-size:14px; }
-  .send { background:#075e54; color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
-</style></head>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo WhatsApp — ${businessName}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #111b21; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 20px; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    .phone { width: 100%; max-width: 420px; background: #e5ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .header { background: #075e54; color: white; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+    .avatar { width: 44px; height: 44px; border-radius: 50%; background: #25d366; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; flex-shrink: 0; }
+    .hinfo .name { font-size: 17px; font-weight: 600; }
+    .hinfo .status { font-size: 12px; opacity: 0.8; }
+    .chat { padding: 12px 10px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ccircle cx='5' cy='5' r='1' fill='%23c9bfb5' opacity='0.3'/%3E%3C/svg%3E"); min-height: 300px; }
+    .date-chip { text-align: center; margin: 8px 0; }
+    .date-chip span { background: rgba(255,255,255,0.7); font-size: 12px; padding: 3px 10px; border-radius: 8px; color: #555; }
+    .footer { background: #f0f0f0; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
+    .footer-input { flex: 1; background: white; border-radius: 24px; padding: 10px 16px; font-size: 15px; color: #aaa; }
+    .footer-btn { width: 46px; height: 46px; border-radius: 50%; background: #075e54; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; flex-shrink: 0; }
+    .label { text-align: center; padding: 10px; font-size: 12px; color: #666; background: #f5f5f5; }
+  </style>
+</head>
 <body>
   <div class="phone">
     <div class="header">
-      <div class="avatar">${businessName.charAt(0).toUpperCase()}</div>
-      <div>
+      <div class="avatar">${initial}</div>
+      <div class="hinfo">
         <div class="name">${businessName}</div>
         <div class="status">en línea</div>
       </div>
     </div>
-    <div class="chat">${bubbles}</div>
-    <div class="footer">
-      <div class="input">Escribí un mensaje...</div>
-      <div class="send">➤</div>
+    <div class="chat">
+      <div class="date-chip"><span>Hoy</span></div>
+      ${bubbles}
     </div>
+    <div class="footer">
+      <div class="footer-input">Escribí un mensaje...</div>
+      <div class="footer-btn">➤</div>
+    </div>
+    <div class="label">Vista previa del asistente de WhatsApp • Desarrollado por David Taranto</div>
   </div>
 </body>
 </html>`;
 
-  const buffer = await nodeHtmlToImage({
-    html,
-    quality: 90,
-    type: 'png',
-    puppeteerArgs: {
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    },
-  });
-
-  return buffer;
+  return Buffer.from(html, 'utf-8');
 }
 
 // ============ 3. Mini-propuesta PDF con pdfkit ============
