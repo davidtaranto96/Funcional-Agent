@@ -7,30 +7,41 @@ function getAnthropic() {
   return anthropic;
 }
 
-// ============ 1. Landing HTML generada por Claude ============
+// ============ 1. Demo visual del producto (primera pantalla real) ============
 async function generateLandingHTML(report) {
-  const { cliente, proyecto, requisitos, resumen_ejecutivo } = report;
+  const { cliente, proyecto, requisitos } = report;
 
-  const prompt = `Armá una landing page HTML completa (autocontenida, con Tailwind por CDN) para presentar una propuesta comercial a este cliente:
+  const prompt = `Sos un diseñador UI/UX experto. Tenés que crear una demo visual HTML de la PRIMERA PANTALLA del producto que un cliente le encargó a un desarrollador freelance.
 
-Cliente: ${cliente.nombre || 'Cliente'}
-Tipo de proyecto: ${proyecto.tipo || 'software a medida'}
-Descripción: ${proyecto.descripcion || ''}
-Plataforma: ${proyecto.plataforma || ''}
-Funcionalidades: ${(proyecto.funcionalidades || []).join(', ')}
-Presupuesto mencionado: ${requisitos.presupuesto || 'a definir'}
-Plazo: ${requisitos.plazo || 'a definir'}
-Resumen: ${resumen_ejecutivo || ''}
+NO hagas una "propuesta comercial" ni un resumen de lo que se habló. El cliente ya sabe lo que pidió.
+Hacé una demo visual que parezca el producto REAL funcionando: la primera pantalla de la app/web/sistema que el cliente imaginó.
 
-REQUISITOS:
-- HTML5 completo, con <!DOCTYPE html>, <head>, <meta>, <body>
+DATOS DEL PROYECTO:
+- Nombre del negocio/cliente: ${cliente.nombre || 'Mi Negocio'}
+- Tipo de producto: ${proyecto.tipo || 'web'}
+- Descripción: ${proyecto.descripcion || ''}
+- Plataforma: ${proyecto.plataforma || 'web'}
+- Funcionalidades pedidas: ${(proyecto.funcionalidades || []).join(', ')}
+- Colores o estilo mencionado: ${requisitos.stack_sugerido || ''} ${proyecto.estado_actual || ''}
+
+EJEMPLOS de lo que tenés que hacer según el tipo:
+- Si pide "web para restaurante" → primera pantalla del sitio del restaurante: hero con foto (emoji), menú destacado, botón de pedido
+- Si pide "sistema de turnos" → pantalla de reserva de turno: calendario visual, horarios, formulario simple
+- Si pide "tienda online" → página de producto: imagen (emoji grande), precio, botón agregar al carrito, descripción
+- Si pide "landing page para gimnasio" → hero con logo (inicial), horarios, planes, CTA
+- Si pide "bot de WhatsApp" → mostrá una pantalla de configuración del bot o una web de presentación del servicio que automatiza
+- Si pide "app de delivery" → pantalla de inicio de app: búsqueda, categorías, productos destacados
+
+REGLAS TÉCNICAS:
+- HTML5 completo, autocontenido, con <!DOCTYPE html>
 - Tailwind por CDN: <script src="https://cdn.tailwindcss.com"></script>
-- Secciones: hero con nombre del cliente, qué entendí del proyecto, funcionalidades clave (grid de cards), timeline tentativo (3-4 pasos), precio estimado (si hay), CTA final "Agendá una llamada" con botón a https://wa.me/
-- Tono: moderno, profesional, colores azul/violeta, mucho espacio en blanco
-- Diseño responsive, mobile-first
-- Personalizado: usá el NOMBRE del cliente varias veces, habla en "vos", español argentino
-- El autor del trabajo es David Taranto (desarrollador freelance)
-- No uses imágenes externas (usá emojis o iconos de Tailwind/heroicons inline SVG)
+- NO uses imágenes externas. Usá emojis grandes como imágenes placeholder, SVGs inline simples, o gradientes de color
+- Responsive, mobile-first
+- Usá los colores del negocio si los mencionaron; si no, elegí una paleta coherente con el rubro
+- Que se vea como un producto real, no como una plantilla genérica
+- Podés usar JavaScript inline para interactividad visual básica (tabs, hover states) — sin fetch ni APIs
+- Pie de página discreto: "Demo generada por David Taranto · Desarrollador freelance"
+- Idioma: español argentino
 
 DEVOLVÉ ÚNICAMENTE EL HTML, sin markdown, sin backticks, sin explicaciones.`;
 
@@ -51,15 +62,23 @@ DEVOLVÉ ÚNICAMENTE EL HTML, sin markdown, sin backticks, sin explicaciones.`;
 async function generateWhatsappMockup(report) {
   const { cliente, proyecto } = report;
 
-  const prompt = `Armá una conversación corta de WhatsApp (máximo 6 mensajes alternados) entre un cliente y el asistente automático de "${cliente.nombre || 'este negocio'}", relacionada con este proyecto:
+  const prompt = `Armá una conversación realista de WhatsApp (5-7 mensajes) entre un cliente REAL y el bot de WhatsApp de "${cliente.nombre || 'este negocio'}".
 
-Tipo: ${proyecto.tipo || 'negocio'}
+Esta es una DEMO del bot que se va a construir. Mostrá cómo quedaría funcionando una vez listo.
+
+Proyecto: ${proyecto.tipo || 'negocio'}
 Descripción: ${proyecto.descripcion || ''}
+Funcionalidades del bot: ${(proyecto.funcionalidades || []).join(', ')}
 
-DEVOLVÉ UN JSON puro (sin markdown) con este formato:
-{"messages": [{"from": "client", "text": "..."}, {"from": "bot", "text": "..."}]}
+REGLAS:
+- El cliente hace una consulta REAL relacionada con el negocio (no "hola" genérico)
+- El bot responde de forma útil, eficiente y con el tono del negocio
+- Mostrá al menos 1 funcionalidad concreta del bot (ej: dar precio, agendar turno, mostrar menú, confirmar pedido)
+- Mensajes cortos, naturales, argentinos ("vos", "dale", "te paso", "genial")
+- El bot NO es un asistente genérico: es específico para este negocio
 
-Tono argentino, con "vos", mensajes cortos y realistas. El bot debe sonar útil y amable.`;
+DEVOLVÉ UN JSON puro (sin markdown) con este formato exacto:
+{"messages": [{"from": "client", "text": "..."}, {"from": "bot", "text": "..."}]}`;
 
   const response = await getAnthropic().messages.create({
     model: 'claude-haiku-4-5-20251001',
