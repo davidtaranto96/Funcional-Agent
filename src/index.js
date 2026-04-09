@@ -90,8 +90,18 @@ app.post('/webhook', async (req, res) => {
     console.log(`Mensaje de ${fromKey}: "${text.substring(0, 100)}"`);
 
     // ── Comandos de admin desde el WhatsApp de David ──────────────────────
-    const davidPhone = (process.env.DAVID_PHONE || '').replace('whatsapp:', '').replace('+', '');
-    if (From === davidPhone) {
+    // Argentina puede llegar como 5493878599185 (con 9) o 54387815599185 (con 15)
+    // Normalizamos ambos: sacamos el 9 después de 54 y el 15 del celular
+    const normalizeAR = (num) => {
+      let n = num.replace(/\D/g, '');
+      // 54 9 AREA LOCAL → 54AREALOCAL
+      if (n.startsWith('549') && n.length === 13) n = '54' + n.slice(3);
+      // 54 AREA 15 LOCAL → 54AREALOCAL
+      n = n.replace(/^(54\d{3,4})15(\d{6,7})$/, '$1$2');
+      return n;
+    };
+    const davidPhone = normalizeAR((process.env.DAVID_PHONE || '').replace('whatsapp:', '').replace('+', ''));
+    if (normalizeAR(From) === davidPhone) {
       const cmd = text.trim().toUpperCase();
       const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
