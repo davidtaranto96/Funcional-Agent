@@ -24,7 +24,7 @@ function getDrive() {
 }
 
 function getParentFolderId() {
-  const id = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+  const id = (process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || '').trim();
   if (!id) throw new Error('GOOGLE_DRIVE_PARENT_FOLDER_ID no está configurado');
   return id;
 }
