@@ -162,14 +162,52 @@ app.post('/webhook', async (req, res) => {
         return;
       }
 
+      // STATUS +549... — ver estado completo de un cliente
+      if (cmd.startsWith('STATUS')) {
+        const parts = text.trim().split(/\s+/);
+        let targetPhone = parts.length > 1 ? parts.slice(1).join('').trim() : null;
+        if (targetPhone && !targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:+${targetPhone.replace(/[^0-9]/g,'')}`;
+        const all = db.listAllClients();
+        if (!targetPhone) {
+          const resumen = all.slice(-5).map(c => {
+            const nombre = c.report?.cliente?.nombre || c.phone;
+            return `• *${nombre}* — etapa: ${c.stage} | demo: ${c.demo_status}`;
+          }).join('\n');
+          await sendMessage(fromKey, `📊 *Últimos 5 clientes:*\n\n${resumen || 'Sin clientes aún.'}`);
+        } else {
+          const conv = db.getConversation(targetPhone);
+          if (!conv) { await sendMessage(fromKey, `❌ No encontré al cliente ${targetPhone}`); return; }
+          const nombre = conv.report?.cliente?.nombre || targetPhone;
+          const timeline = (conv.timeline || []).slice(-3).map(e => `• ${e.event}: ${e.note||''}`).join('\n');
+          await sendMessage(fromKey,
+            `📋 *${nombre}*\nEtapa: ${conv.stage}\nDemo: ${conv.demo_status}\nDrive: ${conv.drive_folder_id || 'sin carpeta'}\n\n*Últimos eventos:*\n${timeline || '(vacío)'}`);
+        }
+        return;
+      }
+
+      // REPORTE +549... — disparar flujo de demos manualmente para un cliente
+      if (cmd.startsWith('REPORTE')) {
+        const parts = text.trim().split(/\s+/);
+        let targetPhone = parts.length > 1 ? parts.slice(1).join('').trim() : null;
+        if (!targetPhone) { await sendMessage(fromKey, '⚠️ Usá: REPORTE +5493878599185'); return; }
+        if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:+${targetPhone.replace(/[^0-9]/g,'')}`;
+        const conv = db.getConversation(targetPhone);
+        if (!conv?.report) { await sendMessage(fromKey, `❌ ${targetPhone} no tiene reporte todavía.`); return; }
+        await sendMessage(fromKey, `🔄 Regenerando demos para ${conv.report?.cliente?.nombre || targetPhone}...`);
+        orchestrator.processNewReport(targetPhone, conv.report).catch(console.error);
+        return;
+      }
+
       if (cmd === 'AYUDA' || cmd === 'HELP') {
         await sendMessage(fromKey,
           `*Comandos disponibles:*\n\n` +
-          `• *PENDIENTES* — ver demos que esperan tu aprobación\n` +
-          `• *APROBAR* — aprobar el demo más reciente y mandárselo al cliente\n` +
-          `• *APROBAR +549...* — aprobar demo de un número específico\n` +
-          `• *RECHAZAR* — rechazar el demo más reciente\n` +
-          `• *RECHAZAR +549...* — rechazar demo de un número específico\n\n` +
+          `• *PENDIENTES* — demos esperando aprobación\n` +
+          `• *APROBAR* — aprobar demo más reciente\n` +
+          `• *APROBAR +549...* — aprobar demo de número específico\n` +
+          `• *RECHAZAR* — rechazar demo más reciente\n` +
+          `• *STATUS* — últimos 5 clientes\n` +
+          `• *STATUS +549...* — estado detallado de un cliente\n` +
+          `• *REPORTE +549...* — regenerar demos manualmente\n\n` +
           `Panel web: ${appUrl}/admin`
         );
         return;
@@ -181,29 +219,46 @@ app.post('/webhook', async (req, res) => {
 
     // Si se acaba de confirmar el proyecto, generar y enviar reporte
     if (result.stage === 'done' && result.previousStage === 'confirming') {
+      console.log(`[index] 🎯 Transición confirming→done para ${fromKey} — generando reporte...`);
       try {
         const conv = db.getConversation(fromKey);
         const report = await generateReport(conv.history, fromKey);
+        console.log(`[index] Reporte generado: ${report?.cliente?.nombre}`);
 
         db.upsertConversation(fromKey, { report });
 
+        // Notificar a David por WhatsApp
         const waReport = formatReportWhatsApp(report);
-        await sendMessage(process.env.DAVID_PHONE, waReport);
+        try {
+          await sendMessage(process.env.DAVID_PHONE, waReport);
+          console.log(`[index] WhatsApp de reporte enviado a David`);
+        } catch (e) { console.error('[index] Error WA reporte:', e.message); }
 
-        const htmlReport = formatReportEmail(report);
-        await sendEmailReport(report, htmlReport);
+        // Notificar a David por email
+        try {
+          const htmlReport = formatReportEmail(report);
+          await sendEmailReport(report, htmlReport);
+          console.log(`[index] Email de reporte enviado`);
+        } catch (e) { console.error('[index] Error email reporte:', e.message); }
 
-        console.log(`Reporte enviado para ${fromKey}`);
-
+        // Confirmar al cliente
         await sendMessage(fromKey,
           '🎨 ¡Perfecto! Ya le pasé todo a David. En los próximos minutos te mando una propuesta visual personalizada con lo que charlamos. ¡Fijate el WhatsApp!');
 
-        orchestrator.processNewReport(fromKey, report).catch(err =>
-          console.error('Error en orchestrator.processNewReport:', err));
+        // Arrancar generación de demos en background
+        console.log(`[index] Lanzando orchestrator para ${fromKey}...`);
+        orchestrator.processNewReport(fromKey, report).catch(err => {
+          console.error('Error en orchestrator.processNewReport:', err);
+          sendMessage(process.env.DAVID_PHONE,
+            `⚠️ Error generando demos para ${fromKey}: ${err.message}`).catch(()=>{});
+        });
+
       } catch (err) {
         console.error('Error generando/enviando reporte:', err);
-        await sendMessage(process.env.DAVID_PHONE,
-          `⚠️ Error generando reporte para ${fromKey}: ${err.message}`);
+        try {
+          await sendMessage(process.env.DAVID_PHONE,
+            `⚠️ Error generando reporte para ${fromKey}: ${err.message}`);
+        } catch(e){}
       }
     }
 

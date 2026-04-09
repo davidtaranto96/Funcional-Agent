@@ -135,8 +135,13 @@ async function processNewReport(phone, report) {
     console.log(`[orchestrator] Flujo de nuevo reporte completo para ${phone}`);
   } catch (err) {
     console.error('[orchestrator] Error general:', err);
-    db.updateDemoStatus(phone, 'none');
+    db.updateDemoStatus(phone, 'error');
     db.appendTimelineEvent(phone, { event: 'demo_error', note: err.message });
+    // Notificar a David por WhatsApp con el error exacto
+    try {
+      await sendMessage(process.env.DAVID_PHONE,
+        `⚠️ *Error en orchestrator*\nCliente: ${phone}\n\nError: ${err.message}\n\nStack: ${(err.stack||'').slice(0,300)}`);
+    } catch (e) { console.error('[orchestrator] No pude notificar error:', e.message); }
   }
 }
 
