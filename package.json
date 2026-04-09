@@ -1,0 +1,22 @@
+{
+  "name": "wpanalista",
+  "version": "1.0.0",
+  "description": "Agente de WhatsApp comercial para gestión de proyectos de desarrollo",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [],
+  "author": "David Taranto",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "sql.js": "^1.11.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "openai": "^4.77.0",
+    "resend": "^4.0.0",
+    "twilio": "^5.4.0"
+  }
+}
