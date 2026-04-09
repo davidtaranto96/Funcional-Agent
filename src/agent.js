@@ -66,7 +66,7 @@ async function generateClientSummary(history) {
     .join('\n');
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     system: `Leé esta conversación y armá un resumen casual y breve del proyecto para confirmar con el cliente.
 Hablá en argentino, con "vos". Sin listas numeradas. Empezá con algo como "A ver si entendí bien —" o "Dale, te hago un resumen para ver si estamos en la misma —".
@@ -106,7 +106,7 @@ async function handleMessage(phone, userText) {
     const trimmed = trimHistory(history);
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: systemPrompt,
       messages: trimmed,
