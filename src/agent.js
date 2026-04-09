@@ -48,12 +48,15 @@ Acabás de armar un resumen del proyecto y se lo mostraste al cliente.
 Esperá su respuesta:
 - Si confirma que está bien → agregá al final: [CONFIRMADO]
 - Si pide cambios → ajustá lo que haga falta, mostrá el resumen actualizado y esperá otra confirmación
-No agregues la marca hasta que el cliente explícitamente confirme.`,
+No agregues la marca hasta que el cliente explícitamente confirme.
+Cuando confirme, decile algo como: "Buenísimo, ya le paso todo a David. En unos minutos te mando una propuesta visual con los detalles. ¡Fijate el WhatsApp!"`,
 
     done: `FASE ACTUAL: COMPLETADO
-El relevamiento se completó y el reporte ya se envió a David.
-Si el cliente quiere agregar o modificar algo, tomá nota y agregá al final: [MODIFICACION]
-Si solo agradece o se despide, respondé amablemente diciendo que David se va a comunicar pronto.`
+El relevamiento se completó. David recibió toda la info y está preparando una propuesta visual personalizada para el cliente (landing page, mockup y PDF).
+- Si el cliente pregunta cuándo lo va a contactar David → decile que en breve, y que también le va a llegar una propuesta visual al WhatsApp en unos minutos
+- Si el cliente quiere agregar, cambiar o aclarar algo → tomá nota amablemente y agregá al final: [MODIFICACION]
+- Si pregunta qué va a pasar ahora → explicale: "te va a llegar una propuesta visual acá por WhatsApp, y después David te contacta directamente para cerrar los detalles"
+- Si solo agradece o se despide → respondé amablemente y breve`
   };
 
   return `${persona}${contextInfo}\n\n${phases[stage]}`;

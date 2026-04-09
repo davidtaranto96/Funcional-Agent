@@ -59,6 +59,83 @@ app.post('/webhook', async (req, res) => {
 
     console.log(`Mensaje de ${From}: "${text.substring(0, 100)}..."`);
 
+    // ── Comandos de admin desde el WhatsApp de David ──────────────────────
+    if (From === process.env.DAVID_PHONE) {
+      const cmd = text.trim().toUpperCase();
+      const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+      if (cmd === 'PENDIENTES') {
+        const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
+        if (pendientes.length === 0) {
+          await sendMessage(From, '✅ No hay demos pendientes de revisión.');
+        } else {
+          const lista = pendientes.map(c => {
+            const nombre = c.report?.cliente?.nombre || c.phone;
+            return `• *${nombre}*\n  ${appUrl}/admin/review/${encodeURIComponent(c.phone)}`;
+          }).join('\n\n');
+          await sendMessage(From, `📋 *Demos pendientes (${pendientes.length}):*\n\n${lista}`);
+        }
+        return;
+      }
+
+      if (cmd.startsWith('APROBAR')) {
+        const parts = text.trim().split(/\s+/);
+        let targetPhone;
+        if (parts.length > 1) {
+          targetPhone = parts.slice(1).join('').trim();
+          if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
+        } else {
+          const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
+          if (pendientes.length === 0) {
+            await sendMessage(From, '⚠️ No hay demos pendientes para aprobar.');
+            return;
+          }
+          targetPhone = pendientes[0].phone;
+        }
+        const conv = db.getConversation(targetPhone);
+        const nombre = conv?.report?.cliente?.nombre || targetPhone;
+        db.updateDemoStatus(targetPhone, 'approved');
+        db.appendTimelineEvent(targetPhone, { event: 'demo_approved', note: 'Aprobado desde WhatsApp' });
+        orchestrator.sendApprovedDemoToClient(targetPhone).catch(console.error);
+        await sendMessage(From, `✅ *Aprobado.* Mandando demo a ${nombre}...`);
+        return;
+      }
+
+      if (cmd.startsWith('RECHAZAR')) {
+        const parts = text.trim().split(/\s+/);
+        let targetPhone;
+        if (parts.length > 1) {
+          targetPhone = parts.slice(1).join('').trim();
+          if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
+        } else {
+          const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
+          if (pendientes.length === 0) {
+            await sendMessage(From, '⚠️ No hay demos pendientes.');
+            return;
+          }
+          targetPhone = pendientes[0].phone;
+        }
+        db.updateDemoStatus(targetPhone, 'rejected');
+        db.appendTimelineEvent(targetPhone, { event: 'demo_rejected', note: 'Rechazado desde WhatsApp' });
+        await sendMessage(From, `❌ Demo rechazado.`);
+        return;
+      }
+
+      if (cmd === 'AYUDA' || cmd === 'HELP') {
+        await sendMessage(From,
+          `*Comandos disponibles:*\n\n` +
+          `• *PENDIENTES* — ver demos que esperan tu aprobación\n` +
+          `• *APROBAR* — aprobar el demo más reciente y mandárselo al cliente\n` +
+          `• *APROBAR +549...* — aprobar demo de un número específico\n` +
+          `• *RECHAZAR* — rechazar el demo más reciente\n` +
+          `• *RECHAZAR +549...* — rechazar demo de un número específico\n\n` +
+          `Panel web: ${appUrl}/admin`
+        );
+        return;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     const result = await handleMessage(From, text);
 
     // Si se acaba de confirmar el proyecto, generar y enviar reporte
@@ -80,6 +157,10 @@ app.post('/webhook', async (req, res) => {
 
         console.log(`Reporte enviado para ${From}`);
 
+        // Notificar al cliente que viene una propuesta visual
+        await sendMessage(From,
+          '🎨 ¡Perfecto! Ya le pasé todo a David. En los próximos minutos te mando una propuesta visual personalizada con lo que charlamos. ¡Fijate el WhatsApp!');
+
         // Disparar en background la generación de demos + notificación de review
         orchestrator.processNewReport(From, report).catch(err =>
           console.error('Error en orchestrator.processNewReport:', err));
@@ -90,10 +171,14 @@ app.post('/webhook', async (req, res) => {
       }
     }
 
-    // Si hay una modificación post-reporte, notificar a David
+    // Si hay una modificación post-reporte, notificar a David con contexto completo
     if (result.stage === 'done' && result.previousStage === 'done' && text) {
+      const conv = db.getConversation(From);
+      const nombre = conv?.report?.cliente?.nombre || From;
+      const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
       await sendMessage(process.env.DAVID_PHONE,
-        `📝 *Modificación de ${From}:*\n${text}`);
+        `📝 *Cambio pedido por ${nombre}*\n📱 ${From}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(From)}`);
+      db.appendTimelineEvent(From, { event: 'client_requested_change', note: text.slice(0, 200) });
     }
 
     // Enviar respuesta al cliente
