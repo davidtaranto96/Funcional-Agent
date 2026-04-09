@@ -12,9 +12,17 @@ const app = express();
 app.use(express.urlencoded({ extended: false })); // Twilio manda form-encoded
 app.use(express.json()); // Para el endpoint /context
 
+// Último error para debug (borrar en producción)
+let lastError = null;
+
 // Health check para Railway
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Debug endpoint temporal
+app.get('/debug', (req, res) => {
+  res.json({ lastError: lastError ? { message: lastError.message, stack: lastError.stack } : null });
 });
 
 // Webhook principal de Twilio
@@ -78,6 +86,7 @@ app.post('/webhook', async (req, res) => {
     await sendMessage(From, result.reply);
 
   } catch (err) {
+    lastError = err;
     console.error('Error en webhook:', err);
     try {
       await sendMessage(req.body.From,
