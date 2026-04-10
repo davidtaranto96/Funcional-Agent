@@ -25,12 +25,14 @@ DATOS DEL PROYECTO:
 - Colores o estilo mencionado: ${requisitos.stack_sugerido || ''} ${proyecto.estado_actual || ''}
 
 EJEMPLOS de lo que tenés que hacer según el tipo:
-- Si pide "web para restaurante" → primera pantalla del sitio del restaurante: hero con foto (emoji), menú destacado, botón de pedido
-- Si pide "sistema de turnos" → pantalla de reserva de turno: calendario visual, horarios, formulario simple
-- Si pide "tienda online" → página de producto: imagen (emoji grande), precio, botón agregar al carrito, descripción
-- Si pide "landing page para gimnasio" → hero con logo (inicial), horarios, planes, CTA
-- Si pide "bot de WhatsApp" → mostrá una pantalla de configuración del bot o una web de presentación del servicio que automatiza
-- Si pide "app de delivery" → pantalla de inicio de app: búsqueda, categorías, productos destacados
+- Si pide "web para restaurante" → primera pantalla del sitio: hero con foto (emoji), menú destacado, botón de reserva/pedido
+- Si pide "sistema de turnos" → pantalla de reserva de turno: calendario visual, horarios disponibles, formulario simple
+- Si pide "tienda online / e-commerce" → página de producto: imagen (emoji grande), precio, botón agregar al carrito
+- Si pide "landing page para gimnasio" → hero con logo (inicial), horarios, planes de membresía, CTA
+- Si pide "bot de WhatsApp / automatización" → web de presentación del bot: qué automatiza, capturas de conversación de ejemplo, CTA
+- Si pide "app móvil" → simulá la primera pantalla de la app en formato celular (contenedor 390px, borde redondeado, status bar): home screen con navegación inferior, contenido principal
+- Si pide "sistema de gestión / backoffice" → dashboard: métricas en cards, tabla de datos reciente, sidebar de navegación
+- Si pide "app de delivery / pedidos" → pantalla de inicio: búsqueda, categorías con iconos, productos destacados con precio
 
 REGLAS TÉCNICAS:
 - HTML5 completo, autocontenido, con <!DOCTYPE html>
@@ -273,17 +275,31 @@ async function generateMiniPDF(report) {
   });
 }
 
-// ============ Orquestador: genera los 3 en paralelo ============
+// Detecta si el proyecto incluye bot/automatización de WhatsApp
+function isWhatsappBotProject(report) {
+  const fields = [
+    report.proyecto?.tipo || '',
+    report.proyecto?.descripcion || '',
+    (report.proyecto?.funcionalidades || []).join(' '),
+    report.proyecto?.plataforma || '',
+  ].join(' ').toLowerCase();
+  return ['whatsapp', 'bot', 'chatbot', 'automatizac', 'asistente automático', 'mensaje automático']
+    .some(k => fields.includes(k));
+}
+
+// ============ Orquestador: genera demos según el tipo de proyecto ============
 async function generateAllDemos(report) {
+  const needsWAMockup = isWhatsappBotProject(report);
+  console.log(`[demos] Tipo: ${report.proyecto?.tipo} | WA mockup: ${needsWAMockup}`);
+
   const [landingHTML, whatsappPng, pdfBuffer] = await Promise.all([
     generateLandingHTML(report).catch(err => {
       console.error('Error generando landing:', err);
       return `<!DOCTYPE html><html><body><h1>Propuesta para ${report.cliente?.nombre || 'Cliente'}</h1><p>Error generando landing.</p></body></html>`;
     }),
-    generateWhatsappMockup(report).catch(err => {
-      console.error('Error generando mockup WA:', err);
-      return null;
-    }),
+    needsWAMockup
+      ? generateWhatsappMockup(report).catch(err => { console.error('Error generando mockup WA:', err); return null; })
+      : Promise.resolve(null),
     generateMiniPDF(report).catch(err => {
       console.error('Error generando PDF:', err);
       return null;
