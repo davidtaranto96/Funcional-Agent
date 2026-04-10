@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.2'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.3'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -2543,6 +2543,9 @@ router.get('/clientes/:id', requireAuth, async (req, res) => {
   if (!client) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Cliente no encontrado.</p>', {}));
 
   const clientProjects = await db.getProjectsByClientId(req.params.id);
+  const allProjects = await db.listProjects();
+  // Proyectos sin cliente asignado o de otro cliente (para poder vincular)
+  const unlinkableProjects = allProjects.filter(p => !p.client_id || p.client_id === '');
   const allWa = await db.listAllClients();
   const pendingCount = allWa.filter(c => c.demo_status === 'pending_review').length;
 
@@ -2552,15 +2555,39 @@ router.get('/clientes/:id', requireAuth, async (req, res) => {
 
   const projectCards = clientProjects.map(p => {
     const cat = PROJECT_CATEGORIES.find(c => c.key === (p.category || 'cliente')) || PROJECT_CATEGORIES[0];
-    const pending = (p.tasks || []).filter(t => !t.done).length;
-    return `<a href="/admin/projects/${p.id}" class="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 transition-colors block">
-      <div class="w-2 rounded-full flex-shrink-0 self-stretch" style="background:${cat.color}"></div>
-      <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(p.title || p.client_name)}</div>
-        <div class="text-xs text-slate-400 mt-0.5">${projectStatusBadge(p.status)}</div>
+    const tasks = p.tasks || [];
+    const pending = tasks.filter(t => !t.done).length;
+    const pct = tasks.length > 0 ? Math.round(tasks.filter(t => t.done).length / tasks.length * 100) : 0;
+    return `
+    <div class="border border-slate-100 rounded-xl overflow-hidden hover:border-slate-200 transition-colors" style="border-left: 3px solid ${cat.color}">
+      <div class="flex items-center gap-3 p-3">
+        <div class="flex-1 min-w-0" onclick="location.href='/admin/projects/${p.id}'" style="cursor:pointer">
+          <div class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(p.title || p.client_name)}</div>
+          <div class="flex items-center gap-2 mt-1 flex-wrap">
+            ${projectStatusBadge(p.status)}
+            ${p.budget ? `<span class="text-xs font-medium text-slate-600">${escapeHtml(p.budget)}</span>` : ''}
+            ${pending > 0 ? `<span class="text-xs text-amber-600">${pending} tarea${pending !== 1 ? 's' : ''} pendiente${pending !== 1 ? 's' : ''}</span>` : ''}
+          </div>
+          ${tasks.length > 0 ? `
+          <div class="mt-2 flex items-center gap-2">
+            <div class="flex-1 bg-slate-100 rounded-full h-1">
+              <div class="h-1 rounded-full" style="width:${pct}%;background:${cat.color}"></div>
+            </div>
+            <span class="text-[10px] text-slate-400">${pct}%</span>
+          </div>` : ''}
+        </div>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <a href="/admin/projects/${p.id}" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Abrir proyecto">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+          <form method="POST" action="/admin/clientes/${client.id}/unlink-project/${p.id}" onsubmit="return confirm('¿Desvincular este proyecto del cliente?')">
+            <button type="submit" class="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-400 transition-colors" title="Desvincular">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </form>
+        </div>
       </div>
-      ${pending > 0 ? `<span class="text-xs text-amber-600 font-medium flex-shrink-0">${pending} tarea${pending !== 1 ? 's' : ''}</span>` : ''}
-    </a>`;
+    </div>`;
   }).join('');
 
   // Try to find matching WA lead by phone
@@ -2600,11 +2627,25 @@ router.get('/clientes/:id', requireAuth, async (req, res) => {
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-semibold text-slate-700">Proyectos (${clientProjects.length})</h2>
-            <a href="/admin/projects/new" class="text-xs text-blue-600 hover:underline">+ Nuevo proyecto →</a>
+            <a href="/admin/projects/new?client_id=${client.id}" class="text-xs text-blue-600 hover:underline">+ Nuevo →</a>
           </div>
+
           ${clientProjects.length > 0
-            ? `<div class="space-y-2">${projectCards}</div>`
-            : `<div class="text-center py-8"><div class="text-2xl mb-2">📋</div><p class="text-sm text-slate-400">Sin proyectos vinculados todavía.</p></div>`}
+            ? `<div class="space-y-2 mb-4">${projectCards}</div>`
+            : `<div class="text-center py-6 mb-4"><div class="text-2xl mb-2">📋</div><p class="text-sm text-slate-400">Sin proyectos vinculados todavía.</p></div>`}
+
+          <!-- Asignar proyecto existente -->
+          ${unlinkableProjects.length > 0 ? `
+          <div class="border-t border-slate-100 pt-4">
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Asignar proyecto existente</div>
+            <form method="POST" action="/admin/clientes/${client.id}/link-project" class="flex gap-2">
+              <select name="project_id" required class="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-0">
+                <option value="">Seleccionar proyecto...</option>
+                ${unlinkableProjects.map(p => `<option value="${p.id}">${escapeHtml(p.title || p.client_name)}</option>`).join('')}
+              </select>
+              <button type="submit" class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">Vincular</button>
+            </form>
+          </div>` : ''}
         </div>
 
         <!-- Notes -->
@@ -2653,26 +2694,60 @@ router.get('/clientes/:id', requireAuth, async (req, res) => {
           <a href="/admin/client/${encodeURIComponent(waLead.phone)}" class="text-xs text-emerald-700 hover:underline font-medium">Ver conversación →</a>
         </div>` : ''}
 
+        <!-- Quick actions -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-3">Acciones rápidas</h2>
+          <div class="space-y-2">
+            ${client.phone ? `
+            <a href="https://wa.me/${client.phone.replace(/\D/g,'')}" target="_blank"
+              class="flex items-center gap-2.5 w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
+              <span>💬</span><span>Abrir WhatsApp</span>
+            </a>
+            <a href="tel:${escapeHtml(client.phone)}"
+              class="flex items-center gap-2.5 w-full border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
+              <span>📞</span><span>Llamar</span>
+            </a>` : ''}
+            ${client.email ? `
+            <a href="mailto:${escapeHtml(client.email)}"
+              class="flex items-center gap-2.5 w-full border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
+              <span>✉️</span><span>Enviar email</span>
+            </a>` : ''}
+            <a href="/admin/projects/new?client_id=${client.id}"
+              class="flex items-center gap-2.5 w-full border border-blue-200 hover:bg-blue-50 text-blue-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
+              <span>📁</span><span>Crear proyecto</span>
+            </a>
+          </div>
+        </div>
+
         <!-- Stats -->
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-3">Resumen</h2>
-          <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-              <span class="text-slate-500">Proyectos</span>
-              <span class="font-medium">${clientProjects.length}</span>
+          <div class="space-y-2.5 text-sm">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Total proyectos</span>
+              <span class="font-semibold text-slate-800">${clientProjects.length}</span>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between items-center">
               <span class="text-slate-500">En curso</span>
-              <span class="font-medium">${clientProjects.filter(p => ['in_progress','review'].includes(p.status)).length}</span>
+              <span class="font-medium text-blue-600">${clientProjects.filter(p => ['in_progress','review'].includes(p.status)).length}</span>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between items-center">
               <span class="text-slate-500">Entregados</span>
               <span class="font-medium text-emerald-600">${clientProjects.filter(p => p.status === 'delivered').length}</span>
             </div>
-            ${clientProjects.filter(p => p.budget).length > 0 ? `
-            <div class="flex justify-between pt-2 border-t border-slate-100">
-              <span class="text-slate-500">Proyectos con presupuesto</span>
-              <span class="font-medium">${clientProjects.filter(p => p.budget).length}</span>
+            ${clientProjects.some(p => p.budget) ? `
+            <div class="pt-2 border-t border-slate-100">
+              <div class="text-xs text-slate-400 uppercase tracking-wide mb-1.5">Presupuestos</div>
+              ${clientProjects.filter(p => p.budget).map(p => `
+              <div class="flex justify-between items-center py-0.5">
+                <span class="text-xs text-slate-500 truncate mr-2">${escapeHtml(p.title || p.client_name)}</span>
+                <span class="text-xs font-semibold text-slate-700 flex-shrink-0">${escapeHtml(p.budget)}</span>
+              </div>`).join('')}
+            </div>` : ''}
+            ${clientProjects.some(p => p.budget_status === 'paid') ? `
+            <div class="flex justify-between items-center pt-1">
+              <span class="text-slate-500">Proyectos pagados</span>
+              <span class="font-medium text-emerald-600">${clientProjects.filter(p => p.budget_status === 'paid').length} ✓</span>
             </div>` : ''}
           </div>
         </div>
@@ -2700,6 +2775,23 @@ router.post('/clientes/:id/update', requireAuth, async (req, res) => {
 
 router.post('/clientes/:id/notes', requireAuth, async (req, res) => {
   await db.updateClientRecord(req.params.id, { ...(await db.getClientRecord(req.params.id) || {}), notes: req.body.notes || '' });
+  res.redirect(`/admin/clientes/${req.params.id}`);
+});
+
+// Vincular proyecto existente a este cliente
+router.post('/clientes/:id/link-project', requireAuth, async (req, res) => {
+  const projectId = req.body.project_id;
+  if (!projectId) return res.redirect(`/admin/clientes/${req.params.id}`);
+  const project = await db.getProject(projectId);
+  if (!project) return res.redirect(`/admin/clientes/${req.params.id}`);
+  await db.updateProject(projectId, { ...project, client_id: req.params.id, tasks: JSON.stringify(project.tasks || []) });
+  res.redirect(`/admin/clientes/${req.params.id}`);
+});
+
+// Desvincular proyecto de este cliente
+router.post('/clientes/:id/unlink-project/:projectId', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.projectId);
+  if (project) await db.updateProject(req.params.projectId, { ...project, client_id: '', tasks: JSON.stringify(project.tasks || []) });
   res.redirect(`/admin/clientes/${req.params.id}`);
 });
 
