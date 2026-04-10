@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.1'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -223,7 +223,7 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>${escapeHtml(title)} · DT Systems</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -350,7 +350,7 @@ function loginPage(errorMsg = '') {
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>DT Systems · Login</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -477,15 +477,15 @@ router.get('/', requireAuth, async (req, res) => {
 
   // Alert strip
   const alertStrip = pendingReview.length ? `
-    <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
-      <span class="text-2xl">⚠️</span>
-      <div class="flex-1">
-        <div class="font-semibold text-orange-800 text-sm">Demos esperando tu revisión</div>
-        <div class="text-xs text-orange-600 mt-0.5">
+    <div class="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
+      <span class="text-lg flex-shrink-0">⚠️</span>
+      <div class="flex-1 min-w-0">
+        <span class="font-semibold text-orange-800 text-sm">Demos esperando revisión — </span>
+        <span class="text-xs text-orange-600 truncate">
           ${pendingReview.map(c => `<a href="/admin/review/${encodeURIComponent(c.phone)}" class="underline font-medium">${escapeHtml(c.report?.cliente?.nombre || c.phone)}</a>`).join(' · ')}
-        </div>
+        </span>
       </div>
-      <a href="/admin/review/${encodeURIComponent(pendingReview[0].phone)}" class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+      <a href="/admin/review/${encodeURIComponent(pendingReview[0].phone)}" class="flex-shrink-0 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
         Revisar →
       </a>
     </div>` : '';
@@ -606,21 +606,22 @@ router.get('/', requireAuth, async (req, res) => {
           <a href="/admin/tasks" class="text-xs text-blue-600 hover:underline">Ver todas →</a>
         </div>
         ${allPendingTasks.length > 0 ? `
-          <div class="space-y-2">
-            ${allPendingTasks.slice(0, 5).map(t => `
-              <a href="/admin/projects/${t.projectId}" class="flex items-start gap-2.5 group py-1.5 -mx-1 px-1 rounded-lg hover:bg-slate-50 transition-colors block">
-                <div class="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${t.priority === 'high' ? 'bg-red-400' : t.priority === 'medium' ? 'bg-amber-400' : 'bg-slate-300'}"></div>
+          <div class="space-y-1">
+            ${allPendingTasks.slice(0, 5).map(t => {
+              const dl = t.due_date ? Math.ceil((new Date(t.due_date) - new Date()) / 86400000) : null;
+              const dlColor = dl === null ? '' : dl < 0 ? 'text-red-500' : dl <= 1 ? 'text-orange-500' : 'text-slate-400';
+              const dlLabel = dl === null ? '' : dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : `${dl}d`;
+              return `
+              <a href="/admin/projects/${t.projectId}" class="flex items-center gap-2 group py-2 px-2 -mx-2 rounded-lg hover:bg-slate-50 transition-colors">
+                <div class="w-2 h-2 rounded-full flex-shrink-0 ${t.priority === 'high' ? 'bg-red-400' : t.priority === 'medium' ? 'bg-amber-400' : 'bg-slate-300'}"></div>
                 <div class="flex-1 min-w-0">
-                  <div class="text-xs text-slate-700 group-hover:text-blue-600 truncate">${escapeHtml(t.text)}</div>
-                  <div class="text-[10px] text-slate-400 truncate">${escapeHtml(t.projectTitle)}</div>
-                  ${t.due_date ? (() => {
-                    const dl = Math.ceil((new Date(t.due_date) - new Date()) / 86400000);
-                    const color = dl < 0 ? 'text-red-500' : dl <= 1 ? 'text-orange-500' : 'text-slate-400';
-                    return `<div class="text-[10px] ${color} font-medium">📅 ${dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : `en ${dl}d`}</div>`;
-                  })() : ''}
+                  <div class="text-xs text-slate-700 group-hover:text-blue-600 truncate leading-tight">${escapeHtml(t.text)}</div>
+                  <div class="text-[10px] text-slate-400 truncate leading-tight">${escapeHtml(t.projectTitle)}</div>
                 </div>
-              </a>`).join('')}
-            ${allPendingTasks.length > 5 ? `<a href="/admin/tasks" class="text-xs text-slate-400 hover:text-blue-600 pt-1 block">+${allPendingTasks.length - 5} más →</a>` : ''}
+                ${dl !== null ? `<span class="text-[10px] font-semibold flex-shrink-0 ${dlColor}">${dlLabel}</span>` : ''}
+              </a>`;
+            }).join('')}
+            ${allPendingTasks.length > 5 ? `<a href="/admin/tasks" class="text-xs text-slate-400 hover:text-blue-600 pt-1 block text-center">+${allPendingTasks.length - 5} más →</a>` : ''}
           </div>` : `<div class="text-center py-6"><div class="text-2xl mb-1">✅</div><p class="text-xs text-slate-400">Sin tareas pendientes</p></div>`}
       </div>
 
@@ -902,7 +903,16 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
   const steps = processSteps(conv);
   const doneCount = steps.filter(s => s.done).length;
 
-  const stepperHtml = steps.map((s, i) => {
+  // Mobile: vertical checklist compacto / Desktop: stepper horizontal
+  const stepperMobile = steps.map(s => `
+    <div class="flex items-center gap-2.5 py-1.5">
+      <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'}">
+        ${s.done ? '<svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>' : ''}
+      </div>
+      <span class="text-xs ${s.done ? 'text-slate-700 font-medium' : 'text-slate-400'}">${s.label}</span>
+    </div>`).join('');
+
+  const stepperDesktop = steps.map((s, i) => {
     const isLast = i === steps.length - 1;
     return `<div class="flex items-center ${isLast ? '' : 'flex-1'}">
       <div class="flex flex-col items-center">
@@ -974,7 +984,10 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
         <h2 class="text-sm font-semibold text-slate-700">Progreso del proceso</h2>
         <span class="text-xs text-slate-400">${doneCount} de ${steps.length} pasos</span>
       </div>
-      <div class="flex items-start overflow-x-auto pb-1">${stepperHtml}</div>
+      <!-- Mobile: lista compacta en 2 columnas -->
+      <div class="md:hidden grid grid-cols-2 gap-x-4">${stepperMobile}</div>
+      <!-- Desktop: stepper horizontal -->
+      <div class="hidden md:flex items-start overflow-x-auto pb-1">${stepperDesktop}</div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
