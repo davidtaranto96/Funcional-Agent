@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.5.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.6.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 
 // ─── Multer: upload de archivos para proyectos ───────────────────────────────
@@ -234,9 +234,11 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
     .spin{animation:spin 1s linear infinite}
     body{font-feature-settings:'cv02','cv03','cv04','cv11';-webkit-font-smoothing:antialiased}
     .nav-active{background:rgba(59,130,246,0.15)!important}
+    .card-hover{transition:box-shadow 0.2s,transform 0.2s}
+    .card-hover:hover{box-shadow:0 8px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen" style="display:flex">
+<body class="bg-slate-50/80 text-slate-800 min-h-screen" style="display:flex;background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%)">
   <aside style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-[#0f172a] flex flex-col border-r border-white/5">
     <!-- Brand -->
     <div class="px-4 py-4 border-b border-white/5">
@@ -292,7 +294,7 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
     </div>
   </aside>
   <div style="margin-left:240px;flex:1;min-height:100vh">
-    <main class="max-w-7xl mx-auto p-6 pb-16">${body}</main>
+    <main class="max-w-7xl mx-auto p-6 pb-16 min-h-screen">${body}</main>
   </div>
 </body>
 </html>`;
@@ -305,31 +307,73 @@ const passport = require('passport');
 function loginPage(errorMsg = '') {
   const googleConfigured = !!process.env.GOOGLE_CLIENT_ID;
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Login · DT Systems</title>
-<script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen flex items-center justify-center">
-  <div class="w-full max-w-sm">
-    <div class="text-center mb-8">
-      <div class="text-3xl font-bold text-white tracking-tight">DT Systems</div>
-      <div class="text-slate-400 text-sm mt-1">Gestión de leads y proyectos</div>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DT Systems · Login</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;background:#060612;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-font-smoothing:antialiased}
+    .blob1{position:fixed;top:-20%;left:-10%;width:60vw;height:60vw;background:radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 65%);pointer-events:none;border-radius:50%}
+    .blob2{position:fixed;bottom:-15%;right:-5%;width:50vw;height:50vw;background:radial-gradient(circle,rgba(139,92,246,0.14) 0%,transparent 65%);pointer-events:none;border-radius:50%}
+    .blob3{position:fixed;top:40%;left:55%;width:30vw;height:30vw;background:radial-gradient(circle,rgba(59,130,246,0.08) 0%,transparent 65%);pointer-events:none;border-radius:50%}
+    .grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:48px 48px;pointer-events:none}
+    .card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:36px;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+    .gradient-text{background:linear-gradient(135deg,#c7d2fe 0%,#a5b4fc 30%,#818cf8 60%,#6366f1 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:12px;color:rgba(255,255,255,0.85);font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s;text-decoration:none}
+    .btn-google:hover{background:rgba(255,255,255,0.11);border-color:rgba(255,255,255,0.2)}
+    .divider{display:flex;align-items:center;gap:12px;margin:18px 0}
+    .divider-line{flex:1;height:1px;background:rgba(255,255,255,0.06)}
+    .divider span{font-size:11px;color:rgba(255,255,255,0.25);white-space:nowrap}
+    .input{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:13px 16px;color:rgba(255,255,255,0.9);font-size:14px;outline:none;transition:border-color 0.2s;font-family:inherit}
+    .input::placeholder{color:rgba(255,255,255,0.25)}
+    .input:focus{border-color:rgba(99,102,241,0.6);background:rgba(99,102,241,0.06)}
+    .btn-submit{width:100%;background:linear-gradient(135deg,#6366f1,#7c3aed);border:none;border-radius:12px;padding:13px;color:white;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:10px;font-family:inherit}
+    .btn-submit:hover{background:linear-gradient(135deg,#4f46e5,#6d28d9);transform:translateY(-1px);box-shadow:0 8px 24px rgba(99,102,241,0.4)}
+    .error-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:12px 16px;color:#fca5a5;font-size:13px;margin-bottom:18px}
+    .logo-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#7c3aed);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+  </style>
+</head>
+<body>
+  <div class="blob1"></div>
+  <div class="blob2"></div>
+  <div class="blob3"></div>
+  <div class="grid-bg"></div>
+
+  <div style="width:100%;max-width:400px;padding:0 20px;position:relative;z-index:10">
+    <!-- Brand -->
+    <div style="text-align:center;margin-bottom:28px">
+      <div class="logo-icon">
+        <span style="color:white;font-size:13px;font-weight:900;letter-spacing:-0.5px">DT</span>
+      </div>
+      <div style="font-size:26px;font-weight:800;letter-spacing:-0.8px" class="gradient-text">DT Systems</div>
+      <div style="color:rgba(255,255,255,0.35);font-size:13px;margin-top:4px">David Sebastian Taranto · CRM & Proyectos</div>
     </div>
-    <div class="bg-white rounded-2xl shadow-2xl p-8">
-      ${errorMsg ? `<div class="mb-5 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl">${errorMsg}</div>` : ''}
+
+    <!-- Card -->
+    <div class="card">
+      ${errorMsg ? `<div class="error-box">⚠ ${errorMsg}</div>` : ''}
+
       ${googleConfigured ? `
-      <a href="/admin/auth/google"
-        class="flex items-center justify-center gap-3 w-full border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 font-semibold py-3 rounded-xl transition-colors mb-4">
-        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
+      <a href="/admin/auth/google" class="btn-google">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
         Continuar con Google
       </a>
-      <div class="relative my-4"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-100"></div></div><div class="relative flex justify-center"><span class="bg-white px-3 text-xs text-slate-400">o usá contraseña</span></div></div>` : ''}
+      <div class="divider"><div class="divider-line"></div><span>o con contraseña</span><div class="divider-line"></div></div>` : ''}
+
       <form method="POST" action="/admin/login">
-        <input type="password" name="password" autofocus placeholder="Contraseña"
-          class="w-full border border-slate-200 rounded-xl px-4 py-3 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-        <button class="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-semibold text-sm transition-colors">Entrar</button>
+        <input type="password" name="password" autofocus placeholder="Contraseña de acceso" class="input">
+        <button type="submit" class="btn-submit">Acceder al panel →</button>
       </form>
     </div>
+
+    <div style="text-align:center;margin-top:20px;color:rgba(255,255,255,0.2);font-size:11px">
+      v${APP_VERSION} · Solo uso interno
+    </div>
   </div>
-</body></html>`;
+</body>
+</html>`;
 }
 
 router.get('/login', (req, res) => {
@@ -1612,6 +1656,21 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function getDirSize(dirPath) {
+  if (!fs.existsSync(dirPath)) return 0;
+  let total = 0;
+  try {
+    for (const entry of fs.readdirSync(dirPath)) {
+      const full = path.join(dirPath, entry);
+      try {
+        const stat = fs.statSync(full);
+        total += stat.isDirectory() ? getDirSize(full) : stat.size;
+      } catch {}
+    }
+  } catch {}
+  return total;
+}
+
 router.get('/projects/:id', requireAuth, async (req, res) => {
   const project = await db.getProject(req.params.id);
   if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>', { user: req.session?.user }));
@@ -2334,6 +2393,11 @@ function docLayout(title, sidebarHtml, contentHtml, { pendingCount = 0, user = n
 
 router.get('/documentos', requireAuth, async (req, res) => {
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  const DATA_DIR = path.join(__dirname, '..', 'data');
+  const usedBytes = getDirSize(DATA_DIR);
+  const usedMB = (usedBytes / (1024 * 1024)).toFixed(1);
+  const usedGB = (usedBytes / (1024 * 1024 * 1024)).toFixed(2);
+  const storageLabel = usedBytes > 1024 * 1024 * 1024 ? `${usedGB} GB` : `${usedMB} MB`;
   const folders = await db.listDocumentFolders();
   const projects = await db.listProjects();
   const waClients = await db.listAllClients();
@@ -2522,12 +2586,40 @@ router.get('/documentos', requireAuth, async (req, res) => {
       <div class="flex items-center justify-between mb-5">
         <div>
           <h1 class="text-xl font-bold text-slate-900">Mi Drive</h1>
-          <div class="text-xs text-slate-400 mt-0.5">${totalAll} archivos totales</div>
+          <div class="text-xs text-slate-400 mt-0.5">${totalAll} archivos totales · ${storageLabel} usados</div>
         </div>
         <div class="flex items-center gap-2">
-          <a href="?view=grid" class="px-2.5 py-1.5 rounded-lg text-xs font-medium ${view==='grid'?'bg-slate-800 text-white':'text-slate-500 hover:bg-slate-100'}">⊞ Grilla</a>
-          <a href="?view=list" class="px-2.5 py-1.5 rounded-lg text-xs font-medium ${view==='list'?'bg-slate-800 text-white':'text-slate-500 hover:bg-slate-100'}">≡ Lista</a>
+          <button onclick="document.getElementById('newFolderInline').classList.toggle('hidden')"
+            class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+            + Nueva carpeta
+          </button>
+          <a href="?view=grid" class="px-2.5 py-2 rounded-xl text-xs font-medium ${view==='grid'?'bg-slate-800 text-white':'text-slate-100 border border-slate-200 hover:bg-slate-50 text-slate-500'}">⊞</a>
+          <a href="?view=list" class="px-2.5 py-2 rounded-xl text-xs font-medium ${view==='list'?'bg-slate-800 text-white':'text-slate-100 border border-slate-200 hover:bg-slate-50 text-slate-500'}">≡</a>
         </div>
+      </div>
+      <!-- Inline new folder form -->
+      <div id="newFolderInline" class="hidden bg-white border border-slate-200 rounded-2xl p-5 mb-5 shadow-sm">
+        <h3 class="text-sm font-semibold text-slate-700 mb-4">Nueva carpeta</h3>
+        <form method="POST" action="/admin/documentos/folder/new" class="flex items-end gap-3 flex-wrap">
+          <div class="flex-1 min-w-48">
+            <label class="text-xs text-slate-500 block mb-1">Nombre *</label>
+            <input type="text" name="name" placeholder="Ej: Contratos, Facturas..." required
+              class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div class="flex-1 min-w-36">
+            <label class="text-xs text-slate-500 block mb-1">Descripción</label>
+            <input type="text" name="description" placeholder="Opcional..."
+              class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">Color</label>
+            <div class="flex gap-1.5 items-center">
+              ${['#3b82f6','#8b5cf6','#10b981','#f59e0b','#f43f5e','#64748b'].map((c,i) =>
+                `<label class="cursor-pointer"><input type="radio" name="color" value="${c}" class="sr-only" ${i===0?'checked':''}><div class="w-6 h-6 rounded-full hover:scale-110 transition-transform border-2 border-white shadow-sm" style="background:${c}"></div></label>`).join('')}
+            </div>
+          </div>
+          <button class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-semibold transition-colors">Crear</button>
+        </form>
       </div>
       ${allFolderGroups.filter(g => g.folders.length > 0 || g.emptyMsg).map(g => `
         <div class="mb-7">
@@ -2593,7 +2685,20 @@ router.get('/documentos', requireAuth, async (req, res) => {
       ${uploadSection}`;
   }
 
-  res.send(docLayout('Documentos', sidebarHtml, contentHtml, { pendingCount, user: req.session?.user }));
+  const storageBarWidth = Math.min(Math.round((usedBytes / (512 * 1024 * 1024)) * 100), 95); // assume ~512MB as soft reference
+  const sidebarHtmlFull = sidebarHtml + `
+  <div style="margin-top:auto;padding-top:16px;border-top:1px solid #f1f5f9;padding-left:8px;padding-right:8px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:10px;color:#94a3b8;font-weight:500">Almacenamiento</span>
+      <span style="font-size:10px;color:#64748b;font-weight:600">${storageLabel}</span>
+    </div>
+    <div style="background:#f1f5f9;border-radius:9999px;height:5px;width:100%">
+      <div style="height:5px;border-radius:9999px;background:linear-gradient(to right,#60a5fa,#6366f1);width:${storageBarWidth}%"></div>
+    </div>
+    <div style="font-size:10px;color:#cbd5e1;margin-top:4px">Railway Volume</div>
+  </div>`;
+
+  res.send(docLayout('Documentos', sidebarHtmlFull, contentHtml, { pendingCount, user: req.session?.user }));
 });
 
 router.post('/documentos/folder/new', requireAuth, async (req, res) => {
