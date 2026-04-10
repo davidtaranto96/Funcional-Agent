@@ -177,10 +177,10 @@ function timelineIcon(ev) {
 function layout(title, body, { pendingCount = 0, activePage = '', user = null } = {}) {
   const navItem = (href, icon, label, page) => {
     const active = activePage === page;
-    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
-      <span class="text-base">${icon}</span>
-      <span>${label}</span>
-      ${page === 'clients' && pendingCount > 0 ? `<span class="ml-auto bg-orange-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>` : ''}
+    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${active ? 'bg-blue-600/90 text-white shadow-sm' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}">
+      <span class="text-[15px] leading-none flex-shrink-0 ${active ? 'opacity-100' : 'opacity-60'}">${icon}</span>
+      <span class="flex-1">${label}</span>
+      ${page === 'clients' && pendingCount > 0 ? `<span class="bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>` : ''}
     </a>`;
   };
 
@@ -190,14 +190,14 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
   const userInitial = (userName || userEmail || 'D')[0].toUpperCase();
 
   const userBlock = `
-    <div class="mx-3 mb-2 p-3 bg-slate-800/60 rounded-xl border border-slate-700/40">
+    <div class="mx-3 mb-2 p-2.5 bg-white/5 rounded-xl border border-white/5 hover:bg-white/8 transition-colors cursor-default">
       <div class="flex items-center gap-2.5">
         ${userPhoto
-          ? `<img src="${userPhoto}" class="w-8 h-8 rounded-full flex-shrink-0 ring-2 ring-blue-500/40" alt="">`
-          : `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">${userInitial}</div>`}
+          ? `<img src="${userPhoto}" class="w-7 h-7 rounded-full flex-shrink-0 ring-2 ring-blue-500/30" alt="">`
+          : `<div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${userInitial}</div>`}
         <div class="min-w-0 flex-1">
-          <div class="text-xs font-semibold text-white truncate">${escapeHtml(userName || 'David Taranto')}</div>
-          ${userEmail ? `<div class="text-[10px] text-slate-400 truncate">${escapeHtml(userEmail)}</div>` : '<div class="text-[10px] text-slate-500">Admin</div>'}
+          <div class="text-xs font-semibold text-slate-200 truncate leading-tight">${escapeHtml(userName || 'David Taranto')}</div>
+          ${userEmail ? `<div class="text-[10px] text-slate-500 truncate leading-tight">${escapeHtml(userEmail)}</div>` : '<div class="text-[10px] text-slate-500 leading-tight">Admin</div>'}
         </div>
       </div>
     </div>`;
@@ -221,27 +221,42 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen" style="display:flex">
-  <aside style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-slate-900 flex flex-col border-r border-slate-700/30">
+  <aside style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-[#0f172a] flex flex-col border-r border-white/5">
     <!-- Brand -->
-    <div class="px-5 py-4 border-b border-slate-700/40">
-      <div class="flex items-center gap-2.5">
-        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-          <span class="text-white text-[10px] font-bold tracking-tight">DT</span>
+    <div class="px-4 py-4 border-b border-white/5">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-900/40">
+          <span class="text-white text-[11px] font-black tracking-tight">DT</span>
         </div>
         <div>
-          <div class="text-sm font-bold text-white tracking-tight">DT Systems</div>
-          <div class="text-[10px] text-slate-500 leading-none">CRM & Proyectos <span class="text-slate-600">· v${APP_VERSION}</span></div>
+          <div class="text-sm font-bold text-white tracking-tight leading-tight">DT Systems</div>
+          <div class="text-[10px] text-slate-500 leading-none mt-0.5">CRM & Proyectos · <span class="text-slate-600">v${APP_VERSION}</span></div>
         </div>
       </div>
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 p-3 space-y-0.5 mt-2">
-      ${navItem('/admin', '📊', 'Dashboard', 'dashboard')}
-      ${navItem('/admin/clients', '💬', 'Leads WA', 'clients')}
-      ${navItem('/admin/clientes', '👥', 'Clientes', 'clientes')}
-      ${navItem('/admin/projects', '📁', 'Proyectos', 'projects')}
-      ${navItem('/admin/tasks', '✅', 'Tareas', 'tasks')}
+    <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+      <div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">General</div>
+        <div class="space-y-0.5">
+          ${navItem('/admin', '📊', 'Dashboard', 'dashboard')}
+        </div>
+      </div>
+      <div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Clientes</div>
+        <div class="space-y-0.5">
+          ${navItem('/admin/clients', '💬', 'Leads WA', 'clients')}
+          ${navItem('/admin/clientes', '👥', 'Clientes', 'clientes')}
+        </div>
+      </div>
+      <div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Trabajo</div>
+        <div class="space-y-0.5">
+          ${navItem('/admin/projects', '📁', 'Proyectos', 'projects')}
+          ${navItem('/admin/tasks', '✅', 'Tareas', 'tasks')}
+        </div>
+      </div>
     </nav>
 
     <!-- User + Logout -->
@@ -682,6 +697,11 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
   const phoneUrl = encodeURIComponent(phone);
   const allClients = await db.listAllClients();
   const pendingCount = allClients.filter(c => c.demo_status === 'pending_review').length;
+  const allClientRecords = await db.listClientRecords();
+  // Try to find a matching client by phone
+  const matchedClient = allClientRecords.find(cr =>
+    cr.phone && conv.phone && (cr.phone.replace(/\D/g,'').includes(conv.phone.replace(/\D/g,'').slice(-8)) || conv.phone.replace(/\D/g,'').includes(cr.phone.replace(/\D/g,'').slice(-8)))
+  );
 
   const steps = processSteps(conv);
   const doneCount = steps.filter(s => s.done).length;
@@ -816,6 +836,29 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
               class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500">${escapeHtml(conv.notes || '')}</textarea>
             <button class="mt-2 w-full border border-slate-200 hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-sm transition-colors">Guardar notas</button>
           </form>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-3">Cliente CRM</h2>
+          ${matchedClient ? `
+            <div class="flex items-center gap-2.5 mb-3">
+              ${(() => {
+                const colors = ['bg-blue-100 text-blue-600','bg-purple-100 text-purple-600','bg-emerald-100 text-emerald-600'];
+                const c = colors[matchedClient.name.split('').reduce((a,ch) => a + ch.charCodeAt(0), 0) % colors.length];
+                return `<div class="w-8 h-8 rounded-full ${c} flex items-center justify-center font-bold text-sm">${(matchedClient.name[0]||'?').toUpperCase()}</div>`;
+              })()}
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(matchedClient.name)}</div>
+                ${matchedClient.company ? `<div class="text-xs text-slate-400">${escapeHtml(matchedClient.company)}</div>` : ''}
+              </div>
+            </div>
+            <a href="/admin/clientes/${matchedClient.id}" class="flex items-center justify-center gap-2 w-full border border-blue-200 text-blue-600 hover:bg-blue-50 py-2 rounded-xl text-sm font-medium transition-colors">Ver ficha del cliente →</a>
+          ` : `
+            <p class="text-xs text-slate-400 mb-3">Este lead no está vinculado a ningún cliente registrado.</p>
+            <a href="/admin/clientes/new?phone=${encodeURIComponent(conv.phone)}&name=${encodeURIComponent(conv.report?.cliente?.nombre || '')}&email=${encodeURIComponent(conv.report?.cliente?.email || '')}"
+               class="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">
+              + Crear cliente desde este lead
+            </a>
+          `}
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-2">Historial</h2>
@@ -1030,20 +1073,28 @@ router.get('/tasks', requireAuth, async (req, res) => {
     .filter(g => g.tasks.length > 0);
 
   if (filter === 'high') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.priority === 'high') })).filter(g => g.tasks.length > 0);
-  if (filter === 'overdue') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) < 0) })).filter(g => g.tasks.length > 0);
-  if (filter === 'today') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) === 0) })).filter(g => g.tasks.length > 0);
+  if (filter === 'overdue') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.due_date && new Date(t.due_date) < new Date()) })).filter(g => g.tasks.length > 0);
+  if (filter === 'today') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => { if (!t.due_date) return false; const dl = Math.ceil((new Date(t.due_date) - new Date()) / 86400000); return dl >= 0 && dl <= 1; }) })).filter(g => g.tasks.length > 0);
+  if (filter === 'david') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.assignee === 'david') })).filter(g => g.tasks.length > 0);
+  if (filter === 'hermana') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.assignee === 'hermana') })).filter(g => g.tasks.length > 0);
 
   const totalPending = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done).length, 0);
   const highPriority = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.priority === 'high').length, 0);
-  const overdueCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) < 0).length, 0);
-  const todayCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) === 0).length, 0);
+  const overdueCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.due_date && new Date(t.due_date) < new Date()).length, 0);
+  const todayCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => {
+    if (t.done || !t.due_date) return false;
+    const dl = Math.ceil((new Date(t.due_date) - new Date()) / 86400000);
+    return dl >= 0 && dl <= 1;
+  }).length, 0);
 
   const filterTabs = [
     { key: 'all', label: `Todas (${totalPending})` },
     { key: 'high', label: `Alta prioridad (${highPriority})` },
-    ...(overdueCount > 0 ? [{ key: 'overdue', label: `🔴 Vencidas (${overdueCount})` }] : []),
-    ...(todayCount > 0 ? [{ key: 'today', label: `🟡 Vence hoy (${todayCount})` }] : []),
-  ].map(t => `<a href="/admin/tasks?filter=${t.key}" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">${t.label}</a>`).join('');
+    overdueCount > 0 ? { key: 'overdue', label: `⚠ Vencidas (${overdueCount})` } : null,
+    todayCount > 0 ? { key: 'today', label: `📅 Hoy (${todayCount})` } : null,
+    { key: 'david', label: 'David' },
+    { key: 'hermana', label: 'Hermana' },
+  ].filter(Boolean).map(t => `<a href="/admin/tasks?filter=${t.key}" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">${t.label}</a>`).join('');
 
   const priorityDot = p => {
     if (p === 'high') return '<span class="w-2 h-2 rounded-full bg-red-400 flex-shrink-0 mt-1"></span>';
@@ -1501,6 +1552,8 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
   if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>', { user: req.session?.user }));
 
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  // Load linked client if exists
+  const linkedClient = project.client_id ? await db.getClientRecord(project.client_id) : null;
   const tasks = project.tasks || [];
 
   // Archivos del proyecto
@@ -1738,6 +1791,26 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             <a href="/admin/projects/${project.id}/edit" class="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">✏️ Editar proyecto</a>
           </div>
         </div>
+        ${linkedClient ? `
+  <div class="bg-white rounded-2xl border border-slate-200 p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide">Cliente vinculado</h2>
+      <a href="/admin/clientes/${linkedClient.id}" class="text-xs text-blue-600 hover:underline">Ver →</a>
+    </div>
+    <div class="flex items-center gap-2.5">
+      ${(() => {
+        const colors = ['bg-blue-500','bg-purple-500','bg-emerald-500','bg-orange-500','bg-rose-500'];
+        const bg = colors[linkedClient.name.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % colors.length];
+        return `<div class="w-8 h-8 rounded-full ${bg} flex items-center justify-center text-white font-bold text-sm flex-shrink-0">${(linkedClient.name[0]||'?').toUpperCase()}</div>`;
+      })()}
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(linkedClient.name)}</div>
+        ${linkedClient.company ? `<div class="text-xs text-slate-400 truncate">${escapeHtml(linkedClient.company)}</div>` : ''}
+      </div>
+    </div>
+    ${linkedClient.phone ? `<a href="tel:${escapeHtml(linkedClient.phone)}" class="text-xs text-blue-600 hover:underline mt-2 block">${escapeHtml(linkedClient.phone)}</a>` : ''}
+    ${linkedClient.email ? `<a href="mailto:${escapeHtml(linkedClient.email)}" class="text-xs text-slate-400 hover:underline truncate block">${escapeHtml(linkedClient.email)}</a>` : ''}
+  </div>` : ''}
       </div>
     </div>`;
 
@@ -1968,10 +2041,15 @@ router.get('/clientes', requireAuth, async (req, res) => {
 
 router.get('/clientes/new', requireAuth, async (req, res) => {
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  const prefill = {
+    phone: req.query.phone || '',
+    name: req.query.name || '',
+    email: req.query.email || '',
+  };
   const body = `
     <div class="mb-5"><a href="/admin/clientes" class="text-sm text-slate-500 hover:text-blue-600">← Clientes</a></div>
     <h1 class="text-2xl font-bold text-slate-900 mb-6">Nuevo cliente</h1>
-    ${clientForm({}, '/admin/clientes')}`;
+    ${clientForm(prefill, '/admin/clientes')}`;
   res.send(layout('Nuevo cliente', body, { pendingCount, activePage: 'clientes', user: req.session?.user }));
 });
 
