@@ -7,7 +7,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.6'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.7'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -276,7 +276,7 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
       <div>
         <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Clientes</div>
         <div class="space-y-0.5">
-          ${navItem('/admin/clients', '💬', 'Leads WA', 'clients')}
+          ${navItem('/admin/clients', '💬', 'Pipeline', 'clients')}
           ${navItem('/admin/clientes', '👥', 'Clientes', 'clientes')}
         </div>
       </div>
@@ -461,7 +461,7 @@ router.get('/', requireAuth, async (req, res) => {
   const pendingTasks = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done).length, 0);
 
   const metricCards = [
-    { label: 'Leads WA',        value: clients.length,        icon: '💬', grad: 'from-blue-500 to-blue-600',      sub: `${clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length} activos`, href: '/admin/clients' },
+    { label: 'Pipeline WA',     value: clients.length,        icon: '💬', grad: 'from-blue-500 to-blue-600',      sub: `${clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length} activos`, href: '/admin/clients' },
     { label: 'Demos pendientes', value: pendingReview.length,  icon: '⏳', grad: pendingReview.length > 0 ? 'from-orange-400 to-orange-500' : 'from-slate-400 to-slate-500', sub: 'para revisar', alert: pendingReview.length > 0, href: '/admin/clients' },
     { label: 'Proyectos activos',value: activeProjects,        icon: '📁', grad: 'from-purple-500 to-purple-600',  sub: `${projects.length} en total`, href: '/admin/projects' },
     { label: 'Tareas pendientes',value: pendingTasks,          icon: '✅', grad: pendingTasks > 0 ? 'from-amber-400 to-amber-500' : 'from-emerald-500 to-emerald-600', sub: 'en proyectos', href: '/admin/tasks' },
@@ -701,15 +701,22 @@ router.get('/clients', requireAuth, async (req, res) => {
   });
   if (filter !== 'all') clients = clients.filter(c => c.client_stage === filter);
 
-  const tabs = [{ key: 'all', label: 'Todos', count: allClients.length },
-    ...STAGES.map(s => ({ key: s.key, label: s.label, count: allClients.filter(c => c.client_stage === s.key).length }))
+  const tabs = [{ key: 'all', label: 'Todos', count: allClients.length, dot: null },
+    ...STAGES.map(s => ({ key: s.key, label: s.label, count: allClients.filter(c => c.client_stage === s.key).length, dot: s.dot }))
   ].filter(t => t.key === 'all' || t.count > 0);
 
   const tabHtml = tabs.map(t => `
-    <a href="/admin/clients?stage=${t.key}${search ? '&q=' + encodeURIComponent(search) : ''}"
-      class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
-      ${t.label} <span class="text-xs ${filter === t.key ? 'opacity-70' : 'text-slate-400'}">${t.count}</span>
+    <a href="/admin/clients?stage=${t.key}&view=${view}${search ? '&q=' + encodeURIComponent(search) : ''}"
+      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}">
+      ${t.dot ? `<span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${t.dot}"></span>` : ''}
+      ${t.label} <span class="text-xs ${filter === t.key ? 'opacity-60' : 'text-slate-400'} ml-0.5">${t.count}</span>
     </a>`).join('');
+
+  // Stats para header
+  const statsTotal = allClients.length;
+  const statsActivos = allClients.filter(c => !['lost','dormant','won'].includes(c.client_stage)).length;
+  const statsDemos = allClients.filter(c => ['sent','approved'].includes(c.demo_status)).length;
+  const statsGanados = allClients.filter(c => c.client_stage === 'won').length;
 
   // Mobile cards + desktop table rows
   const mobileCards = clients.map(c => {
@@ -746,34 +753,46 @@ router.get('/clients', requireAuth, async (req, res) => {
   }).join('');
 
   const rows = clients.map(c => {
-    const nombre = c.report?.cliente?.nombre || c.context?.nombre || '—';
-    const tipo = c.report?.proyecto?.tipo || '—';
+    const nombre = c.report?.cliente?.nombre || c.context?.nombre || null;
+    const tipo = c.report?.proyecto?.tipo || null;
     const phoneUrl = encodeURIComponent(c.phone);
     const steps = processSteps(c);
     const done = steps.filter(s => s.done).length;
     const pct = Math.round(done / steps.length * 100);
+    const lastMsg = (c.history || []).filter(m => m.role === 'user').pop();
+    const preview = lastMsg ? escapeHtml(lastMsg.content.slice(0, 55)) + (lastMsg.content.length > 55 ? '…' : '') : '';
+    const stage = STAGES.find(s => s.key === (c.client_stage || 'lead')) || STAGES[0];
     return `
-      <tr class="border-b border-slate-100 hover:bg-blue-50/30 transition-colors cursor-pointer group" onclick="location.href='/admin/client/${phoneUrl}'">
+      <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group" onclick="location.href='/admin/client/${phoneUrl}'">
         <td class="px-4 py-3.5">
-          <div class="font-medium text-slate-800">${escapeHtml(nombre)}</div>
-          <div class="text-xs text-slate-400 mt-0.5">${escapeHtml(c.phone)}</div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold text-white" style="background:${stage.dot}">
+              ${nombre ? escapeHtml(nombre[0].toUpperCase()) : '?'}
+            </div>
+            <div class="min-w-0">
+              <div class="font-semibold text-slate-800 ${nombre ? '' : 'text-slate-400 italic'}">${escapeHtml(nombre || 'Sin identificar')}</div>
+              <div class="text-xs text-slate-400 truncate mt-0.5 max-w-[180px]">${preview || escapeHtml(c.phone)}</div>
+            </div>
+          </div>
         </td>
-        <td class="px-4 py-3.5 text-sm text-slate-600 max-w-xs"><div class="truncate">${escapeHtml(tipo)}</div></td>
+        <td class="px-4 py-3.5 text-sm text-slate-500 max-w-[160px]">
+          <div class="truncate">${tipo ? escapeHtml(tipo) : '<span class="text-slate-300 italic">Sin proyecto</span>'}</div>
+        </td>
         <td class="px-4 py-3.5">${stageBadge(c.client_stage)}</td>
         <td class="px-4 py-3.5">${demoStatusBadge(c.demo_status)}</td>
         <td class="px-4 py-3.5">
           <div class="flex items-center gap-2">
-            <div class="bg-slate-100 rounded-full h-1.5" style="width:72px">
-              <div class="h-1.5 rounded-full bg-blue-500" style="width:${pct}%"></div>
+            <div class="bg-slate-100 rounded-full h-1.5" style="width:64px">
+              <div class="h-1.5 rounded-full bg-blue-500 transition-all" style="width:${pct}%"></div>
             </div>
-            <span class="text-xs text-slate-400">${done}/${steps.length}</span>
+            <span class="text-xs text-slate-400 tabular-nums">${done}/${steps.length}</span>
           </div>
         </td>
-        <td class="px-4 py-3.5 text-xs text-slate-400">${timeAgo(c.updated_at)}</td>
+        <td class="px-4 py-3.5 text-xs text-slate-400 whitespace-nowrap">${timeAgo(c.updated_at)}</td>
         <td class="px-4 py-3.5 text-right">
           ${c.demo_status === 'pending_review'
-            ? `<a href="/admin/review/${phoneUrl}" class="bg-orange-100 text-orange-700 hover:bg-orange-200 text-xs font-semibold px-2.5 py-1 rounded-lg" onclick="event.stopPropagation()">Revisar</a>`
-            : `<a href="/admin/client/${phoneUrl}" class="opacity-0 group-hover:opacity-100 text-blue-600 text-xs transition-opacity" onclick="event.stopPropagation()">Abrir →</a>`}
+            ? `<a href="/admin/review/${phoneUrl}" class="bg-orange-500 text-white hover:bg-orange-600 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors" onclick="event.stopPropagation()">Revisar →</a>`
+            : `<span class="opacity-0 group-hover:opacity-100 text-blue-600 text-xs transition-opacity font-medium">Abrir →</span>`}
         </td>
       </tr>`;
   }).join('');
@@ -817,44 +836,82 @@ router.get('/clients', requireAuth, async (req, res) => {
   })();
 
   const body = `
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-      <h1 class="text-xl md:text-2xl font-bold text-slate-900">Leads WhatsApp</h1>
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold text-slate-900">Pipeline</h1>
+        <p class="text-sm text-slate-400 mt-0.5">Consultas recibidas por WhatsApp</p>
+      </div>
       <div class="flex items-center gap-2 flex-wrap">
         <button onclick="location.reload()" title="Actualizar" class="flex items-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
           Actualizar
         </button>
-        <span class="text-sm text-slate-400">${clients.length} resultado${clients.length !== 1 ? 's' : ''}</span>
-        <div class="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5">
+        <div class="flex items-center gap-0.5 border border-slate-200 rounded-lg p-0.5 bg-white">
           <a href="/admin/clients?stage=${escapeHtml(filter)}&view=list${search ? '&q='+encodeURIComponent(search) : ''}"
-            class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === 'list' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'}">☰ Lista</a>
+            class="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            Lista
+          </a>
           <a href="/admin/clients?stage=${escapeHtml(filter)}&view=kanban${search ? '&q='+encodeURIComponent(search) : ''}"
-            class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === 'kanban' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'}">⊞ Kanban</a>
+            class="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === 'kanban' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Kanban
+          </a>
         </div>
         <div class="relative group">
-          <button class="text-xs border border-dashed border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-500 px-3 py-1.5 rounded-lg transition-colors">
-            + Lead de prueba
+          <button class="flex items-center gap-1 text-xs border border-dashed border-slate-300 text-slate-400 hover:border-blue-300 hover:text-blue-500 px-3 py-1.5 rounded-lg transition-colors">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Lead de prueba
           </button>
-          <div class="hidden group-hover:block absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 w-48 py-1">
+          <div class="hidden group-hover:block absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 w-52 py-1.5">
+            <div class="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tipo de demo</div>
             <form method="POST" action="/admin/create-demo-lead"><input type="hidden" name="tipo" value="web">
-              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600">🌐 Web (Panadería)</button></form>
+              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600 flex items-center gap-2">🌐 <span>Web — Panadería</span></button></form>
             <form method="POST" action="/admin/create-demo-lead"><input type="hidden" name="tipo" value="bot">
-              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600">💬 Bot WA (Veterinaria)</button></form>
+              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600 flex items-center gap-2">💬 <span>Bot WA — Veterinaria</span></button></form>
             <form method="POST" action="/admin/create-demo-lead"><input type="hidden" name="tipo" value="app">
-              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600">📱 App móvil (Gimnasio)</button></form>
+              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600 flex items-center gap-2">📱 <span>App móvil — Gimnasio</span></button></form>
           </div>
         </div>
       </div>
     </div>
-    <div class="flex items-center gap-3 mb-4">
+
+    <!-- Stat cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div class="bg-white rounded-2xl border border-slate-200 px-4 py-3.5">
+        <div class="text-xs text-slate-400 font-medium mb-1">Total contactos</div>
+        <div class="text-2xl font-bold text-slate-800">${statsTotal}</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 px-4 py-3.5">
+        <div class="text-xs text-slate-400 font-medium mb-1">En proceso</div>
+        <div class="text-2xl font-bold text-blue-600">${statsActivos}</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 px-4 py-3.5">
+        <div class="text-xs text-slate-400 font-medium mb-1">Demos enviadas</div>
+        <div class="text-2xl font-bold text-indigo-600">${statsDemos}</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 px-4 py-3.5">
+        <div class="text-xs text-slate-400 font-medium mb-1">Proyectos ganados</div>
+        <div class="text-2xl font-bold text-emerald-600">${statsGanados}</div>
+      </div>
+    </div>
+
+    <!-- Search + tabs -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-4">
       <form method="GET" action="/admin/clients" class="flex-1">
         <input type="hidden" name="stage" value="${escapeHtml(filter)}">
         <input type="hidden" name="view" value="${escapeHtml(view)}">
-        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, teléfono o proyecto..."
-          class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, teléfono o proyecto..."
+            class="w-full border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+        </div>
       </form>
     </div>
-    <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
+    <div class="flex items-center gap-1.5 mb-4 flex-wrap">${tabHtml}
+      <span class="ml-auto text-xs text-slate-400 self-center">${clients.length} resultado${clients.length !== 1 ? 's' : ''}</span>
+    </div>
     ${view === 'kanban' ? kanbanHtml : `
     <!-- Mobile: cards -->
     <div class="md:hidden space-y-3">
@@ -882,7 +939,7 @@ router.get('/clients', requireAuth, async (req, res) => {
       </div>
     </div>`}`;
 
-  res.send(layout('Leads WA', body, { pendingCount: pendingReview.length, activePage: 'clients', user: req.session?.user }));
+  res.send(layout('Pipeline', body, { pendingCount: pendingReview.length, activePage: 'clients', user: req.session?.user }));
 });
 
 // ─── WA Client detail ────────────────────────────────────────────────────────
@@ -975,7 +1032,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
   ].filter(([, v]) => v);
 
   const body = `
-    <div class="mb-5"><a href="/admin/clients" class="text-sm text-slate-500 hover:text-blue-600">← Leads WA</a></div>
+    <div class="mb-5"><a href="/admin/clients" class="text-sm text-slate-500 hover:text-blue-600">← Pipeline</a></div>
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
       <div>
         <h1 class="text-xl md:text-2xl font-bold text-slate-900">${escapeHtml(nombre)}</h1>
