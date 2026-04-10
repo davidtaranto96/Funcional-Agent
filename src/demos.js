@@ -275,35 +275,39 @@ async function generateMiniPDF(report) {
   });
 }
 
-// Detecta si el proyecto incluye bot/automatización de WhatsApp
-function isWhatsappBotProject(report) {
+function detectDemoTypes(report) {
   const fields = [
     report.proyecto?.tipo || '',
     report.proyecto?.descripcion || '',
     (report.proyecto?.funcionalidades || []).join(' '),
     report.proyecto?.plataforma || '',
   ].join(' ').toLowerCase();
-  return ['whatsapp', 'bot', 'chatbot', 'automatizac', 'asistente automático', 'mensaje automático']
-    .some(k => fields.includes(k));
+
+  const waKeywords = ['whatsapp', 'bot', 'chatbot', 'automatizac', 'asistente automático', 'mensaje automático'];
+  const webKeywords = ['web', 'página', 'pagina', 'sitio', 'landing', 'tienda', 'shop', 'ecommerce', 'e-commerce', 'app', 'aplicación', 'aplicacion', 'sistema', 'dashboard', 'panel', 'gestión', 'gestion', 'plataforma'];
+
+  const needsWA  = waKeywords.some(k => fields.includes(k));
+  const needsWeb = webKeywords.some(k => fields.includes(k));
+
+  return {
+    landing: needsWeb || !needsWA,  // si no es WA puro, siempre hacemos visual web/app
+    whatsapp: needsWA,
+  };
 }
 
 // ============ Orquestador: genera demos según el tipo de proyecto ============
 async function generateAllDemos(report) {
-  const needsWAMockup = isWhatsappBotProject(report);
-  console.log(`[demos] Tipo: ${report.proyecto?.tipo} | WA mockup: ${needsWAMockup}`);
+  const demos = detectDemoTypes(report);
+  console.log(`[demos] Tipo: "${report.proyecto?.tipo}" → landing:${demos.landing} WA:${demos.whatsapp}`);
 
   const [landingHTML, whatsappPng, pdfBuffer] = await Promise.all([
-    generateLandingHTML(report).catch(err => {
-      console.error('Error generando landing:', err);
-      return `<!DOCTYPE html><html><body><h1>Propuesta para ${report.cliente?.nombre || 'Cliente'}</h1><p>Error generando landing.</p></body></html>`;
-    }),
-    needsWAMockup
+    demos.landing
+      ? generateLandingHTML(report).catch(err => { console.error('Error generando landing:', err); return null; })
+      : Promise.resolve(null),
+    demos.whatsapp
       ? generateWhatsappMockup(report).catch(err => { console.error('Error generando mockup WA:', err); return null; })
       : Promise.resolve(null),
-    generateMiniPDF(report).catch(err => {
-      console.error('Error generando PDF:', err);
-      return null;
-    }),
+    generateMiniPDF(report).catch(err => { console.error('Error generando PDF:', err); return null; }),
   ]);
 
   return { landingHTML, whatsappPng, pdfBuffer };
