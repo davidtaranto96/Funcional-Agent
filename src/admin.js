@@ -528,6 +528,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-3">Acciones</h2>
           ${conv.demo_status === 'pending_review' ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">👁 Revisar demos</a>` : ''}
+          ${conv.report ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Convertir en proyecto</a>` : ''}
           <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
             <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">🔄 Regenerar demos</button>
           </form>
@@ -569,6 +570,49 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
     </div>`;
 
   res.send(layout(nombre, body, { pendingCount, activePage: 'clients' }));
+});
+
+// ─── Convertir lead WA en proyecto ──────────────────────────────────────────
+
+router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  const conv = await db.getConversation(phone);
+  if (!conv?.report) return res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+
+  const r = conv.report;
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+
+  // Pre-cargar datos del reporte en el formulario de proyecto
+  const prefill = {
+    client_name:   r.cliente?.nombre || '',
+    client_phone:  phoneSlug(phone),
+    client_email:  r.cliente?.email || '',
+    title:         r.proyecto?.tipo ? `${r.proyecto.tipo} — ${r.cliente?.nombre || ''}`.trim() : '',
+    type:          r.proyecto?.tipo || '',
+    description:   [r.proyecto?.descripcion, r.resumen_ejecutivo].filter(Boolean).join('\n\n'),
+    budget:        r.requisitos?.presupuesto || '',
+    budget_status: 'not_quoted',
+    status:        'planning',
+    notes:         r.requisitos?.notas_adicionales || '',
+    tasks: (r.proyecto?.funcionalidades || []).map(f => ({
+      text: f, done: false, priority: 'medium', assignee: 'david',
+    })),
+  };
+
+  const nombre = r.cliente?.nombre || phone;
+  const body = `
+    <div class="mb-5 flex items-center gap-3">
+      <a href="/admin/client/${encodeURIComponent(phone)}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(nombre)}</a>
+      <span class="text-slate-300">/</span>
+      <span class="text-sm text-slate-500">Convertir en proyecto</span>
+    </div>
+    <div class="flex items-center gap-3 mb-6">
+      <h1 class="text-2xl font-bold text-slate-900">Nuevo proyecto</h1>
+      <span class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">Pre-cargado del lead WA</span>
+    </div>
+    ${projectForm(prefill, '/admin/projects', 'Crear proyecto')}`;
+
+  res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects' }));
 });
 
 // ─── Review ──────────────────────────────────────────────────────────────────
