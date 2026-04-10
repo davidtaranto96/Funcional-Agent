@@ -59,8 +59,24 @@ async function init() {
       notes TEXT DEFAULT '',
       updates_log TEXT DEFAULT '[]',
       is_personal INTEGER DEFAULT 0,
+      category TEXT DEFAULT 'cliente',
       deadline TEXT,
+      client_id TEXT DEFAULT '',
       created_by TEXT DEFAULT 'david',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS client_records (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL DEFAULT '',
+      phone TEXT DEFAULT '',
+      email TEXT DEFAULT '',
+      company TEXT DEFAULT '',
+      category TEXT DEFAULT 'cliente',
+      notes TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -85,6 +101,8 @@ async function init() {
     `ALTER TABLE projects ADD COLUMN updates_log TEXT DEFAULT '[]'`,
     `ALTER TABLE projects ADD COLUMN is_personal INTEGER DEFAULT 0`,
     `ALTER TABLE projects ADD COLUMN deadline TEXT`,
+    `ALTER TABLE projects ADD COLUMN category TEXT DEFAULT 'cliente'`,
+    `ALTER TABLE projects ADD COLUMN client_id TEXT DEFAULT ''`,
   ];
   for (const sql of projectMigrations) {
     try { await db.execute(sql); } catch (e) { /* already exists */ }
@@ -130,7 +148,9 @@ function parseProject(row) {
     notes: String(row.notes || ''),
     updates_log: row.updates_log ? JSON.parse(String(row.updates_log)) : [],
     is_personal: Number(row.is_personal || 0) === 1,
+    category: String(row.category || 'cliente'),
     deadline: row.deadline || null,
+    client_id: String(row.client_id || ''),
     created_by: String(row.created_by || 'david'),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -279,13 +299,13 @@ async function createProject(data) {
   const id = `proj_${Date.now()}`;
   const db = getDb();
   await db.execute({
-    sql: `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, is_personal, deadline, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, is_personal, deadline, category, client_id, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [id, data.client_name || '', data.client_phone || '', data.client_email || '',
            data.title || '', data.type || '', data.description || '',
            data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
            JSON.stringify(data.tasks || []), data.notes || '', data.is_personal ? 1 : 0,
-           data.deadline || null, data.created_by || 'david'],
+           data.deadline || null, data.category || 'cliente', data.client_id || '', data.created_by || 'david'],
   });
   return id;
 }
@@ -294,12 +314,12 @@ async function updateProject(id, data) {
   const db = getDb();
   await db.execute({
     sql: `UPDATE projects SET client_name=?, client_phone=?, client_email=?, title=?, type=?, description=?,
-          status=?, budget=?, budget_status=?, tasks=?, notes=?, is_personal=?, deadline=?, updated_at=datetime('now') WHERE id=?`,
+          status=?, budget=?, budget_status=?, tasks=?, notes=?, is_personal=?, category=?, deadline=?, client_id=?, updated_at=datetime('now') WHERE id=?`,
     args: [data.client_name || '', data.client_phone || '', data.client_email || '',
            data.title || '', data.type || '', data.description || '',
            data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
            JSON.stringify(data.tasks || []), data.notes || '', data.is_personal ? 1 : 0,
-           data.deadline || null, id],
+           data.category || 'cliente', data.deadline || null, data.client_id || '', id],
   });
 }
 
@@ -320,10 +340,72 @@ async function addProjectUpdate(id, text) {
   });
 }
 
+// ─── Client Records ───────────────────────────────────────────────────────────
+
+function parseClientRecord(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: String(row.name || ''),
+    phone: String(row.phone || ''),
+    email: String(row.email || ''),
+    company: String(row.company || ''),
+    category: String(row.category || 'cliente'),
+    notes: String(row.notes || ''),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+async function listClientRecords() {
+  const db = getDb();
+  const result = await db.execute('SELECT * FROM client_records ORDER BY updated_at DESC');
+  return result.rows.map(parseClientRecord);
+}
+
+async function getClientRecord(id) {
+  const db = getDb();
+  const result = await db.execute({ sql: 'SELECT * FROM client_records WHERE id = ?', args: [id] });
+  return result.rows.length ? parseClientRecord(result.rows[0]) : null;
+}
+
+async function createClientRecord(data) {
+  const id = `cl_${Date.now()}`;
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT INTO client_records (id, name, phone, email, company, category, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.name || '', data.phone || '', data.email || '',
+           data.company || '', data.category || 'cliente', data.notes || ''],
+  });
+  return id;
+}
+
+async function updateClientRecord(id, data) {
+  const db = getDb();
+  await db.execute({
+    sql: `UPDATE client_records SET name=?, phone=?, email=?, company=?, category=?, notes=?, updated_at=datetime('now') WHERE id=?`,
+    args: [data.name || '', data.phone || '', data.email || '',
+           data.company || '', data.category || 'cliente', data.notes || '', id],
+  });
+}
+
+async function deleteClientRecord(id) {
+  const db = getDb();
+  await db.execute({ sql: 'DELETE FROM client_records WHERE id = ?', args: [id] });
+}
+
+async function getProjectsByClientId(clientId) {
+  const db = getDb();
+  const result = await db.execute({ sql: 'SELECT * FROM projects WHERE client_id = ? ORDER BY updated_at DESC', args: [clientId] });
+  return result.rows.map(parseProject);
+}
+
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
   updateDemoStatus, updateClientStage, setDriveFolderId, setNotes, setDemoNotes,
   appendTimelineEvent, listAllClients, getClientsByStage,
   listProjects, getProject, createProject, updateProject, deleteProject, addProjectUpdate,
+  listClientRecords, getClientRecord, createClientRecord, updateClientRecord, deleteClientRecord, getProjectsByClientId,
 };

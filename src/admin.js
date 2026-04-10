@@ -3,6 +3,8 @@ const path = require('path');
 const express = require('express');
 const multer = require('multer');
 const db = require('./db');
+
+const APP_VERSION = '1.2.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 
 // ─── Multer: upload de archivos para proyectos ───────────────────────────────
@@ -98,6 +100,33 @@ const BUDGET_STATUS = [
   { key: 'partial',    label: 'Pago parcial',     badge: 'bg-amber-100 text-amber-700' },
   { key: 'paid',       label: 'Pagado ✓',         badge: 'bg-emerald-100 text-emerald-700' },
 ];
+
+const PROJECT_CATEGORIES = [
+  { key: 'cliente',     label: 'Cliente',     color: '#3b82f6', badge: 'bg-blue-100 text-blue-700',     dot: '🔵' },
+  { key: 'personal',   label: 'Personal',    color: '#8b5cf6', badge: 'bg-violet-100 text-violet-700',  dot: '🟣' },
+  { key: 'ventas',     label: 'Ventas',      color: '#10b981', badge: 'bg-emerald-100 text-emerald-700',dot: '🟢' },
+  { key: 'desarrollo', label: 'Desarrollo',  color: '#f59e0b', badge: 'bg-amber-100 text-amber-700',    dot: '🟡' },
+  { key: 'diseño',     label: 'Diseño',      color: '#ec4899', badge: 'bg-pink-100 text-pink-700',      dot: '🩷' },
+  { key: 'otro',       label: 'Otro',        color: '#64748b', badge: 'bg-slate-100 text-slate-600',    dot: '⚪' },
+];
+
+const CLIENT_CATEGORIES = [
+  { key: 'cliente',     label: 'Cliente',     badge: 'bg-blue-100 text-blue-700' },
+  { key: 'empresa',     label: 'Empresa',     badge: 'bg-indigo-100 text-indigo-700' },
+  { key: 'freelancer',  label: 'Freelancer',  badge: 'bg-emerald-100 text-emerald-700' },
+  { key: 'partner',     label: 'Partner',     badge: 'bg-amber-100 text-amber-700' },
+  { key: 'potencial',   label: 'Potencial',   badge: 'bg-violet-100 text-violet-700' },
+];
+
+function clientCategoryBadge(key) {
+  const c = CLIENT_CATEGORIES.find(x => x.key === key) || CLIENT_CATEGORIES[0];
+  return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${c.badge}">${c.label}</span>`;
+}
+
+function categoryBadge(key) {
+  const c = PROJECT_CATEGORIES.find(x => x.key === key) || PROJECT_CATEGORIES[0];
+  return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${c.badge}">${c.dot} ${c.label}</span>`;
+}
 
 function stageBadge(key) {
   const s = STAGES.find(x => x.key === key) || STAGES[0];
@@ -201,7 +230,7 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
         </div>
         <div>
           <div class="text-sm font-bold text-white tracking-tight">DT Systems</div>
-          <div class="text-[10px] text-slate-500 leading-none">CRM & Proyectos</div>
+          <div class="text-[10px] text-slate-500 leading-none">CRM & Proyectos <span class="text-slate-600">· v${APP_VERSION}</span></div>
         </div>
       </div>
     </div>
@@ -210,6 +239,7 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
     <nav class="flex-1 p-3 space-y-0.5 mt-2">
       ${navItem('/admin', '📊', 'Dashboard', 'dashboard')}
       ${navItem('/admin/clients', '💬', 'Leads WA', 'clients')}
+      ${navItem('/admin/clientes', '👥', 'Clientes', 'clientes')}
       ${navItem('/admin/projects', '📁', 'Proyectos', 'projects')}
       ${navItem('/admin/tasks', '✅', 'Tareas', 'tasks')}
     </nav>
@@ -461,7 +491,12 @@ router.get('/', requireAuth, async (req, res) => {
                 <div class="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${t.priority === 'high' ? 'bg-red-400' : t.priority === 'medium' ? 'bg-amber-400' : 'bg-slate-300'}"></div>
                 <div class="flex-1 min-w-0">
                   <div class="text-xs text-slate-700 group-hover:text-blue-600 truncate">${escapeHtml(t.text)}</div>
-                  <div class="text-[10px] text-slate-400 truncate">${escapeHtml(t.projectTitle)}${t.isPersonal ? ' · Personal' : ''}</div>
+                  <div class="text-[10px] text-slate-400 truncate">${escapeHtml(t.projectTitle)}</div>
+                  ${t.due_date ? (() => {
+                    const dl = Math.ceil((new Date(t.due_date) - new Date()) / 86400000);
+                    const color = dl < 0 ? 'text-red-500' : dl <= 1 ? 'text-orange-500' : 'text-slate-400';
+                    return `<div class="text-[10px] ${color} font-medium">📅 ${dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : `en ${dl}d`}</div>`;
+                  })() : ''}
                 </div>
               </a>`).join('')}
             ${allPendingTasks.length > 5 ? `<a href="/admin/tasks" class="text-xs text-slate-400 hover:text-blue-600 pt-1 block">+${allPendingTasks.length - 5} más →</a>` : ''}
@@ -820,6 +855,7 @@ router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
   };
 
   const nombre = r.cliente?.nombre || phone;
+  const clientList = await db.listClientRecords();
   const body = `
     <div class="mb-5 flex items-center gap-3">
       <a href="/admin/client/${encodeURIComponent(phone)}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(nombre)}</a>
@@ -830,7 +866,7 @@ router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
       <h1 class="text-2xl font-bold text-slate-900">Nuevo proyecto</h1>
       <span class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">Pre-cargado del lead WA</span>
     </div>
-    ${projectForm(prefill, '/admin/projects', 'Crear proyecto')}`;
+    ${projectForm(prefill, '/admin/projects', 'Crear proyecto', clientList)}`;
 
   res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
@@ -983,7 +1019,7 @@ router.get('/tasks', requireAuth, async (req, res) => {
   const projects = await db.listProjects();
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
 
-  const filter = req.query.filter || 'all'; // all | high | personal | client
+  const filter = req.query.filter || 'all'; // all | high | overdue | today
 
   // Gather all pending tasks with project context
   let taskGroups = projects
@@ -994,17 +1030,19 @@ router.get('/tasks', requireAuth, async (req, res) => {
     .filter(g => g.tasks.length > 0);
 
   if (filter === 'high') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.priority === 'high') })).filter(g => g.tasks.length > 0);
-  if (filter === 'personal') taskGroups = taskGroups.filter(g => g.project.is_personal);
-  if (filter === 'client') taskGroups = taskGroups.filter(g => !g.project.is_personal);
+  if (filter === 'overdue') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) < 0) })).filter(g => g.tasks.length > 0);
+  if (filter === 'today') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) === 0) })).filter(g => g.tasks.length > 0);
 
   const totalPending = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done).length, 0);
   const highPriority = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.priority === 'high').length, 0);
+  const overdueCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) < 0).length, 0);
+  const todayCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.due_date && Math.ceil((new Date(t.due_date) - new Date()) / 86400000) === 0).length, 0);
 
   const filterTabs = [
     { key: 'all', label: `Todas (${totalPending})` },
     { key: 'high', label: `Alta prioridad (${highPriority})` },
-    { key: 'personal', label: 'Personal' },
-    { key: 'client', label: 'Clientes' },
+    ...(overdueCount > 0 ? [{ key: 'overdue', label: `🔴 Vencidas (${overdueCount})` }] : []),
+    ...(todayCount > 0 ? [{ key: 'today', label: `🟡 Vence hoy (${todayCount})` }] : []),
   ].map(t => `<a href="/admin/tasks?filter=${t.key}" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">${t.label}</a>`).join('');
 
   const priorityDot = p => {
@@ -1015,11 +1053,11 @@ router.get('/tasks', requireAuth, async (req, res) => {
 
   const groups = taskGroups.map(g => `
     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-4">
-      <div class="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 ${g.project.is_personal ? 'bg-violet-50' : 'bg-slate-50'}">
+      <div class="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <span class="text-sm font-semibold text-slate-800">${escapeHtml(g.project.title || g.project.client_name)}</span>
-            ${g.project.is_personal ? '<span class="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-medium">Personal</span>' : ''}
+            ${categoryBadge(g.project.category || 'cliente')}
             ${g.project.deadline ? (() => {
               const d = new Date(g.project.deadline);
               const dl = Math.ceil((d - new Date()) / 86400000);
@@ -1039,7 +1077,16 @@ router.get('/tasks', requireAuth, async (req, res) => {
               ${priorityDot(t.priority)}
               <div class="flex-1 min-w-0">
                 <div class="text-sm text-slate-700">${escapeHtml(t.text)}</div>
-                ${t.assignee ? `<div class="text-xs text-slate-400 mt-0.5">${escapeHtml(t.assignee)}</div>` : ''}
+                <div class="flex items-center gap-1 mt-0.5">
+                  ${t.assignee ? `<span class="text-xs text-slate-400">${escapeHtml(t.assignee)}</span>` : ''}
+                  ${t.due_date ? (() => {
+                    const d = new Date(t.due_date);
+                    const dl = Math.ceil((d - new Date()) / 86400000);
+                    const color = dl < 0 ? 'text-red-500' : dl <= 2 ? 'text-orange-500' : 'text-slate-400';
+                    const label = dl < 0 ? `Vencida` : dl === 0 ? 'Hoy' : `${dl}d`;
+                    return `<span class="text-[10px] ${color} font-medium ml-1">📅 ${label}</span>`;
+                  })() : ''}
+                </div>
               </div>
             </div>
           </form>`).join('')}
@@ -1075,14 +1122,16 @@ router.get('/projects', requireAuth, async (req, res) => {
 
   if (search) projects = projects.filter(p =>
     p.client_name.toLowerCase().includes(search) || p.title.toLowerCase().includes(search) || p.type.toLowerCase().includes(search));
-  if (filter === 'personal') projects = projects.filter(p => p.is_personal);
-  else if (filter === 'client') projects = projects.filter(p => !p.is_personal);
-  else if (filter !== 'all') projects = projects.filter(p => p.status === filter);
+  if (filter.startsWith('cat_')) {
+    const catKey = filter.slice(4);
+    projects = projects.filter(p => (p.category || 'cliente') === catKey);
+  } else if (filter !== 'all') {
+    projects = projects.filter(p => p.status === filter);
+  }
 
   const tabs = [
     { key: 'all', label: 'Todos', count: allProjects.length },
-    { key: 'personal', label: '🟣 Personal', count: allProjects.filter(p => p.is_personal).length },
-    { key: 'client', label: '🔵 Clientes', count: allProjects.filter(p => !p.is_personal).length },
+    ...PROJECT_CATEGORIES.map(c => ({ key: `cat_${c.key}`, label: `${c.dot} ${c.label}`, count: allProjects.filter(p => (p.category || 'cliente') === c.key).length })),
     ...PROJECT_STATUS.map(s => ({ key: s.key, label: s.label, count: allProjects.filter(p => p.status === s.key).length }))
   ].filter(t => t.key === 'all' || t.count > 0);
 
@@ -1097,42 +1146,55 @@ router.get('/projects', requireAuth, async (req, res) => {
     const doneTasks = tasks.filter(t => t.done).length;
     const pendingTasks = tasks.filter(t => !t.done);
     const pct = tasks.length > 0 ? Math.round(doneTasks / tasks.length * 100) : 0;
+    const cat = PROJECT_CATEGORIES.find(c => c.key === (p.category || 'cliente')) || PROJECT_CATEGORIES[0];
+    const statusObj = PROJECT_STATUS.find(s => s.key === p.status) || PROJECT_STATUS[0];
     return `
-      <div class="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md hover:ring-1 hover:ring-blue-100 transition-all cursor-pointer group relative" onclick="location.href='/admin/projects/${p.id}'" style="border-left: 4px solid ${{ 'planning': '#94a3b8', 'in_progress': '#3b82f6', 'review': '#8b5cf6', 'done': '#10b981', 'paused': '#f59e0b', 'waiting_client': '#6366f1', 'waiting_payment': '#f43f5e', 'delivered': '#10b981', 'cancelled': '#f43f5e' }[p.status] || '#94a3b8'}">
-        ${p.is_personal ? '<div class="absolute top-3 right-16 text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-medium">🟣 Personal</div>' : ''}
-        <div class="flex items-start justify-between mb-3">
+    <div class="bg-white rounded-2xl border border-slate-200 hover:shadow-md transition-all cursor-pointer group overflow-hidden"
+         onclick="location.href='/admin/projects/${p.id}'"
+         style="border-top: 3px solid ${cat.color}">
+      <div class="p-5">
+        <div class="flex items-start justify-between mb-2">
           <div class="flex-1 min-w-0 pr-3">
-            <div class="font-semibold text-slate-800 truncate">${escapeHtml(p.title || p.client_name)}</div>
-            <div class="text-xs text-slate-400 mt-0.5">${escapeHtml(p.client_name)}${p.client_email ? ` · ${escapeHtml(p.client_email)}` : ''}</div>
+            <div class="font-semibold text-slate-800 truncate text-base">${escapeHtml(p.title || p.client_name)}</div>
+            <div class="text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(p.client_name)}${p.client_email ? ` · ${escapeHtml(p.client_email)}` : ''}</div>
           </div>
           <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
             ${projectStatusBadge(p.status)}
             ${budgetStatusBadge(p.budget_status)}
           </div>
         </div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] px-2 py-0.5 rounded-full font-medium ${cat.badge}">${cat.dot} ${cat.label}</span>
+          ${p.deadline ? (() => {
+            const d = new Date(p.deadline);
+            const dl = Math.ceil((d - new Date()) / 86400000);
+            const color = dl < 0 ? 'bg-red-100 text-red-600' : dl <= 3 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500';
+            return `<span class="text-[10px] px-2 py-0.5 rounded-full font-medium ${color}">📅 ${dl < 0 ? `Vencida` : dl === 0 ? 'Hoy' : `${dl}d`}</span>`;
+          })() : ''}
+        </div>
         ${p.description ? `<p class="text-xs text-slate-500 mb-3 line-clamp-2">${escapeHtml(p.description)}</p>` : ''}
         ${pendingTasks.length > 0 ? `
-          <div class="mb-3">
-            ${pendingTasks.slice(0, 3).map(t => `
-              <div class="flex items-start gap-2 text-xs text-slate-600 mb-1">
-                <span class="text-orange-400 mt-0.5">●</span>
+          <div class="mb-3 space-y-1">
+            ${pendingTasks.slice(0, 2).map(t => `
+              <div class="flex items-start gap-2 text-xs text-slate-600">
+                <span class="${t.priority === 'high' ? 'text-red-400' : 'text-orange-300'} mt-0.5 flex-shrink-0">●</span>
                 <span class="truncate">${escapeHtml(t.text)}</span>
-                ${t.assignee ? `<span class="ml-auto text-slate-400 flex-shrink-0">${t.assignee}</span>` : ''}
               </div>`).join('')}
-            ${pendingTasks.length > 3 ? `<div class="text-xs text-slate-400 mt-1">+${pendingTasks.length - 3} más</div>` : ''}
+            ${pendingTasks.length > 2 ? `<div class="text-xs text-slate-400">+${pendingTasks.length - 2} más</div>` : ''}
           </div>` : ''}
         ${tasks.length > 0 ? `
-          <div class="flex items-center gap-2 mt-2">
+          <div class="flex items-center gap-2 mt-3">
             <div class="flex-1 bg-slate-100 rounded-full h-1.5">
-              <div class="h-1.5 rounded-full bg-blue-500" style="width:${pct}%"></div>
+              <div class="h-1.5 rounded-full transition-all" style="width:${pct}%;background:${cat.color}"></div>
             </div>
-            <span class="text-xs text-slate-400">${doneTasks}/${tasks.length} tareas</span>
+            <span class="text-xs text-slate-400 flex-shrink-0">${doneTasks}/${tasks.length}</span>
           </div>` : ''}
-        <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-          <span class="text-xs text-slate-400">${timeAgo(p.updated_at)}</span>
-          ${p.budget ? `<span class="text-xs font-semibold text-slate-700">${escapeHtml(p.budget)}</span>` : ''}
-        </div>
-      </div>`;
+      </div>
+      <div class="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+        <span class="text-xs text-slate-400">${timeAgo(p.updated_at)}</span>
+        ${p.budget ? `<span class="text-xs font-semibold text-slate-700">${escapeHtml(p.budget)}</span>` : ''}
+      </div>
+    </div>`;
   }).join('');
 
   const emptyState = `
@@ -1178,13 +1240,20 @@ router.get('/projects', requireAuth, async (req, res) => {
 
 // ─── New project form ─────────────────────────────────────────────────────────
 
-function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear proyecto') {
+function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear proyecto', clientList = []) {
   const statusOpts = PROJECT_STATUS.map(s =>
     `<option value="${s.key}" ${(data.status || 'planning') === s.key ? 'selected' : ''}>${s.label}</option>`).join('');
   const budgetOpts = BUDGET_STATUS.map(s =>
     `<option value="${s.key}" ${(data.budget_status || 'not_quoted') === s.key ? 'selected' : ''}>${s.label}</option>`).join('');
 
   const tasks = data.tasks || [];
+
+  const clientOptions = clientList.map(cl =>
+    `<option value="${cl.id}" ${(data.client_id || '') === cl.id ? 'selected' : ''}
+     data-name="${escapeHtml(cl.name)}" data-phone="${escapeHtml(cl.phone)}" data-email="${escapeHtml(cl.email)}">
+     ${escapeHtml(cl.name)}${cl.company ? ` (${escapeHtml(cl.company)})` : ''}
+    </option>`
+  ).join('');
 
   return `
     <form method="POST" action="${action}" id="projectForm">
@@ -1193,6 +1262,15 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
 
           <div class="bg-white rounded-2xl border border-slate-200 p-5">
             <h2 class="text-sm font-semibold text-slate-700 mb-4">Datos del cliente</h2>
+            <div class="mb-4 pb-4 border-b border-slate-100">
+              <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Vincular a cliente existente</label>
+              <select name="client_id" onchange="fillClientData(this)"
+                class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— Sin vincular o nuevo cliente —</option>
+                ${clientOptions}
+              </select>
+              <div class="text-[10px] text-slate-400 mt-1">Seleccioná un cliente para pre-cargar sus datos</div>
+            </div>
             <div class="grid grid-cols-2 gap-4">
               <div class="col-span-2 lg:col-span-1">
                 <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Nombre del cliente *</label>
@@ -1242,16 +1320,18 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
                 <textarea name="notes" rows="3" placeholder="Contactos involucrados, pendientes de consultar, contexto extra..."
                   class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500">${escapeHtml(data.notes || '')}</textarea>
               </div>
-              <div class="flex items-center gap-6">
-                <label class="flex items-center gap-2.5 cursor-pointer">
-                  <input type="checkbox" name="is_personal" value="1" ${data.is_personal ? 'checked' : ''} class="w-4 h-4 rounded accent-violet-600">
-                  <span class="text-sm text-slate-700">Proyecto personal (no es de un cliente)</span>
-                </label>
-              </div>
-              <div>
-                <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Deadline (fecha límite)</label>
-                <input type="date" name="deadline" value="${escapeHtml(data.deadline || '')}"
-                  class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Categoría</label>
+                  <select name="category" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    ${PROJECT_CATEGORIES.map(c => `<option value="${c.key}" ${(data.category || 'cliente') === c.key ? 'selected' : ''} style="color:${c.color}">${c.dot} ${c.label}</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Deadline (fecha límite)</label>
+                  <input type="date" name="deadline" value="${escapeHtml(data.deadline || '')}"
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
               </div>
             </div>
           </div>
@@ -1299,7 +1379,7 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
         <input type="checkbox" class="task-done mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-blue-600" \${task.done ? 'checked' : ''}>
         <div class="flex-1 min-w-0">
           <input type="text" class="task-text w-full bg-transparent text-sm text-slate-700 focus:outline-none placeholder-slate-400 border-b border-transparent focus:border-slate-300" value="\${(task.text||'').replace(/"/g,'&quot;')}" placeholder="Describí la tarea...">
-          <div class="flex items-center gap-2 mt-1.5">
+          <div class="flex items-center gap-2 mt-1.5 flex-wrap">
             <select class="task-priority text-xs border-0 bg-transparent text-slate-400 focus:outline-none cursor-pointer">
               <option value="medium" \${task.priority==='medium'?'selected':''}>Prioridad media</option>
               <option value="high" \${task.priority==='high'?'selected':''}>Alta prioridad</option>
@@ -1311,6 +1391,7 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
               <option value="hermana" \${task.assignee==='hermana'?'selected':''}>Hermana</option>
               <option value="cliente" \${task.assignee==='cliente'?'selected':''}>Cliente</option>
             </select>
+            <input type="date" class="task-due-date text-xs border-0 bg-transparent text-slate-400 focus:outline-none" value="\${task.due_date||''}">
           </div>
         </div>
         <button type="button" onclick="removeTask(\${i})" class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0 text-lg leading-none mt-0.5">×</button>
@@ -1318,7 +1399,7 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
     }
 
     function addTask() {
-      const task = { text: '', done: false, priority: 'medium', assignee: '' };
+      const task = { text: '', done: false, priority: 'medium', assignee: '', due_date: '' };
       tasks.push(task);
       const div = document.createElement('div');
       div.innerHTML = taskRowHtml(task, tasks.length - 1);
@@ -1344,6 +1425,7 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
         tasks[i].done = row.querySelector('.task-done').checked;
         tasks[i].priority = row.querySelector('.task-priority').value;
         tasks[i].assignee = row.querySelector('.task-assignee').value;
+        tasks[i].due_date = row.querySelector('.task-due-date')?.value || '';
       });
       document.getElementById('tasksInput').value = JSON.stringify(tasks);
     }
@@ -1351,6 +1433,14 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
     document.addEventListener('input', e => { if (e.target.closest('.task-row')) saveTasks(); });
     document.addEventListener('change', e => { if (e.target.closest('.task-row')) saveTasks(); });
     document.getElementById('projectForm').addEventListener('submit', saveTasks);
+
+    function fillClientData(sel) {
+      const opt = sel.options[sel.selectedIndex];
+      if (!opt.value) return;
+      document.querySelector('[name="client_name"]').value = opt.dataset.name || '';
+      document.querySelector('[name="client_phone"]').value = opt.dataset.phone || '';
+      document.querySelector('[name="client_email"]').value = opt.dataset.email || '';
+    }
     </script>`;
 }
 
@@ -1361,13 +1451,14 @@ function taskRowHtml(task, i) {
     <input type="checkbox" class="task-done mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-blue-600" ${task.done ? 'checked' : ''}>
     <div class="flex-1 min-w-0">
       <input type="text" class="task-text w-full bg-transparent text-sm text-slate-700 focus:outline-none placeholder-slate-400 border-b border-transparent focus:border-slate-300" value="${escapeHtml(task.text || '')}" placeholder="Describí la tarea...">
-      <div class="flex items-center gap-2 mt-1.5">
+      <div class="flex items-center gap-2 mt-1.5 flex-wrap">
         <select class="task-priority text-xs border-0 bg-transparent text-slate-400 focus:outline-none cursor-pointer">
           ${pOpts.map(([v,l]) => `<option value="${v}" ${(task.priority||'medium')===v?'selected':''}>${l}</option>`).join('')}
         </select>
         <select class="task-assignee text-xs border-0 bg-transparent text-slate-400 focus:outline-none cursor-pointer">
           ${aOpts.map(([v,l]) => `<option value="${v}" ${(task.assignee||'')===v?'selected':''}>${l}</option>`).join('')}
         </select>
+        <input type="date" class="task-due-date text-xs border-0 bg-transparent text-slate-400 focus:outline-none cursor-pointer" value="${escapeHtml(task.due_date || '')}" placeholder="">
       </div>
     </div>
     <button type="button" onclick="removeTask(${i})" class="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0 text-lg leading-none mt-0.5">×</button>
@@ -1376,17 +1467,18 @@ function taskRowHtml(task, i) {
 
 router.get('/projects/new', requireAuth, async (req, res) => {
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  const clientList = await db.listClientRecords();
   const body = `
     <div class="mb-5"><a href="/admin/projects" class="text-sm text-slate-500 hover:text-blue-600">← Proyectos</a></div>
     <h1 class="text-2xl font-bold text-slate-900 mb-6">Nuevo proyecto</h1>
-    ${projectForm({}, '/admin/projects', 'Crear proyecto')}`;
+    ${projectForm({}, '/admin/projects', 'Crear proyecto', clientList)}`;
   res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
 
 router.post('/projects', requireAuth, async (req, res) => {
   let tasks = [];
   try { tasks = JSON.parse(req.body.tasks || '[]'); } catch (e) {}
-  const id = await db.createProject({ ...req.body, tasks, is_personal: req.body.is_personal === '1', deadline: req.body.deadline || null });
+  const id = await db.createProject({ ...req.body, tasks, is_personal: req.body.category === 'personal', deadline: req.body.deadline || null, client_id: req.body.client_id || '' });
   res.redirect(`/admin/projects/${id}`);
 });
 
@@ -1436,6 +1528,13 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
         <div class="flex items-center gap-2 mt-0.5">
           ${priorityBadge(t.priority)}
           ${t.assignee ? `<span class="text-[10px] text-slate-400">${escapeHtml(t.assignee)}</span>` : ''}
+          ${t.due_date ? (() => {
+            const d = new Date(t.due_date);
+            const dl = Math.ceil((d - new Date()) / 86400000);
+            const color = dl < 0 ? 'text-red-500' : dl <= 2 ? 'text-orange-500' : 'text-slate-400';
+            const label = dl < 0 ? `Vencida` : dl === 0 ? 'Hoy' : `${dl}d`;
+            return `<span class="text-[10px] ${color} font-medium">📅 ${label}</span>`;
+          })() : ''}
         </div>
       </div>
     </form>`).join('');
@@ -1494,6 +1593,11 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
               <a href="/admin/projects/${project.id}/edit" class="text-xs text-blue-600 hover:underline">Editar tareas →</a>
             </div>
           </div>
+          <form method="POST" action="/admin/projects/${project.id}/add-task" class="mb-4 flex gap-2">
+            <input type="text" name="text" placeholder="Agregar tarea rápida..." required
+              class="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex-shrink-0">+ Agregar</button>
+          </form>
           ${tasks.length > 0 ? `
             <div class="bg-slate-100 rounded-full h-2 mb-4">
               <div class="h-2 rounded-full bg-blue-500 transition-all" style="width:${pct}%"></div>
@@ -1501,7 +1605,7 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             ${taskRows}` : `
             <div class="text-center py-8">
               <div class="text-2xl mb-2">✅</div>
-              <p class="text-sm text-slate-400">Sin tareas. <a href="/admin/projects/${project.id}/edit" class="text-blue-600 hover:underline">Agregar tareas</a></p>
+              <p class="text-sm text-slate-400">Sin tareas. Agregá una arriba o <a href="/admin/projects/${project.id}/edit" class="text-blue-600 hover:underline">editá el proyecto</a>.</p>
             </div>`}
         </div>
 
@@ -1625,7 +1729,7 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
                 <div class="text-xs ${color} mt-0.5">${label}</div>
               </div>`;
             })() : ''}
-            ${project.is_personal ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-1">Tipo</div><span class="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full font-medium">🟣 Proyecto personal</span></div>` : ''}
+            <div><div class="text-xs text-slate-400 uppercase tracking-wide mb-1">Categoría</div>${categoryBadge(project.category || 'cliente')}</div>
             ${project.client_phone ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Teléfono</div><a href="tel:${escapeHtml(project.client_phone)}" class="text-blue-600 hover:underline text-sm">${escapeHtml(project.client_phone)}</a></div>` : ''}
             ${project.client_email ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Email</div><a href="mailto:${escapeHtml(project.client_email)}" class="text-blue-600 hover:underline text-sm truncate block">${escapeHtml(project.client_email)}</a></div>` : ''}
             ${project.created_at ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Creado</div><div class="text-slate-600 text-sm">${new Date(project.created_at + (project.created_at.endsWith('Z') ? '' : 'Z')).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</div></div>` : ''}
@@ -1646,23 +1750,35 @@ router.get('/projects/:id/edit', requireAuth, async (req, res) => {
   const project = await db.getProject(req.params.id);
   if (!project) return res.redirect('/admin/projects');
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  const clientList = await db.listClientRecords();
   const body = `
     <div class="mb-5"><a href="/admin/projects/${project.id}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(project.title || project.client_name)}</a></div>
     <h1 class="text-2xl font-bold text-slate-900 mb-6">Editar proyecto</h1>
-    ${projectForm(project, `/admin/projects/${project.id}/update`, 'Guardar cambios')}`;
+    ${projectForm(project, `/admin/projects/${project.id}/update`, 'Guardar cambios', clientList)}`;
   res.send(layout('Editar proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
 
 router.post('/projects/:id/update', requireAuth, async (req, res) => {
   let tasks = [];
   try { tasks = JSON.parse(req.body.tasks || '[]'); } catch (e) {}
-  await db.updateProject(req.params.id, { ...req.body, tasks, is_personal: req.body.is_personal === '1', deadline: req.body.deadline || null });
+  await db.updateProject(req.params.id, { ...req.body, tasks, is_personal: req.body.category === 'personal', deadline: req.body.deadline || null, client_id: req.body.client_id || '' });
   res.redirect(`/admin/projects/${req.params.id}`);
 });
 
 router.post('/projects/:id/add-update', requireAuth, async (req, res) => {
   const text = (req.body.text || '').trim();
   if (text) await db.addProjectUpdate(req.params.id, text);
+  res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+router.post('/projects/:id/add-task', requireAuth, async (req, res) => {
+  const text = (req.body.text || '').trim();
+  if (!text) return res.redirect(`/admin/projects/${req.params.id}`);
+  const project = await db.getProject(req.params.id);
+  if (!project) return res.redirect('/admin/projects');
+  const tasks = project.tasks || [];
+  tasks.push({ text, done: false, priority: 'medium', assignee: '', due_date: '' });
+  await db.updateProject(req.params.id, { ...project, tasks });
   res.redirect(`/admin/projects/${req.params.id}`);
 });
 
@@ -1694,6 +1810,344 @@ router.post('/projects/:id/files/:filename/delete', requireAuth, (req, res) => {
   const filePath = path.join(PROJECT_FILES_DIR, req.params.id, req.params.filename);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+// ─── Clientes CRM ─────────────────────────────────────────────────────────────
+
+function clientForm(data = {}, action = '/admin/clientes', btnLabel = 'Guardar') {
+  const catOpts = CLIENT_CATEGORIES.map(c =>
+    `<option value="${c.key}" ${(data.category || 'cliente') === c.key ? 'selected' : ''}>${c.label}</option>`).join('');
+  return `
+    <form method="POST" action="${action}">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="lg:col-span-2 space-y-5">
+          <div class="bg-white rounded-2xl border border-slate-200 p-5">
+            <h2 class="text-sm font-semibold text-slate-700 mb-4">Datos del cliente</h2>
+            <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                  <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Nombre completo *</label>
+                  <input type="text" name="name" value="${escapeHtml(data.name || '')}" required
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: María García">
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Empresa / Negocio</label>
+                  <input type="text" name="company" value="${escapeHtml(data.company || '')}"
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: Panadería Don Héctor">
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Tipo</label>
+                  <select name="category" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">${catOpts}</select>
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Teléfono</label>
+                  <input type="text" name="phone" value="${escapeHtml(data.phone || '')}"
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="+54 9 387...">
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Email</label>
+                  <input type="email" name="email" value="${escapeHtml(data.email || '')}"
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="cliente@email.com">
+                </div>
+              </div>
+              <div>
+                <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Notas</label>
+                <textarea name="notes" rows="4" placeholder="Historial, preferencias, contexto del cliente..."
+                  class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500">${escapeHtml(data.notes || '')}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold text-sm transition-colors">${btnLabel}</button>
+        </div>
+      </div>
+    </form>`;
+}
+
+router.get('/clientes', requireAuth, async (req, res) => {
+  const clients = await db.listClientRecords();
+  const projects = await db.listProjects();
+  const allWaClients = await db.listAllClients();
+  const pendingCount = allWaClients.filter(c => c.demo_status === 'pending_review').length;
+  const search = (req.query.q || '').toLowerCase();
+  const catFilter = req.query.cat || 'all';
+
+  let filtered = clients;
+  if (search) filtered = filtered.filter(c =>
+    c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search) ||
+    c.phone.includes(search) || c.company.toLowerCase().includes(search));
+  if (catFilter !== 'all') filtered = filtered.filter(c => c.category === catFilter);
+
+  // Project count per client
+  const projCount = id => projects.filter(p => p.client_id === id).length;
+
+  const catTabs = [{ key: 'all', label: 'Todos', count: clients.length },
+    ...CLIENT_CATEGORIES.map(c => ({ key: c.key, label: c.label, count: clients.filter(cl => cl.category === c.key).length }))
+  ].filter(t => t.key === 'all' || t.count > 0);
+
+  const tabHtml = catTabs.map(t => `
+    <a href="/admin/clientes?cat=${t.key}${search ? '&q=' + encodeURIComponent(search) : ''}"
+      class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${catFilter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
+      ${t.label} <span class="text-xs ${catFilter === t.key ? 'opacity-70' : 'text-slate-400'}">${t.count}</span>
+    </a>`).join('');
+
+  const rows = filtered.map(c => {
+    const pc = projCount(c.id);
+    const initial = (c.name[0] || '?').toUpperCase();
+    const colors = ['bg-blue-100 text-blue-600','bg-purple-100 text-purple-600','bg-emerald-100 text-emerald-600','bg-orange-100 text-orange-600','bg-rose-100 text-rose-600'];
+    const color = colors[c.name.split('').reduce((a,ch) => a + ch.charCodeAt(0), 0) % colors.length];
+    return `
+      <tr class="border-b border-slate-100 hover:bg-blue-50/30 transition-colors cursor-pointer group" onclick="location.href='/admin/clientes/${c.id}'">
+        <td class="px-4 py-3.5">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full ${color} flex items-center justify-center font-bold text-sm flex-shrink-0">${initial}</div>
+            <div>
+              <div class="font-medium text-slate-800">${escapeHtml(c.name)}</div>
+              ${c.company ? `<div class="text-xs text-slate-400">${escapeHtml(c.company)}</div>` : ''}
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-3.5">${clientCategoryBadge(c.category)}</td>
+        <td class="px-4 py-3.5 text-sm text-slate-500">
+          ${c.phone ? `<div class="text-xs">${escapeHtml(c.phone)}</div>` : ''}
+          ${c.email ? `<div class="text-xs text-slate-400">${escapeHtml(c.email)}</div>` : ''}
+        </td>
+        <td class="px-4 py-3.5">
+          ${pc > 0 ? `<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">${pc} proyecto${pc !== 1 ? 's' : ''}</span>` : '<span class="text-xs text-slate-300">—</span>'}
+        </td>
+        <td class="px-4 py-3.5 text-xs text-slate-400">${timeAgo(c.updated_at)}</td>
+        <td class="px-4 py-3.5 text-right">
+          <a href="/admin/clientes/${c.id}" class="opacity-0 group-hover:opacity-100 text-blue-600 text-xs transition-opacity" onclick="event.stopPropagation()">Abrir →</a>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const emptyState = `<div class="text-center py-20">
+    <div class="text-5xl mb-4">👥</div>
+    <h3 class="text-lg font-semibold text-slate-700 mb-2">Sin clientes todavía</h3>
+    <p class="text-sm text-slate-400 mb-6">Creá tu primer cliente para asociarlo a proyectos.</p>
+    <a href="/admin/clientes/new" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo cliente</a>
+  </div>`;
+
+  const body = `
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Clientes</h1>
+        <div class="text-sm text-slate-400 mt-0.5">${clients.length} cliente${clients.length !== 1 ? 's' : ''} en total</div>
+      </div>
+      <a href="/admin/clientes/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo cliente</a>
+    </div>
+    <div class="flex items-center gap-3 mb-4">
+      <form method="GET" action="/admin/clientes" class="flex-1">
+        <input type="hidden" name="cat" value="${escapeHtml(catFilter)}">
+        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, empresa, email o teléfono..."
+          class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </form>
+    </div>
+    <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
+    ${filtered.length === 0 && clients.length === 0 ? emptyState : `
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <table class="w-full">
+        <thead class="border-b border-slate-100">
+          <tr class="text-xs text-slate-400 uppercase">
+            <th class="px-4 py-3 text-left font-medium">Cliente</th>
+            <th class="px-4 py-3 text-left font-medium">Tipo</th>
+            <th class="px-4 py-3 text-left font-medium">Contacto</th>
+            <th class="px-4 py-3 text-left font-medium">Proyectos</th>
+            <th class="px-4 py-3 text-left font-medium">Actividad</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td class="px-4 py-12 text-center text-slate-400 text-sm" colspan="6">Sin resultados</td></tr>'}</tbody>
+      </table>
+    </div>`}`;
+
+  res.send(layout('Clientes', body, { pendingCount, activePage: 'clientes', user: req.session?.user }));
+});
+
+router.get('/clientes/new', requireAuth, async (req, res) => {
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  const body = `
+    <div class="mb-5"><a href="/admin/clientes" class="text-sm text-slate-500 hover:text-blue-600">← Clientes</a></div>
+    <h1 class="text-2xl font-bold text-slate-900 mb-6">Nuevo cliente</h1>
+    ${clientForm({}, '/admin/clientes')}`;
+  res.send(layout('Nuevo cliente', body, { pendingCount, activePage: 'clientes', user: req.session?.user }));
+});
+
+router.post('/clientes', requireAuth, async (req, res) => {
+  const id = await db.createClientRecord(req.body);
+  res.redirect(`/admin/clientes/${id}`);
+});
+
+router.get('/clientes/:id', requireAuth, async (req, res) => {
+  const client = await db.getClientRecord(req.params.id);
+  if (!client) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Cliente no encontrado.</p>', {}));
+
+  const clientProjects = await db.getProjectsByClientId(req.params.id);
+  const allWa = await db.listAllClients();
+  const pendingCount = allWa.filter(c => c.demo_status === 'pending_review').length;
+
+  const initial = (client.name[0] || '?').toUpperCase();
+  const avatarColors = ['bg-blue-500','bg-purple-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-indigo-500'];
+  const avatarColor = avatarColors[client.name.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % avatarColors.length];
+
+  const projectCards = clientProjects.map(p => {
+    const cat = PROJECT_CATEGORIES.find(c => c.key === (p.category || 'cliente')) || PROJECT_CATEGORIES[0];
+    const pending = (p.tasks || []).filter(t => !t.done).length;
+    return `<a href="/admin/projects/${p.id}" class="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 transition-colors block">
+      <div class="w-2 rounded-full flex-shrink-0 self-stretch" style="background:${cat.color}"></div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(p.title || p.client_name)}</div>
+        <div class="text-xs text-slate-400 mt-0.5">${projectStatusBadge(p.status)}</div>
+      </div>
+      ${pending > 0 ? `<span class="text-xs text-amber-600 font-medium flex-shrink-0">${pending} tarea${pending !== 1 ? 's' : ''}</span>` : ''}
+    </a>`;
+  }).join('');
+
+  // Try to find matching WA lead by phone
+  const waLead = client.phone ? allWa.find(c => c.phone.includes(client.phone.replace(/\D/g, '')) || client.phone.includes(c.phone.replace(/\D/g, ''))) : null;
+
+  const body = `
+    <div class="mb-5 flex items-center justify-between">
+      <nav class="flex items-center gap-1.5 text-sm text-slate-400">
+        <a href="/admin/clientes" class="hover:text-blue-600">Clientes</a>
+        <span>/</span>
+        <span class="text-slate-600 truncate">${escapeHtml(client.name)}</span>
+      </nav>
+      <div class="flex gap-2">
+        <a href="/admin/clientes/${client.id}/edit" class="border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm transition-colors">Editar</a>
+        <form method="POST" action="/admin/clientes/${client.id}/delete" onsubmit="return confirm('¿Eliminar este cliente?')">
+          <button class="border border-red-200 text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl text-sm transition-colors">Eliminar</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-4 mb-6">
+      <div class="w-14 h-14 rounded-2xl ${avatarColor} flex items-center justify-center text-white font-bold text-2xl flex-shrink-0">
+        ${initial}
+      </div>
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">${escapeHtml(client.name)}</h1>
+        <div class="flex items-center gap-2 mt-1">
+          ${clientCategoryBadge(client.category)}
+          ${client.company ? `<span class="text-sm text-slate-500">${escapeHtml(client.company)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="lg:col-span-2 space-y-5">
+        <!-- Projects -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-700">Proyectos (${clientProjects.length})</h2>
+            <a href="/admin/projects/new" class="text-xs text-blue-600 hover:underline">+ Nuevo proyecto →</a>
+          </div>
+          ${clientProjects.length > 0
+            ? `<div class="space-y-2">${projectCards}</div>`
+            : `<div class="text-center py-8"><div class="text-2xl mb-2">📋</div><p class="text-sm text-slate-400">Sin proyectos vinculados todavía.</p></div>`}
+        </div>
+
+        <!-- Notes -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-3">Notas</h2>
+          <form method="POST" action="/admin/clientes/${client.id}/notes">
+            <textarea name="notes" rows="5" placeholder="Historial, acuerdos, notas sobre este cliente..."
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500">${escapeHtml(client.notes || '')}</textarea>
+            <button class="mt-2 w-full border border-slate-200 hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-sm transition-colors">Guardar notas</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        <!-- Contact info -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-4">Contacto</h2>
+          <div class="space-y-3">
+            ${client.phone ? `<div>
+              <div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Teléfono</div>
+              <a href="tel:${escapeHtml(client.phone)}" class="text-sm text-blue-600 hover:underline">${escapeHtml(client.phone)}</a>
+              ${client.phone ? `<a href="https://wa.me/${client.phone.replace(/\D/g,'')}" target="_blank" class="ml-2 text-xs text-emerald-600 hover:underline">WhatsApp ↗</a>` : ''}
+            </div>` : ''}
+            ${client.email ? `<div>
+              <div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Email</div>
+              <a href="mailto:${escapeHtml(client.email)}" class="text-sm text-blue-600 hover:underline truncate block">${escapeHtml(client.email)}</a>
+            </div>` : ''}
+            ${client.company ? `<div>
+              <div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Empresa</div>
+              <div class="text-sm text-slate-700">${escapeHtml(client.company)}</div>
+            </div>` : ''}
+            <div>
+              <div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Creado</div>
+              <div class="text-sm text-slate-600">${client.created_at ? new Date(client.created_at + (client.created_at.endsWith('Z') ? '' : 'Z')).toLocaleDateString('es-AR', { day:'numeric', month:'short', year:'numeric' }) : '—'}</div>
+            </div>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-100">
+            <a href="/admin/clientes/${client.id}/edit" class="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">✏️ Editar</a>
+          </div>
+        </div>
+
+        ${waLead ? `
+        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+          <h2 class="text-xs font-semibold text-emerald-700 mb-2">💬 Lead WA vinculado</h2>
+          <p class="text-xs text-emerald-600 mb-2">${escapeHtml(waLead.report?.cliente?.nombre || waLead.phone)}</p>
+          <a href="/admin/client/${encodeURIComponent(waLead.phone)}" class="text-xs text-emerald-700 hover:underline font-medium">Ver conversación →</a>
+        </div>` : ''}
+
+        <!-- Stats -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-3">Resumen</h2>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Proyectos</span>
+              <span class="font-medium">${clientProjects.length}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">En curso</span>
+              <span class="font-medium">${clientProjects.filter(p => ['in_progress','review'].includes(p.status)).length}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Entregados</span>
+              <span class="font-medium text-emerald-600">${clientProjects.filter(p => p.status === 'delivered').length}</span>
+            </div>
+            ${clientProjects.filter(p => p.budget).length > 0 ? `
+            <div class="flex justify-between pt-2 border-t border-slate-100">
+              <span class="text-slate-500">Proyectos con presupuesto</span>
+              <span class="font-medium">${clientProjects.filter(p => p.budget).length}</span>
+            </div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  res.send(layout(client.name, body, { pendingCount, activePage: 'clientes', user: req.session?.user }));
+});
+
+router.get('/clientes/:id/edit', requireAuth, async (req, res) => {
+  const client = await db.getClientRecord(req.params.id);
+  if (!client) return res.redirect('/admin/clientes');
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  const body = `
+    <div class="mb-5"><a href="/admin/clientes/${client.id}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(client.name)}</a></div>
+    <h1 class="text-2xl font-bold text-slate-900 mb-6">Editar cliente</h1>
+    ${clientForm(client, `/admin/clientes/${client.id}/update`)}`;
+  res.send(layout('Editar cliente', body, { pendingCount, activePage: 'clientes', user: req.session?.user }));
+});
+
+router.post('/clientes/:id/update', requireAuth, async (req, res) => {
+  await db.updateClientRecord(req.params.id, req.body);
+  res.redirect(`/admin/clientes/${req.params.id}`);
+});
+
+router.post('/clientes/:id/notes', requireAuth, async (req, res) => {
+  await db.updateClientRecord(req.params.id, { ...(await db.getClientRecord(req.params.id) || {}), notes: req.body.notes || '' });
+  res.redirect(`/admin/clientes/${req.params.id}`);
+});
+
+router.post('/clientes/:id/delete', requireAuth, async (req, res) => {
+  await db.deleteClientRecord(req.params.id);
+  res.redirect('/admin/clientes');
 });
 
 // ─── Demo seed: simula un lead completo para probar el flujo ─────────────────
