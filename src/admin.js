@@ -465,7 +465,22 @@ router.get('/clients', requireAuth, async (req, res) => {
   const body = `
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-slate-900">Leads WhatsApp</h1>
-      <span class="text-sm text-slate-400">${clients.length} resultado${clients.length !== 1 ? 's' : ''}</span>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-slate-400">${clients.length} resultado${clients.length !== 1 ? 's' : ''}</span>
+        <div class="relative group">
+          <button class="text-xs border border-dashed border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-500 px-3 py-1.5 rounded-lg transition-colors">
+            + Lead de prueba
+          </button>
+          <div class="hidden group-hover:block absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 w-48 py-1">
+            <form method="POST" action="/admin/create-demo-lead"><input type="hidden" name="tipo" value="web">
+              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600">🌐 Web (Panadería)</button></form>
+            <form method="POST" action="/admin/create-demo-lead"><input type="hidden" name="tipo" value="bot">
+              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600">💬 Bot WA (Veterinaria)</button></form>
+            <form method="POST" action="/admin/create-demo-lead"><input type="hidden" name="tipo" value="app">
+              <button class="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 text-slate-600">📱 App móvil (Gimnasio)</button></form>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="flex items-center gap-3 mb-4">
       <form method="GET" action="/admin/clients" class="flex-1">
