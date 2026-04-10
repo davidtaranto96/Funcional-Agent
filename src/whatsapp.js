@@ -8,16 +8,10 @@ function getConfig() {
 }
 
 // Normaliza el número para Meta Cloud API
-// Argentina: 5493878599185 (549+area+local) → 54387815599185 (54+area+15+local)
-// Meta sandbox requiere el formato con "15", no con "9"
+// Meta Cloud API usa el número exactamente como lo envía en el webhook (E.164 sin "+")
+// NO convertir formato — la lista de autorizados usa el mismo formato que el webhook
 function normalizePhone(phone) {
-  let n = phone.replace('whatsapp:', '').replace(/[^0-9]/g, '');
-  // Argentina móvil con 9: 549AREALOCAL → 54AREA15LOCAL
-  const arMatch = n.match(/^549(\d{3,4})(\d{6,7})$/);
-  if (arMatch) {
-    n = `54${arMatch[1]}15${arMatch[2]}`;
-  }
-  return n;
+  return phone.replace('whatsapp:', '').replace(/[^0-9]/g, '');
 }
 
 // Manda un mensaje de texto (con split automático si supera 4096 chars)
