@@ -7,7 +7,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.7'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.8'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -169,15 +169,19 @@ function budgetStatusBadge(key) {
 
 function processSteps(conv) {
   const hasEvent = e => (conv.timeline || []).some(x => x.event === e);
+  const ds = conv.demo_status || 'none';
   return [
-    { label: 'Conversación iniciada',    done: true },
-    { label: 'Datos recopilados',        done: conv.stage === 'done' || !!conv.report },
-    { label: 'Reporte generado',         done: !!conv.report },
-    { label: 'Demo generado',            done: !!conv.demo_status && !['none','generating'].includes(conv.demo_status) },
-    { label: 'Revisado por David',       done: ['approved','sent','rejected'].includes(conv.demo_status) },
-    { label: 'Demo enviado al cliente',  done: conv.demo_status === 'sent' || hasEvent('demo_sent_to_client') },
-    { label: 'Negociando',              done: ['negotiating','won'].includes(conv.client_stage) },
-    { label: 'Proyecto ganado',          done: conv.client_stage === 'won' },
+    { label: 'Conversación iniciada',   done: true },
+    { label: 'Datos recopilados',       done: conv.stage === 'done' || !!conv.report },
+    { label: 'Reporte generado',        done: !!conv.report },
+    { label: 'Demo generado',           done: !!ds && !['none','generating'].includes(ds) },
+    // Approved = ok (blue). Corrections/rejected = warning (amber). Pending = not done (gray).
+    { label: 'Aprobado por David',      done: ['approved','sent'].includes(ds),
+      warn: ['changes_requested','rejected'].includes(ds),
+      warnLabel: ds === 'rejected' ? 'Rechazada — regenerando' : 'Con correcciones' },
+    { label: 'Enviado al cliente',      done: ds === 'sent' || hasEvent('demo_sent_to_client') },
+    { label: 'Reunión / negociación',   done: ['negotiating','won'].includes(conv.client_stage) },
+    { label: 'Proyecto ganado',         done: conv.client_stage === 'won' },
   ];
 }
 
@@ -968,24 +972,39 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
   const doneCount = steps.filter(s => s.done).length;
 
   // Mobile: vertical checklist compacto / Desktop: stepper horizontal
+  const stepIcon = (s) => {
+    if (s.done) return '<svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
+    if (s.warn) return '<svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>';
+    return '';
+  };
+  const stepColor = (s) => {
+    if (s.done) return 'bg-blue-600 border-blue-600';
+    if (s.warn) return 'bg-amber-400 border-amber-400';
+    return 'bg-white border-slate-300';
+  };
+
   const stepperMobile = steps.map(s => `
     <div class="flex items-center gap-2.5 py-1.5">
-      <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'}">
-        ${s.done ? '<svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>' : ''}
+      <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${stepColor(s)}">
+        ${stepIcon(s)}
       </div>
-      <span class="text-xs ${s.done ? 'text-slate-700 font-medium' : 'text-slate-400'}">${s.label}</span>
+      <div class="flex-1 min-w-0">
+        <span class="text-xs ${s.done ? 'text-slate-700 font-medium' : s.warn ? 'text-amber-600 font-medium' : 'text-slate-400'}">${s.label}</span>
+        ${s.warn ? `<div class="text-[10px] text-amber-500">${s.warnLabel}</div>` : ''}
+      </div>
     </div>`).join('');
 
   const stepperDesktop = steps.map((s, i) => {
     const isLast = i === steps.length - 1;
+    const lineColor = s.done ? 'bg-blue-500' : s.warn ? 'bg-amber-300' : 'bg-slate-200';
     return `<div class="flex items-center ${isLast ? '' : 'flex-1'}">
       <div class="flex flex-col items-center">
-        <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}">
-          ${s.done ? '<svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>' : ''}
+        <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${stepColor(s)}">
+          ${stepIcon(s)}
         </div>
-        <div class="text-[10px] text-slate-400 mt-1 text-center leading-tight w-14">${s.label}</div>
+        <div class="text-[10px] mt-1 text-center leading-tight w-16 ${s.warn ? 'text-amber-500 font-medium' : 'text-slate-400'}">${s.warn ? s.warnLabel : s.label}</div>
       </div>
-      ${!isLast ? `<div class="h-0.5 flex-1 mb-4 mx-1 ${s.done ? 'bg-blue-500' : 'bg-slate-200'}"></div>` : ''}
+      ${!isLast ? `<div class="h-0.5 flex-1 mb-4 mx-1 ${lineColor}"></div>` : ''}
     </div>`;
   }).join('');
 
@@ -1074,9 +1093,17 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
           ${/* ── Acción principal según estado ── */
             conv.demo_status === 'pending_review'
               ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">👁 Revisar demos</a>`
+            : conv.demo_status === 'rejected'
+              ? `<div class="bg-red-50 border border-red-200 rounded-xl p-3 mb-3">
+                   <div class="text-xs font-semibold text-red-600 mb-1">✗ Demo rechazada — regenerando...</div>
+                   ${conv.demo_notes ? `<div class="text-xs text-red-500 italic">"${escapeHtml(conv.demo_notes)}"</div>` : ''}
+                 </div>
+                 <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
+                   <button class="w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-xl text-sm font-medium transition-colors">🔄 Forzar regeneración</button>
+                 </form>`
             : conv.demo_status === 'changes_requested'
               ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-2 transition-colors">✏ Ver / aprobar correcciones</a>
-                 ${conv.demo_notes ? `<div class="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 mb-3 whitespace-pre-line">${escapeHtml(conv.demo_notes)}</div>` : ''}`
+                 ${conv.demo_notes ? `<div class="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 mb-3 whitespace-pre-line">"${escapeHtml(conv.demo_notes)}"</div>` : ''}`
             : (conv.demo_status === 'sent' || conv.demo_status === 'approved') && conv.client_stage !== 'won'
               ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-sm font-bold mb-3 transition-colors shadow-md shadow-emerald-200">🏆 Confirmar proyecto ganado</a>`
             : conv.client_stage === 'won' && conv.report
@@ -1088,7 +1115,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
           <form method="POST" action="/admin/force-report/${phoneUrl}" class="mb-3" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Generando...'">
             <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">📋 Generar reporte manualmente</button>
           </form>` : ''}
-          ${conv.report ? `
+          ${conv.report && !['pending_review','rejected'].includes(conv.demo_status) ? `
           <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
             <button class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-2 rounded-xl text-sm font-medium transition-colors">🔄 Regenerar demos</button>
           </form>` : ''}
@@ -1450,12 +1477,23 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
           </div>
         </details>
 
-        <!-- Opción 2: Rechazar -->
-        <form method="POST" action="/admin/reject/${phoneUrl}">
-          <button class="w-full px-4 py-3 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-sm font-medium transition-colors text-left">
-            ✗ Rechazar y descartar esta demo
-          </button>
-        </form>
+        <!-- Opción 2: Rechazar y regenerar -->
+        <details class="group border border-red-200 rounded-xl overflow-hidden">
+          <summary class="list-none cursor-pointer">
+            <div class="flex items-center justify-between px-4 py-3 hover:bg-red-50 transition-colors">
+              <span class="text-sm font-medium text-red-600">✗ Rechazar y regenerar</span>
+              <span class="group-open:rotate-180 transition-transform text-red-400 text-xs">▼</span>
+            </div>
+          </summary>
+          <div class="px-4 pb-4 pt-2 bg-red-50">
+            <p class="text-xs text-red-600 mb-2">La demo no quedó bien. Agregá una nota de qué está mal y el sistema regenera automáticamente.</p>
+            <form method="POST" action="/admin/reject/${phoneUrl}">
+              <textarea name="notes" rows="2" placeholder="Ej: Los colores no van con el rubro, cambiar el título principal..."
+                class="w-full border border-red-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 mb-3 bg-white"></textarea>
+              <button class="w-full bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">🔄 Rechazar y regenerar ahora</button>
+            </form>
+          </div>
+        </details>
 
         <!-- Opción 3: Aprobar -->
         <form method="POST" action="/admin/approve/${phoneUrl}">
@@ -1493,8 +1531,17 @@ router.post('/approve/:phone', requireAuth, async (req, res) => {
 
 router.post('/reject/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
+  const notes = (req.body.notes || '').trim();
   await db.updateDemoStatus(phone, 'rejected');
-  await db.appendTimelineEvent(phone, { event: 'demo_rejected', note: 'Rechazado desde el panel' });
+  if (notes) await db.setDemoNotes(phone, notes);
+  await db.appendTimelineEvent(phone, { event: 'demo_rejected', note: notes || 'Rechazado desde el panel' });
+  // Regenerar automáticamente
+  const conv = await db.getConversation(phone);
+  if (conv?.report) {
+    orchestrator.processNewReport(phone, conv.report).catch(err => {
+      console.error('[reject] Error regenerando demos:', err);
+    });
+  }
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 });
 
