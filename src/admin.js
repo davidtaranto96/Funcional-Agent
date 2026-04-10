@@ -268,12 +268,12 @@ router.get('/', requireAuth, async (req, res) => {
   const pendingTasks = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done).length, 0);
 
   const metricCards = [
-    { label: 'Leads WA',        value: clients.length,        icon: '💬', grad: 'from-blue-500 to-blue-600',      sub: `${clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length} activos` },
-    { label: 'Demos pendientes', value: pendingReview.length,  icon: '⏳', grad: pendingReview.length > 0 ? 'from-orange-400 to-orange-500' : 'from-slate-400 to-slate-500', sub: 'para revisar', alert: pendingReview.length > 0 },
-    { label: 'Proyectos activos',value: activeProjects,        icon: '📁', grad: 'from-purple-500 to-purple-600',  sub: `${projects.length} en total` },
-    { label: 'Tareas pendientes',value: pendingTasks,          icon: '✅', grad: pendingTasks > 0 ? 'from-amber-400 to-amber-500' : 'from-emerald-500 to-emerald-600', sub: 'en proyectos' },
+    { label: 'Leads WA',        value: clients.length,        icon: '💬', grad: 'from-blue-500 to-blue-600',      sub: `${clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length} activos`, href: '/admin/clients' },
+    { label: 'Demos pendientes', value: pendingReview.length,  icon: '⏳', grad: pendingReview.length > 0 ? 'from-orange-400 to-orange-500' : 'from-slate-400 to-slate-500', sub: 'para revisar', alert: pendingReview.length > 0, href: '/admin/clients' },
+    { label: 'Proyectos activos',value: activeProjects,        icon: '📁', grad: 'from-purple-500 to-purple-600',  sub: `${projects.length} en total`, href: '/admin/projects' },
+    { label: 'Tareas pendientes',value: pendingTasks,          icon: '✅', grad: pendingTasks > 0 ? 'from-amber-400 to-amber-500' : 'from-emerald-500 to-emerald-600', sub: 'en proyectos', href: '/admin/projects' },
   ].map(m => `
-    <div class="bg-gradient-to-br ${m.grad} rounded-2xl p-5 text-white relative overflow-hidden">
+    <a href="${m.href || '#'}" class="bg-gradient-to-br ${m.grad} rounded-2xl p-5 text-white relative overflow-hidden block hover:opacity-95 hover:scale-[1.01] transition-all cursor-pointer no-underline">
       <div class="flex items-start justify-between">
         <div>
           <div class="text-xs font-medium opacity-75 uppercase tracking-wide">${m.label}</div>
@@ -282,8 +282,8 @@ router.get('/', requireAuth, async (req, res) => {
         </div>
         <div class="text-3xl opacity-50">${m.icon}</div>
       </div>
-      ${m.alert ? '<div class="absolute top-3 right-3 w-2 h-2 bg-white rounded-full opacity-80"></div>' : ''}
-    </div>`).join('');
+      ${m.alert ? '<div class="absolute top-3 right-3 w-2 h-2 bg-white rounded-full animate-pulse opacity-80"></div>' : ''}
+    </a>`).join('');
 
   // Alert strip
   const alertStrip = pendingReview.length ? `
@@ -346,6 +346,27 @@ router.get('/', requireAuth, async (req, res) => {
     </div>`;
   }).join('');
 
+  // Activity feed: flatten timelines of all clients, most recent first
+  const allEvents = clients.flatMap(c => {
+    const nombre = c.report?.cliente?.nombre || c.context?.nombre || c.phone;
+    return (c.timeline || []).map(e => ({ ...e, clientName: nombre, phone: c.phone }));
+  }).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8);
+
+  const eventIcon = ev => {
+    const m = { report_generated: '📋', demos_ready: '🎨', demo_sent_to_client: '✈️', demo_approved: '✅', demo_rejected: '✗', changes_requested: '✏️', stage_changed: '🔄', followup_sent: '📤', abandoned: '💤' };
+    return m[ev] || '•';
+  };
+
+  const activityFeed = allEvents.map(e => `
+    <div class="flex items-start gap-2.5 py-2.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors" onclick="location.href='/admin/client/${encodeURIComponent(e.phone)}'">
+      <span class="text-base flex-shrink-0 mt-0.5">${eventIcon(e.event)}</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-medium text-slate-700 truncate">${escapeHtml(e.clientName)}</div>
+        <div class="text-xs text-slate-400 truncate">${escapeHtml(e.note || e.event)}</div>
+      </div>
+      <div class="text-[10px] text-slate-300 flex-shrink-0">${timeAgo(e.date)}</div>
+    </div>`).join('');
+
   const body = `
     <div class="flex items-center justify-between mb-8">
       <div>
@@ -355,7 +376,7 @@ router.get('/', requireAuth, async (req, res) => {
     </div>
     ${alertStrip}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">${metricCards}</div>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-5">
       <div class="bg-white rounded-2xl border border-slate-200 p-5">
         <h2 class="text-sm font-semibold text-slate-700 mb-4">Pipeline WA</h2>
         <div class="space-y-3">${pipelineHtml || '<p class="text-sm text-slate-400">Sin leads</p>'}</div>
@@ -373,6 +394,10 @@ router.get('/', requireAuth, async (req, res) => {
           <a href="/admin/projects" class="text-xs text-blue-600 hover:underline">Ver todos →</a>
         </div>
         ${recentProjects || '<p class="text-sm text-slate-400">Sin proyectos</p>'}
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <h2 class="text-sm font-semibold text-slate-700 mb-3">Actividad reciente</h2>
+        <div>${activityFeed || '<p class="text-sm text-slate-400">Sin actividad todavía</p>'}</div>
       </div>
     </div>`;
 
@@ -731,7 +756,7 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
       : `<div class="grid grid-cols-1 ${demoItems.length > 1 ? 'lg:grid-cols-' + Math.min(demoItems.length, 3) : ''} gap-5 mb-8">${demoPreviews}</div>`}
 
     <!-- Panel de acciones -->
-    <div class="bg-white rounded-2xl border border-slate-200 p-6 max-w-2xl">
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 max-w-2xl mx-auto">
       <h2 class="text-sm font-semibold text-slate-700 mb-5">¿Qué hacemos con esta demo?</h2>
       <div class="grid grid-cols-1 gap-4">
 
@@ -1137,6 +1162,7 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
     : [];
   const doneTasks = tasks.filter(t => t.done).length;
   const pct = tasks.length > 0 ? Math.round(doneTasks / tasks.length * 100) : 0;
+  const updatesLog = project.updates_log || [];
 
   const priorityBadge = p => {
     if (p === 'high') return '<span class="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">Alta</span>';
@@ -1208,11 +1234,40 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             </div>`}
         </div>
 
-        ${project.notes ? `
-          <div class="bg-white rounded-2xl border border-slate-200 p-5">
-            <h2 class="text-sm font-semibold text-slate-700 mb-3">Notas</h2>
-            <p class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(project.notes)}</p>
-          </div>` : ''}
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-700">Notas y actualizaciones</h2>
+          </div>
+          <!-- Quick-add form -->
+          <form method="POST" action="/admin/projects/${project.id}/add-update" class="mb-4">
+            <div class="flex gap-2">
+              <input type="text" name="text" placeholder="Agregar nota rápida... (Ej: Llamé a Berni, arrancamos el viernes)"
+                class="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+              <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex-shrink-0">+ Agregar</button>
+            </div>
+          </form>
+          <!-- Updates feed -->
+          ${updatesLog.length > 0 ? `
+            <div class="space-y-0">
+              ${updatesLog.map((u, i) => `
+                <div class="flex gap-3 py-3 ${i < updatesLog.length - 1 ? 'border-b border-slate-100' : ''}">
+                  <div class="flex flex-col items-center flex-shrink-0">
+                    <div class="w-2 h-2 rounded-full bg-blue-400 mt-1.5"></div>
+                    ${i < updatesLog.length - 1 ? '<div class="w-px flex-1 bg-slate-100 mt-1"></div>' : ''}
+                  </div>
+                  <div class="flex-1 pb-1">
+                    <p class="text-sm text-slate-700">${escapeHtml(u.text)}</p>
+                    <p class="text-xs text-slate-400 mt-0.5">${new Date(u.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>`).join('')}
+            </div>` : `
+            <p class="text-sm text-slate-400 text-center py-4">Sin notas todavía. Agregá la primera arriba.</p>`}
+          ${project.notes ? `
+            <div class="mt-3 pt-3 border-t border-slate-100">
+              <p class="text-xs text-slate-400 mb-1">Nota general del proyecto:</p>
+              <p class="text-xs text-slate-500 whitespace-pre-wrap">${escapeHtml(project.notes)}</p>
+            </div>` : ''}
+        </div>
 
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <div class="flex items-center justify-between mb-4">
@@ -1295,6 +1350,12 @@ router.post('/projects/:id/update', requireAuth, async (req, res) => {
   let tasks = [];
   try { tasks = JSON.parse(req.body.tasks || '[]'); } catch (e) {}
   await db.updateProject(req.params.id, { ...req.body, tasks });
+  res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+router.post('/projects/:id/add-update', requireAuth, async (req, res) => {
+  const text = (req.body.text || '').trim();
+  if (text) await db.addProjectUpdate(req.params.id, text);
   res.redirect(`/admin/projects/${req.params.id}`);
 });
 

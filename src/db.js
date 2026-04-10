@@ -57,6 +57,7 @@ async function init() {
       budget_status TEXT DEFAULT 'not_quoted',
       tasks TEXT DEFAULT '[]',
       notes TEXT DEFAULT '',
+      updates_log TEXT DEFAULT '[]',
       created_by TEXT DEFAULT 'david',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -75,6 +76,14 @@ async function init() {
   ];
   for (const sql of migrations) {
     try { await db.execute(sql); } catch (e) { /* columna ya existe */ }
+  }
+
+  // Projects migrations
+  const projectMigrations = [
+    `ALTER TABLE projects ADD COLUMN updates_log TEXT DEFAULT '[]'`,
+  ];
+  for (const sql of projectMigrations) {
+    try { await db.execute(sql); } catch (e) { /* already exists */ }
   }
 }
 
@@ -115,6 +124,7 @@ function parseProject(row) {
     budget_status: String(row.budget_status || 'not_quoted'),
     tasks: row.tasks ? JSON.parse(String(row.tasks)) : [],
     notes: String(row.notes || ''),
+    updates_log: row.updates_log ? JSON.parse(String(row.updates_log)) : [],
     created_by: String(row.created_by || 'david'),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -290,10 +300,22 @@ async function deleteProject(id) {
   await db.execute({ sql: 'DELETE FROM projects WHERE id = ?', args: [id] });
 }
 
+async function addProjectUpdate(id, text) {
+  const project = await getProject(id);
+  if (!project) return;
+  const db = getDb();
+  const log = project.updates_log || [];
+  log.unshift({ date: new Date().toISOString(), text: String(text).trim() });
+  await db.execute({
+    sql: `UPDATE projects SET updates_log = ?, updated_at = datetime('now') WHERE id = ?`,
+    args: [JSON.stringify(log), id],
+  });
+}
+
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
   updateDemoStatus, updateClientStage, setDriveFolderId, setNotes, setDemoNotes,
   appendTimelineEvent, listAllClients, getClientsByStage,
-  listProjects, getProject, createProject, updateProject, deleteProject,
+  listProjects, getProject, createProject, updateProject, deleteProject, addProjectUpdate,
 };

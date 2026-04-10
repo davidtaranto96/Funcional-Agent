@@ -172,104 +172,157 @@ DEVOLVÉ UN JSON puro (sin markdown) con este formato exacto:
 async function generateMiniPDF(report) {
   return new Promise((resolve, reject) => {
     const { cliente, proyecto, requisitos, resumen_ejecutivo } = report;
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const doc = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    const W = 595.28;
+    const MARGIN = 50;
+    const CW = W - MARGIN * 2;
     const BLUE = '#2563eb';
+    const DARK_BLUE = '#1d4ed8';
     const DARK = '#1e293b';
-    const LIGHT = '#f1f5f9';
+    const GRAY = '#64748b';
+    const LIGHT = '#f8fafc';
+    const LIGHT_BLUE = '#eff6ff';
 
-    // ----- Portada -----
-    doc.rect(0, 0, doc.page.width, 200).fill(BLUE);
-    doc.fillColor('white').fontSize(12).font('Helvetica')
-       .text('Propuesta de proyecto', 50, 60);
-    doc.fontSize(28).font('Helvetica-Bold')
-       .text(cliente.nombre || 'Cliente', 50, 90, { width: 500 });
-    doc.fontSize(14).font('Helvetica')
-       .text(proyecto.tipo || 'Software a medida', 50, 140, { width: 500 });
+    // ─── PÁGINA 1 ─────────────────────────────────────────────────────────────
 
+    // Header azul
+    doc.rect(0, 0, W, 180).fill(BLUE);
+    // Decoración: círculo grande translúcido
+    doc.circle(W - 60, 30, 110).fillOpacity(0.08).fill('white');
+    doc.fillOpacity(1);
+
+    doc.fillColor('white').fontSize(10).font('Helvetica').opacity(0.7)
+       .text('PROPUESTA DE PROYECTO', MARGIN, 45, { letterSpacing: 2 });
+    doc.opacity(1);
+    doc.fontSize(26).font('Helvetica-Bold').fillColor('white')
+       .text(cliente.nombre || 'Cliente', MARGIN, 65, { width: CW - 80 });
+    doc.fontSize(13).font('Helvetica').fillColor('white').opacity(0.85)
+       .text(proyecto.tipo || 'Desarrollo a medida', MARGIN, 105, { width: CW });
+    doc.opacity(1);
+
+    // Fecha y autor en header
+    const fecha = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+    doc.fontSize(9).fillColor('white').opacity(0.6)
+       .text(`Preparado por David Taranto  ·  ${fecha}`, MARGIN, 150, { width: CW });
+    doc.opacity(1);
+
+    // ─── Resumen ejecutivo ─────────────────────────────────────────────────────
+    const summaryText = resumen_ejecutivo || proyecto.descripcion || 'Proyecto a medida según los requerimientos acordados.';
+    const summaryLines = Math.ceil(summaryText.length / 90);
+    const summaryH = Math.max(70, summaryLines * 16 + 30);
+
+    doc.rect(MARGIN, 200, CW, summaryH).fill(LIGHT_BLUE);
+    doc.fillColor(DARK_BLUE).fontSize(9).font('Helvetica-Bold')
+       .text('LO QUE ENTENDÍ DE TU PROYECTO', MARGIN + 16, 215, { letterSpacing: 1 });
     doc.fillColor(DARK).fontSize(11).font('Helvetica')
-       .text('Preparado por David Taranto — Desarrollador freelance', 50, 220);
-    doc.text(new Date().toLocaleDateString('es-AR'), 50, 236);
+       .text(summaryText, MARGIN + 16, 232, { width: CW - 32, align: 'justify' });
 
-    // ----- Qué entendí -----
-    doc.moveDown(3);
-    doc.fontSize(16).fillColor(BLUE).font('Helvetica-Bold')
-       .text('Qué entendí de tu proyecto', 50, 290);
-    doc.moveDown(0.5);
-    doc.fontSize(11).fillColor(DARK).font('Helvetica')
-       .text(proyecto.descripcion || resumen_ejecutivo || 'Proyecto a definir en próxima reunión.',
-             { width: 500, align: 'justify' });
+    // ─── Funcionalidades ──────────────────────────────────────────────────────
+    let y = 200 + summaryH + 20;
+    doc.fillColor(BLUE).fontSize(13).font('Helvetica-Bold')
+       .text('Funcionalidades incluidas', MARGIN, y);
+    y += 22;
 
-    // ----- Funcionalidades -----
-    if (proyecto.funcionalidades && proyecto.funcionalidades.length) {
-      doc.moveDown(1.5);
-      doc.fontSize(16).fillColor(BLUE).font('Helvetica-Bold')
-         .text('Funcionalidades clave');
-      doc.moveDown(0.5);
-      doc.fontSize(11).fillColor(DARK).font('Helvetica');
-      proyecto.funcionalidades.forEach(f => {
-        doc.text(`•  ${f}`, { width: 500 });
-        doc.moveDown(0.2);
+    const funcs = proyecto.funcionalidades || [];
+    if (funcs.length > 0) {
+      funcs.forEach(f => {
+        // Checkbox-like dot
+        doc.circle(MARGIN + 6, y + 5, 4).fill(BLUE);
+        doc.fillColor(DARK).fontSize(10.5).font('Helvetica')
+           .text(f, MARGIN + 18, y, { width: CW - 18 });
+        y += 18;
       });
+    } else {
+      doc.fillColor(GRAY).fontSize(10).text('A definir en la llamada inicial.', MARGIN + 18, y);
+      y += 18;
     }
 
-    // ----- Detalles técnicos -----
-    doc.moveDown(1.5);
-    doc.fontSize(16).fillColor(BLUE).font('Helvetica-Bold').text('Detalles');
-    doc.moveDown(0.5);
+    // ─── Detalles del proyecto ─────────────────────────────────────────────────
+    y += 12;
+    doc.fillColor(BLUE).fontSize(13).font('Helvetica-Bold')
+       .text('Detalles del proyecto', MARGIN, y);
+    y += 20;
 
-    const row = (label, value) => {
-      if (!value) return;
-      const y = doc.y;
-      doc.fontSize(10).fillColor('#64748b').font('Helvetica-Bold').text(label, 50, y, { width: 130 });
-      doc.fillColor(DARK).font('Helvetica').text(value, 180, y, { width: 370 });
-      doc.moveDown(0.4);
-    };
-    row('Plataforma', proyecto.plataforma);
-    row('Estado actual', proyecto.estado_actual);
-    row('Stack sugerido', requisitos.stack_sugerido);
-    row('Plazo', requisitos.plazo);
-    row('Presupuesto', requisitos.presupuesto);
-    row('Urgencia', requisitos.urgencia);
+    const details = [
+      ['Plataforma',     proyecto.plataforma],
+      ['Estado actual',  proyecto.estado_actual],
+      ['Plazo estimado', requisitos?.plazo],
+      ['Presupuesto',    requisitos?.presupuesto],
+      ['Urgencia',       requisitos?.urgencia],
+      ['Stack sugerido', requisitos?.stack_sugerido],
+    ].filter(([, v]) => v);
 
-    // ----- Página 2: timeline + próximos pasos -----
-    doc.addPage();
-    doc.fontSize(20).fillColor(BLUE).font('Helvetica-Bold').text('Cómo vamos a trabajar', 50, 60);
-    doc.moveDown(1);
-
-    const steps = [
-      { n: '1', title: 'Llamada inicial (30 min)', text: 'Terminamos de alinear requisitos, alcance y tiempos.' },
-      { n: '2', title: 'Propuesta formal', text: 'Te paso presupuesto definitivo, cronograma y forma de pago.' },
-      { n: '3', title: 'Desarrollo', text: 'Avances semanales con demos para que vayas viendo el progreso.' },
-      { n: '4', title: 'Entrega y soporte', text: 'Puesta en producción, capacitación y soporte durante los primeros 30 días.' },
-    ];
-    steps.forEach(s => {
-      const y = doc.y;
-      doc.circle(65, y + 10, 14).fill(BLUE);
-      doc.fillColor('white').fontSize(13).font('Helvetica-Bold').text(s.n, 60, y + 4);
-      doc.fillColor(DARK).fontSize(13).font('Helvetica-Bold').text(s.title, 95, y, { width: 450 });
-      doc.fontSize(10).font('Helvetica').fillColor('#475569').text(s.text, 95, y + 18, { width: 450 });
-      doc.moveDown(2);
+    // Two-column layout for details
+    const colW = CW / 2 - 8;
+    details.forEach(([label, value], idx) => {
+      const col = idx % 2;
+      const row = Math.floor(idx / 2);
+      const dx = MARGIN + col * (colW + 16);
+      const dy = y + row * 32;
+      doc.rect(dx, dy, colW, 28).fill(LIGHT);
+      doc.fillColor(GRAY).fontSize(8).font('Helvetica-Bold')
+         .text(label.toUpperCase(), dx + 8, dy + 6, { width: colW - 16 });
+      doc.fillColor(DARK).fontSize(10).font('Helvetica')
+         .text(String(value), dx + 8, dy + 16, { width: colW - 16 });
     });
 
-    // ----- Próximo paso -----
-    doc.moveDown(1);
-    doc.rect(50, doc.y, 500, 90).fill(LIGHT);
-    const boxY = doc.y + 15;
-    doc.fillColor(BLUE).fontSize(14).font('Helvetica-Bold')
-       .text('Próximo paso', 65, boxY);
-    doc.fillColor(DARK).fontSize(11).font('Helvetica')
-       .text('Respondé este WhatsApp o mandame un mensaje para coordinar la llamada inicial. Te contesto ese mismo día.',
-             65, boxY + 22, { width: 470 });
+    // ─── PÁGINA 2 ─────────────────────────────────────────────────────────────
+    doc.addPage();
 
-    // Footer
-    doc.fontSize(9).fillColor('#94a3b8').font('Helvetica')
-       .text('David Taranto · Desarrollo freelance · Salta, Argentina',
-             50, 780, { width: 500, align: 'center' });
+    // Thin accent bar
+    doc.rect(0, 0, W, 6).fill(BLUE);
+
+    doc.fillColor(DARK).fontSize(20).font('Helvetica-Bold')
+       .text('Cómo vamos a trabajar', MARGIN, 30);
+    doc.fillColor(GRAY).fontSize(11).font('Helvetica')
+       .text('Mi proceso de trabajo es simple, con avances continuos para que siempre sepas cómo avanza tu proyecto.', MARGIN, 58, { width: CW });
+
+    let sy = 100;
+    const steps = [
+      { n: '1', title: 'Llamada inicial (30 min)', text: 'Alineamos requisitos, alcance, tiempos y cualquier duda que quede. Sin costo, sin compromiso.' },
+      { n: '2', title: 'Propuesta formal',          text: 'Te presento el presupuesto definitivo, el cronograma detallado y las opciones de pago.' },
+      { n: '3', title: 'Desarrollo con avances',    text: 'Trabajamos en sprints de 1 semana. Te mando demos funcionales para que vayas viendo el avance en tiempo real.' },
+      { n: '4', title: 'Entrega + soporte 30 días', text: 'Puesta en producción, capacitación de uso y soporte técnico incluido durante el primer mes.' },
+    ];
+
+    steps.forEach(s => {
+      // Number circle
+      doc.circle(MARGIN + 14, sy + 12, 14).fill(BLUE);
+      doc.fillColor('white').fontSize(12).font('Helvetica-Bold')
+         .text(s.n, MARGIN + 9, sy + 7);
+      // Connector line (except last)
+      if (s.n !== '4') {
+        doc.moveTo(MARGIN + 14, sy + 26).lineTo(MARGIN + 14, sy + 60).stroke('#cbd5e1');
+      }
+      doc.fillColor(DARK).fontSize(12).font('Helvetica-Bold')
+         .text(s.title, MARGIN + 36, sy, { width: CW - 36 });
+      doc.fillColor(GRAY).fontSize(10).font('Helvetica')
+         .text(s.text, MARGIN + 36, sy + 16, { width: CW - 36 });
+      sy += 65;
+    });
+
+    // ─── CTA box ──────────────────────────────────────────────────────────────
+    sy += 10;
+    doc.rect(MARGIN, sy, CW, 100).fill(BLUE);
+    doc.fillColor('white').fontSize(16).font('Helvetica-Bold')
+       .text('¿Empezamos?', MARGIN + 20, sy + 18);
+    doc.fillColor('white').fontSize(11).font('Helvetica').opacity(0.9)
+       .text('Respondé este mensaje o mandame un WhatsApp y coordinamos una llamada de 30 minutos esta semana. Contesto el mismo día.', MARGIN + 20, sy + 42, { width: CW - 40 });
+    doc.opacity(1);
+
+    // Contact row
+    doc.fillColor('white').fontSize(9).font('Helvetica-Bold').opacity(0.7)
+       .text('📱 WhatsApp  ·  📧 david.taranto@gmail.com  ·  💼 David Taranto — Desarrollador Freelance', MARGIN + 20, sy + 82, { width: CW - 40 });
+    doc.opacity(1);
+
+    // Footer on page 2
+    doc.fillColor('#94a3b8').fontSize(8).font('Helvetica')
+       .text('David Taranto · Desarrollo de software a medida · Salta, Argentina', MARGIN, 800, { width: CW, align: 'center' });
 
     doc.end();
   });
