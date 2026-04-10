@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.3'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.4'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -1300,17 +1300,17 @@ router.post('/client/:phone/to-project', requireAuth, async (req, res) => {
     category: category || 'cliente',
     deadline: deadline || '',
     notes: notes || '',
-    tasks: JSON.stringify(tasks),
+    tasks,          // array — createProject hace JSON.stringify internamente
     is_personal: false,
   };
 
-  const newProject = await db.createProject(project);
+  const newProjectId = await db.createProject(project); // devuelve string id
 
   // Marcar el lead como ganado
   await db.updateClientStage(phone, 'won');
-  await db.appendTimelineEvent(phone, { event: 'stage_changed', note: `Proyecto ganado — creado proyecto #${newProject.id}` });
+  await db.appendTimelineEvent(phone, { event: 'stage_changed', note: `Proyecto ganado — creado proyecto #${newProjectId}` });
 
-  res.redirect(`/admin/projects/${newProject.id}`);
+  res.redirect(`/admin/projects/${newProjectId}`);
 });
 
 // ─── Review ──────────────────────────────────────────────────────────────────
@@ -2030,8 +2030,9 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
   if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>', { user: req.session?.user }));
 
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
-  // Load linked client if exists
+  // Load linked client + all their projects for context
   const linkedClient = project.client_id ? await db.getClientRecord(project.client_id) : null;
+  const clientOtherProjects = linkedClient ? (await db.getProjectsByClientId(linkedClient.id)).filter(p => p.id !== project.id) : [];
   const tasks = project.tasks || [];
 
   // Archivos del proyecto
@@ -2269,26 +2270,56 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             <a href="/admin/projects/${project.id}/edit" class="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">✏️ Editar proyecto</a>
           </div>
         </div>
-        ${linkedClient ? `
-  <div class="bg-white rounded-2xl border border-slate-200 p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide">Cliente vinculado</h2>
-      <a href="/admin/clientes/${linkedClient.id}" class="text-xs text-blue-600 hover:underline">Ver →</a>
-    </div>
-    <div class="flex items-center gap-2.5">
-      ${(() => {
-        const colors = ['bg-blue-500','bg-purple-500','bg-emerald-500','bg-orange-500','bg-rose-500'];
-        const bg = colors[linkedClient.name.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % colors.length];
-        return `<div class="w-8 h-8 rounded-full ${bg} flex items-center justify-center text-white font-bold text-sm flex-shrink-0">${(linkedClient.name[0]||'?').toUpperCase()}</div>`;
-      })()}
-      <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(linkedClient.name)}</div>
-        ${linkedClient.company ? `<div class="text-xs text-slate-400 truncate">${escapeHtml(linkedClient.company)}</div>` : ''}
+        ${linkedClient ? (() => {
+          const avatarColors = ['bg-blue-500','bg-purple-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-indigo-500'];
+          const bg = avatarColors[linkedClient.name.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % avatarColors.length];
+          return `
+  <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div class="p-4 border-b border-slate-100">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide">Cliente vinculado</h2>
+        <a href="/admin/clientes/${linkedClient.id}" class="text-xs text-blue-600 hover:underline font-medium">Ficha completa →</a>
       </div>
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-10 h-10 rounded-xl ${bg} flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+          ${(linkedClient.name[0]||'?').toUpperCase()}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(linkedClient.name)}</div>
+          ${linkedClient.company ? `<div class="text-xs text-slate-500 truncate">${escapeHtml(linkedClient.company)}</div>` : ''}
+          <div class="mt-0.5">${clientCategoryBadge(linkedClient.category)}</div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        ${linkedClient.phone ? `<div class="flex items-center gap-2">
+          <span class="text-slate-400 text-xs">📞</span>
+          <a href="tel:${escapeHtml(linkedClient.phone)}" class="text-xs text-blue-600 hover:underline flex-1 truncate">${escapeHtml(linkedClient.phone)}</a>
+          <a href="https://wa.me/${linkedClient.phone.replace(/\D/g,'')}" target="_blank" class="text-xs text-emerald-600 hover:underline flex-shrink-0">WA ↗</a>
+        </div>` : ''}
+        ${linkedClient.email ? `<div class="flex items-center gap-2">
+          <span class="text-slate-400 text-xs">✉️</span>
+          <a href="mailto:${escapeHtml(linkedClient.email)}" class="text-xs text-blue-600 hover:underline flex-1 truncate">${escapeHtml(linkedClient.email)}</a>
+        </div>` : ''}
+      </div>
+      ${linkedClient.notes ? `<div class="mt-2 text-xs text-slate-500 bg-slate-50 rounded-lg p-2 line-clamp-2 italic">"${escapeHtml(linkedClient.notes.slice(0,120))}"</div>` : ''}
     </div>
-    ${linkedClient.phone ? `<a href="tel:${escapeHtml(linkedClient.phone)}" class="text-xs text-blue-600 hover:underline mt-2 block">${escapeHtml(linkedClient.phone)}</a>` : ''}
-    ${linkedClient.email ? `<a href="mailto:${escapeHtml(linkedClient.email)}" class="text-xs text-slate-400 hover:underline truncate block">${escapeHtml(linkedClient.email)}</a>` : ''}
-  </div>` : ''}
+    ${clientOtherProjects.length > 0 ? `
+    <div class="p-4">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Otros proyectos del cliente (${clientOtherProjects.length})</div>
+      <div class="space-y-1.5">
+        ${clientOtherProjects.slice(0,3).map(p => {
+          const cat2 = PROJECT_CATEGORIES.find(c => c.key === (p.category||'cliente')) || PROJECT_CATEGORIES[0];
+          return `<a href="/admin/projects/${p.id}" class="flex items-center gap-2 px-2 py-1.5 -mx-2 rounded-lg hover:bg-slate-50 transition-colors">
+            <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${cat2.color}"></div>
+            <span class="text-xs text-slate-700 truncate flex-1">${escapeHtml(p.title||p.client_name)}</span>
+            ${p.budget ? `<span class="text-xs font-medium text-slate-500 flex-shrink-0">${escapeHtml(p.budget)}</span>` : projectStatusBadge(p.status)}
+          </a>`;
+        }).join('')}
+        ${clientOtherProjects.length > 3 ? `<div class="text-xs text-center text-slate-400 pt-1">+${clientOtherProjects.length-3} más</div>` : ''}
+      </div>
+    </div>` : `<div class="p-3 text-center text-xs text-slate-400">Único proyecto de este cliente</div>`}
+  </div>`;
+        })() : ''}
       </div>
     </div>`;
 
@@ -2782,17 +2813,28 @@ router.post('/clientes/:id/notes', requireAuth, async (req, res) => {
 router.post('/clientes/:id/link-project', requireAuth, async (req, res) => {
   const projectId = req.body.project_id;
   if (!projectId) return res.redirect(`/admin/clientes/${req.params.id}`);
-  const project = await db.getProject(projectId);
-  if (!project) return res.redirect(`/admin/clientes/${req.params.id}`);
-  await db.updateProject(projectId, { ...project, client_id: req.params.id, tasks: JSON.stringify(project.tasks || []) });
-  res.redirect(`/admin/clientes/${req.params.id}`);
+  try {
+    const project = await db.getProject(projectId);
+    if (!project) return res.redirect(`/admin/clientes/${req.params.id}`);
+    // tasks ya viene como array de parseProject — updateProject hace el stringify internamente
+    await db.updateProject(projectId, { ...project, client_id: req.params.id });
+    res.redirect(`/admin/clientes/${req.params.id}`);
+  } catch (err) {
+    console.error('[link-project] Error:', err);
+    res.redirect(`/admin/clientes/${req.params.id}`);
+  }
 });
 
 // Desvincular proyecto de este cliente
 router.post('/clientes/:id/unlink-project/:projectId', requireAuth, async (req, res) => {
-  const project = await db.getProject(req.params.projectId);
-  if (project) await db.updateProject(req.params.projectId, { ...project, client_id: '', tasks: JSON.stringify(project.tasks || []) });
-  res.redirect(`/admin/clientes/${req.params.id}`);
+  try {
+    const project = await db.getProject(req.params.projectId);
+    if (project) await db.updateProject(req.params.projectId, { ...project, client_id: '' });
+    res.redirect(`/admin/clientes/${req.params.id}`);
+  } catch (err) {
+    console.error('[unlink-project] Error:', err);
+    res.redirect(`/admin/clientes/${req.params.id}`);
+  }
 });
 
 router.post('/clientes/:id/delete', requireAuth, async (req, res) => {
