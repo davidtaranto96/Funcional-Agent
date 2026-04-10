@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.4.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.5.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 
 // ─── Multer: upload de archivos para proyectos ───────────────────────────────
@@ -2293,122 +2293,307 @@ router.post('/clientes/:id/delete', requireAuth, async (req, res) => {
   res.redirect('/admin/clientes');
 });
 
-// ─── Documentos ───────────────────────────────────────────────────────────────
+// ─── Documentos (Google Drive-style) ─────────────────────────────────────────
+
+function docLayout(title, sidebarHtml, contentHtml, { pendingCount = 0, user = null } = {}) {
+  return layout(title, `
+    <div class="flex gap-0 -mx-6 -mt-6" style="min-height:calc(100vh - 40px)">
+      <!-- Left sidebar -->
+      <div class="w-56 flex-shrink-0 border-r border-slate-200 bg-white px-3 py-5 flex flex-col gap-1" style="min-height:calc(100vh - 40px)">
+        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-2">Mi Drive</div>
+        ${sidebarHtml}
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <details class="group">
+            <summary class="list-none">
+              <button class="flex items-center gap-2 w-full px-2 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors cursor-pointer">
+                <span class="text-base">➕</span> Nueva carpeta
+              </button>
+            </summary>
+            <div class="mt-2 bg-white border border-slate-200 rounded-xl p-3 shadow-lg">
+              <form method="POST" action="/admin/documentos/folder/new" class="space-y-2">
+                <input type="text" name="name" placeholder="Nombre..." required autofocus
+                  class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="text" name="description" placeholder="Descripción (opcional)"
+                  class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="flex gap-1.5">
+                  ${['#3b82f6','#8b5cf6','#10b981','#f59e0b','#f43f5e','#64748b'].map((c,i) =>
+                    `<label class="cursor-pointer"><input type="radio" name="color" value="${c}" class="sr-only" ${i===0?'checked':''}><div class="w-5 h-5 rounded-full hover:scale-110 transition-transform" style="background:${c}"></div></label>`).join('')}
+                </div>
+                <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded-lg text-xs font-semibold transition-colors">Crear</button>
+              </form>
+            </div>
+          </details>
+        </div>
+      </div>
+      <!-- Main content -->
+      <div class="flex-1 px-6 py-5 overflow-auto bg-slate-50">
+        ${contentHtml}
+      </div>
+    </div>`, { pendingCount, activePage: 'documentos', user });
+}
 
 router.get('/documentos', requireAuth, async (req, res) => {
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
   const folders = await db.listDocumentFolders();
   const projects = await db.listProjects();
+  const waClients = await db.listAllClients();
+  const type = req.query.type || 'root';
+  const folderId = req.query.folder || '';
+  const view = req.query.view || 'grid';
 
-  // Custom folders: scan data/documents/
+  // Build folder data
   const customFolders = folders.map(f => {
     const dir = path.join(DOCUMENTS_DIR, f.id);
     const files = fs.existsSync(dir)
-      ? fs.readdirSync(dir).map(name => ({ name, size: fs.statSync(path.join(dir, name)).size, folder: f.id, folderName: f.name }))
+      ? fs.readdirSync(dir).filter(n => !n.startsWith('.')).map(name => {
+          const fp = path.join(dir, name);
+          const stat = fs.statSync(fp);
+          return { name, size: stat.size, mtime: stat.mtime, type: 'custom', folderId: f.id, folderName: f.name };
+        })
       : [];
     return { ...f, files, type: 'custom' };
   });
 
-  // Project folders: from data/project-files/
-  const projectFolders = projects
-    .map(p => {
-      const dir = path.join(PROJECT_FILES_DIR, p.id);
-      const files = fs.existsSync(dir)
-        ? fs.readdirSync(dir).map(name => ({ name, size: fs.statSync(path.join(dir, name)).size, folder: p.id, folderName: p.title || p.client_name }))
-        : [];
-      return { id: p.id, name: p.title || p.client_name, color: '#8b5cf6', description: p.client_name, files, type: 'project', projectId: p.id };
-    })
-    .filter(f => f.files.length > 0);
+  const projectFolders = projects.map(p => {
+    const dir = path.join(PROJECT_FILES_DIR, p.id);
+    const files = fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter(n => !n.startsWith('.')).map(name => {
+          const fp = path.join(dir, name);
+          const stat = fs.statSync(fp);
+          return { name, size: stat.size, mtime: stat.mtime, type: 'project', folderId: p.id, folderName: p.title || p.client_name };
+        })
+      : [];
+    return { id: p.id, name: p.title || p.client_name, color: '#8b5cf6', description: p.client_name, files, type: 'project' };
+  }).filter(f => f.files.length > 0);
 
-  const allFolders = [...customFolders, ...projectFolders];
-  const totalFiles = allFolders.reduce((n, f) => n + f.files.length, 0);
-  const totalSize = allFolders.reduce((n, f) => n + f.files.reduce((s, file) => s + file.size, 0), 0);
+  // Demo files
+  const DEMOS_BASE = path.join(__dirname, '..', 'data', 'demos');
+  const demoFolders = waClients.filter(c => c.demo_status && c.demo_status !== 'none' && c.demo_status !== 'generating').map(c => {
+    const slug = (c.phone || '').replace(/[^0-9]/g, '');
+    const dir = path.join(DEMOS_BASE, slug);
+    const files = fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter(n => !n.startsWith('.')).map(name => {
+          const fp = path.join(dir, name);
+          const stat = fs.statSync(fp);
+          return { name, size: stat.size, mtime: stat.mtime, type: 'demo', folderId: slug, folderName: c.report?.cliente?.nombre || c.phone };
+        })
+      : [];
+    return { id: slug, name: c.report?.cliente?.nombre || c.phone, color: '#0ea5e9', description: 'Demo WA', files, type: 'demo', phone: c.phone };
+  }).filter(f => f.files.length > 0);
 
-  const folderCards = allFolders.map(f => `
-    <a href="/admin/documentos/${f.type === 'project' ? 'project' : 'folder'}/${f.id}" class="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer block group">
-      <div class="flex items-start gap-3">
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl" style="background:${f.color}18">
-          <span style="color:${f.color}">📁</span>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">${escapeHtml(f.name)}</div>
-          <div class="text-xs text-slate-400 mt-0.5">${f.files.length} archivo${f.files.length !== 1 ? 's' : ''}</div>
-          ${f.description ? `<div class="text-xs text-slate-300 truncate mt-0.5">${escapeHtml(f.description)}</div>` : ''}
-        </div>
-        ${f.type === 'project' ? '<span class="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">Proyecto</span>' : ''}
-      </div>
-    </a>`).join('');
+  const sidebarItem = (href, icon, label, active, color = '') => `
+    <a href="${href}" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${active ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}">
+      <span style="${color ? `color:${color}` : ''}">${icon}</span>
+      <span class="truncate flex-1">${escapeHtml(label)}</span>
+    </a>`;
 
-  // All files flat list
-  const allFiles = allFolders.flatMap(f => f.files.map(file => ({ ...file, folderName: f.name, folderType: f.type })));
+  const activeFolder = type === 'custom' ? customFolders.find(f => f.id === folderId)
+    : type === 'project' ? projectFolders.find(f => f.id === folderId)
+    : null;
 
-  const fileRows = allFiles.slice(0, 20).map(f => `
-    <div class="flex items-center gap-3 py-2.5 px-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 group">
-      <span class="text-xl flex-shrink-0">${fileIcon(f.name)}</span>
-      <div class="flex-1 min-w-0">
-        <div class="text-sm text-slate-700 truncate">${escapeHtml(f.name)}</div>
-        <div class="text-xs text-slate-400">${escapeHtml(f.folderName)} · ${formatBytes(f.size)}</div>
-      </div>
-    </div>`).join('');
-
-  // Create folder modal form
-  const newFolderForm = `
-    <details class="group">
-      <summary class="list-none cursor-pointer">
-        <button class="border border-dashed border-slate-200 text-slate-500 hover:border-blue-400 hover:text-blue-600 px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
-          + Nueva carpeta
-        </button>
-      </summary>
-      <div class="mt-2 bg-white border border-slate-200 rounded-2xl p-5 shadow-lg">
-        <h3 class="text-sm font-semibold text-slate-700 mb-4">Nueva carpeta</h3>
-        <form method="POST" action="/admin/documentos/folder/new" class="space-y-3">
-          <input type="text" name="name" placeholder="Nombre de la carpeta" required
-            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <input type="text" name="description" placeholder="Descripción (opcional)"
-            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <div>
-            <label class="text-xs text-slate-500 block mb-1">Color</label>
-            <div class="flex gap-2">
-              ${['#3b82f6','#8b5cf6','#10b981','#f59e0b','#f43f5e','#64748b'].map(c =>
-                `<label class="cursor-pointer"><input type="radio" name="color" value="${c}" class="sr-only"><div class="w-6 h-6 rounded-full border-2 border-white shadow hover:scale-110 transition-transform" style="background:${c}"></div></label>`).join('')}
-            </div>
-          </div>
-          <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">Crear carpeta</button>
-        </form>
-      </div>
-    </details>`;
-
-  const body = `
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h1 class="text-2xl font-bold text-slate-900">Documentos</h1>
-        <div class="text-sm text-slate-400 mt-0.5">${totalFiles} archivos · ${formatBytes(totalSize)}</div>
-      </div>
-      ${newFolderForm}
-    </div>
-
-    ${allFolders.length > 0 ? `
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">${folderCards}</div>
-    ` : `
-      <div class="text-center py-16 mb-8">
-        <div class="text-5xl mb-4">📂</div>
-        <h3 class="text-lg font-semibold text-slate-700 mb-2">Sin carpetas todavía</h3>
-        <p class="text-sm text-slate-400">Creá una carpeta o subí archivos desde los proyectos.</p>
-      </div>
-    `}
-
-    ${allFiles.length > 0 ? `
-      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-slate-700">Archivos recientes</h2>
-          <span class="text-xs text-slate-400">${allFiles.length} en total</span>
-        </div>
-        ${fileRows}
-        ${allFiles.length > 20 ? `<div class="px-4 py-3 text-xs text-slate-400 text-center border-t border-slate-100">Mostrando 20 de ${allFiles.length}</div>` : ''}
-      </div>
+  const sidebarHtml = `
+    ${customFolders.length > 0 || true ? `
+      <div class="text-[10px] font-semibold text-slate-400 px-2 mt-2 mb-1 uppercase tracking-wider">Mis carpetas</div>
+      ${customFolders.map(f => sidebarItem(`/admin/documentos?type=custom&folder=${f.id}&view=${view}`, '📁', f.name, type==='custom'&&folderId===f.id, f.color)).join('')}
+      ${customFolders.length === 0 ? '<div class="text-xs text-slate-300 px-2">Sin carpetas</div>' : ''}
+    ` : ''}
+    ${projectFolders.length > 0 ? `
+      <div class="text-[10px] font-semibold text-slate-400 px-2 mt-3 mb-1 uppercase tracking-wider">Proyectos</div>
+      ${projectFolders.map(f => sidebarItem(`/admin/documentos?type=project&folder=${f.id}&view=${view}`, '📁', f.name, type==='project'&&folderId===f.id, '#8b5cf6')).join('')}
+    ` : ''}
+    ${demoFolders.length > 0 ? `
+      <div class="text-[10px] font-semibold text-slate-400 px-2 mt-3 mb-1 uppercase tracking-wider">Demos WA</div>
+      ${demoFolders.slice(0, 8).map(f => sidebarItem(`/admin/documentos?type=demo&folder=${f.id}&view=${view}`, '💬', f.name, type==='demo'&&folderId===f.id, '#0ea5e9')).join('')}
     ` : ''}`;
 
-  res.send(layout('Documentos', body, { pendingCount, activePage: 'documentos', user: req.session?.user }));
+  // File icon helper (extended)
+  const bigIcon = name => {
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const m = { pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', csv: '📊',
+      png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️',
+      mp4: '🎬', mov: '🎬', avi: '🎬', mp3: '🎵', wav: '🎵',
+      zip: '📦', rar: '📦', html: '🌐', htm: '🌐',
+      txt: '📃', md: '📃', js: '⚙️', json: '⚙️' };
+    return m[ext] || '📎';
+  };
+
+  // Determine files to show
+  let currentFiles = [];
+  let currentTitle = 'Todos los archivos';
+  let currentColor = '#3b82f6';
+  let isCustomFolder = false;
+  let currentFolderObj = null;
+
+  if (type === 'custom' && folderId) {
+    currentFolderObj = customFolders.find(f => f.id === folderId);
+    if (currentFolderObj) {
+      currentFiles = currentFolderObj.files;
+      currentTitle = currentFolderObj.name;
+      currentColor = currentFolderObj.color;
+      isCustomFolder = true;
+    }
+  } else if (type === 'project' && folderId) {
+    currentFolderObj = projectFolders.find(f => f.id === folderId);
+    if (currentFolderObj) {
+      currentFiles = currentFolderObj.files;
+      currentTitle = currentFolderObj.name;
+      currentColor = '#8b5cf6';
+    }
+  } else if (type === 'demo' && folderId) {
+    currentFolderObj = demoFolders.find(f => f.id === folderId);
+    if (currentFolderObj) {
+      currentFiles = currentFolderObj.files;
+      currentTitle = currentFolderObj.name;
+      currentColor = '#0ea5e9';
+    }
+  }
+
+  const totalAll = [...customFolders, ...projectFolders, ...demoFolders].reduce((n, f) => n + f.files.length, 0);
+
+  // File card (grid view)
+  const fileCard = (f, downloadHref, deleteAction, canMove) => {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    const isImage = ['png','jpg','jpeg','gif','webp'].includes(ext);
+    return `
+      <div class="bg-white border border-slate-200 rounded-xl p-3 hover:shadow-md hover:border-blue-200 transition-all group flex flex-col gap-2">
+        <div class="flex items-start justify-between gap-1">
+          <span class="text-3xl leading-none">${bigIcon(f.name)}</span>
+          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <a href="${downloadHref}" download class="text-slate-400 hover:text-blue-600 p-1 rounded transition-colors" title="Descargar">⬇</a>
+            ${deleteAction ? `
+              <form method="POST" action="${deleteAction}" onsubmit="return confirm('¿Eliminar?')" style="display:inline">
+                <button class="text-slate-300 hover:text-red-400 p-1 rounded transition-colors" title="Eliminar">✕</button>
+              </form>` : ''}
+          </div>
+        </div>
+        <div class="flex-1">
+          <div class="text-xs font-medium text-slate-700 break-all leading-tight line-clamp-2" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">${formatBytes(f.size)}</div>
+        </div>
+        ${canMove && isCustomFolder ? `
+          <form method="POST" action="/admin/documentos/file/move" class="pt-1 border-t border-slate-100">
+            <input type="hidden" name="filename" value="${escapeHtml(f.name)}">
+            <input type="hidden" name="fromFolder" value="${escapeHtml(f.folderId)}">
+            <select name="toFolder" onchange="this.form.submit()" class="w-full text-[10px] border-0 bg-transparent text-slate-400 focus:outline-none cursor-pointer">
+              <option value="">Mover a...</option>
+              ${customFolders.filter(cf => cf.id !== f.folderId).map(cf => `<option value="${cf.id}">${escapeHtml(cf.name)}</option>`).join('')}
+            </select>
+          </form>` : ''}
+      </div>`;
+  };
+
+  // File row (list view)
+  const fileRow = (f, downloadHref, deleteAction) => `
+    <div class="flex items-center gap-3 py-2.5 px-3 hover:bg-slate-50 rounded-xl group transition-colors">
+      <span class="text-lg flex-shrink-0">${bigIcon(f.name)}</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-slate-700 truncate font-medium">${escapeHtml(f.name)}</div>
+        <div class="text-xs text-slate-400">${formatBytes(f.size)} · ${f.mtime ? new Date(f.mtime).toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+      </div>
+      <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        <a href="${downloadHref}" download class="text-xs text-blue-600 hover:underline font-medium">⬇ Descargar</a>
+        ${deleteAction ? `
+          <form method="POST" action="${deleteAction}" onsubmit="return confirm('¿Eliminar?')" style="display:inline">
+            <button class="text-xs text-red-400 hover:text-red-600 font-medium">Eliminar</button>
+          </form>` : ''}
+      </div>
+    </div>`;
+
+  // Build content HTML
+  let contentHtml = '';
+
+  if (type === 'root') {
+    // Overview: show all folder sections
+    const allFolderGroups = [
+      { label: 'Mis carpetas', folders: customFolders, emptyMsg: 'Sin carpetas todavía. Creá una desde el panel lateral.' },
+      { label: 'Proyectos con archivos', folders: projectFolders, emptyMsg: null },
+      { label: 'Demos WA', folders: demoFolders, emptyMsg: null },
+    ];
+    const folderCardHtml = (f) => `
+      <a href="/admin/documentos?type=${f.type}&folder=${f.id}&view=${view}"
+         class="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer block group">
+        <div class="text-3xl mb-2" style="color:${f.color}">📁</div>
+        <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-600">${escapeHtml(f.name)}</div>
+        <div class="text-xs text-slate-400 mt-0.5">${f.files.length} archivo${f.files.length!==1?'s':''}</div>
+        ${f.description && f.description !== f.name ? `<div class="text-[10px] text-slate-300 truncate mt-0.5">${escapeHtml(f.description)}</div>` : ''}
+      </a>`;
+
+    contentHtml = `
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h1 class="text-xl font-bold text-slate-900">Mi Drive</h1>
+          <div class="text-xs text-slate-400 mt-0.5">${totalAll} archivos totales</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="?view=grid" class="px-2.5 py-1.5 rounded-lg text-xs font-medium ${view==='grid'?'bg-slate-800 text-white':'text-slate-500 hover:bg-slate-100'}">⊞ Grilla</a>
+          <a href="?view=list" class="px-2.5 py-1.5 rounded-lg text-xs font-medium ${view==='list'?'bg-slate-800 text-white':'text-slate-500 hover:bg-slate-100'}">≡ Lista</a>
+        </div>
+      </div>
+      ${allFolderGroups.filter(g => g.folders.length > 0 || g.emptyMsg).map(g => `
+        <div class="mb-7">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">${g.label}</div>
+          ${g.folders.length > 0
+            ? `<div class="grid grid-cols-3 lg:grid-cols-5 gap-3">${g.folders.map(folderCardHtml).join('')}</div>`
+            : g.emptyMsg ? `<p class="text-xs text-slate-400">${g.emptyMsg}</p>` : ''}
+        </div>`).join('')}`;
+  } else if (currentFolderObj) {
+    // Inside a folder — show files
+    const getDownloadHref = f => {
+      if (f.type === 'custom') return `/admin/documentos/folder/${f.folderId}/file/${encodeURIComponent(f.name)}/download`;
+      if (f.type === 'project') return `/admin/documentos/project/${f.folderId}/file/${encodeURIComponent(f.name)}/download`;
+      if (f.type === 'demo') return `/admin/documentos/demo/${f.folderId}/file/${encodeURIComponent(f.name)}/download`;
+      return '#';
+    };
+    const getDeleteAction = f => {
+      if (f.type === 'custom') return `/admin/documentos/folder/${f.folderId}/file/${encodeURIComponent(f.name)}/delete`;
+      if (f.type === 'project') return `/admin/projects/${f.folderId}/files/${encodeURIComponent(f.name)}/delete`;
+      return null; // demos can't be deleted from here
+    };
+
+    const uploadSection = (type === 'custom') ? `
+      <form method="POST" action="/admin/documentos/folder/${folderId}/upload" enctype="multipart/form-data" class="mt-5">
+        <label class="flex items-center justify-center gap-3 border-2 border-dashed border-slate-200 rounded-2xl py-5 px-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+          <span class="text-2xl">📎</span>
+          <div>
+            <div class="text-sm font-medium text-slate-600">Subir archivos</div>
+            <div class="text-xs text-slate-400">PDF, imágenes, docs, videos · Máx. 50MB</div>
+          </div>
+          <input type="file" name="files" multiple class="hidden" onchange="this.form.submit()">
+        </label>
+      </form>` : (type === 'project') ? `
+      <div class="mt-5 text-center">
+        <a href="/admin/projects/${folderId}" class="text-sm text-blue-600 hover:underline">Ver proyecto completo para subir archivos →</a>
+      </div>` : '';
+
+    const deleteSection = (type === 'custom') ? `
+      <form method="POST" action="/admin/documentos/folder/${folderId}/delete" onsubmit="return confirm('¿Eliminar esta carpeta y todos sus archivos?')" class="ml-auto">
+        <button class="text-xs border border-red-200 text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">Eliminar carpeta</button>
+      </form>` : '';
+
+    contentHtml = `
+      <div class="flex items-center gap-3 mb-5">
+        <a href="/admin/documentos" class="text-sm text-slate-400 hover:text-blue-600">← Mi Drive</a>
+        <span class="text-slate-200">/</span>
+        <span class="text-sm font-semibold text-slate-700">${escapeHtml(currentTitle)}</span>
+        <div class="flex items-center gap-2 ml-auto">
+          <a href="?type=${type}&folder=${folderId}&view=grid" class="px-2.5 py-1.5 rounded-lg text-xs font-medium ${view==='grid'?'bg-slate-800 text-white':'text-slate-500 hover:bg-slate-100'}">⊞</a>
+          <a href="?type=${type}&folder=${folderId}&view=list" class="px-2.5 py-1.5 rounded-lg text-xs font-medium ${view==='list'?'bg-slate-800 text-white':'text-slate-500 hover:bg-slate-100'}">≡</a>
+          ${deleteSection}
+        </div>
+      </div>
+      ${currentFiles.length === 0
+        ? `<div class="text-center py-20"><div class="text-5xl mb-3">📂</div><p class="text-sm text-slate-400">Sin archivos. Subí el primero.</p></div>`
+        : view === 'grid'
+          ? `<div class="grid grid-cols-3 lg:grid-cols-5 gap-3">
+              ${currentFiles.map(f => fileCard(f, getDownloadHref(f), getDeleteAction(f), true)).join('')}
+             </div>`
+          : `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              ${currentFiles.map(f => fileRow(f, getDownloadHref(f), getDeleteAction(f))).join('')}
+             </div>`}
+      ${uploadSection}`;
+  }
+
+  res.send(docLayout('Documentos', sidebarHtml, contentHtml, { pendingCount, user: req.session?.user }));
 });
 
 router.post('/documentos/folder/new', requireAuth, async (req, res) => {
@@ -2416,99 +2601,71 @@ router.post('/documentos/folder/new', requireAuth, async (req, res) => {
   if (!name?.trim()) return res.redirect('/admin/documentos');
   const id = await db.createDocumentFolder({ name: name.trim(), color: color || '#3b82f6', description: description || '' });
   fs.mkdirSync(path.join(DOCUMENTS_DIR, id), { recursive: true });
-  res.redirect(`/admin/documentos/folder/${id}`);
+  res.redirect(`/admin/documentos?type=custom&folder=${id}`);
 });
 
-router.get('/documentos/folder/:folderId', requireAuth, async (req, res) => {
-  const folders = await db.listDocumentFolders();
-  const folder = folders.find(f => f.id === req.params.folderId);
-  if (!folder) return res.redirect('/admin/documentos');
-  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
-
-  const dir = path.join(DOCUMENTS_DIR, folder.id);
-  fs.mkdirSync(dir, { recursive: true });
-  const files = fs.readdirSync(dir).map(name => ({ name, size: fs.statSync(path.join(dir, name)).size }));
-
-  const body = `
-    <div class="mb-5 flex items-center justify-between">
-      <nav class="flex items-center gap-1.5 text-sm text-slate-400">
-        <a href="/admin/documentos" class="hover:text-blue-600">Documentos</a>
-        <span>/</span>
-        <span class="text-slate-700 font-medium">${escapeHtml(folder.name)}</span>
-      </nav>
-      <form method="POST" action="/admin/documentos/folder/${folder.id}/delete" onsubmit="return confirm('¿Eliminar esta carpeta y todos sus archivos?')">
-        <button class="border border-red-200 text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs transition-colors">Eliminar carpeta</button>
-      </form>
-    </div>
-    <div class="flex items-center gap-3 mb-6">
-      <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style="background:${folder.color}18">
-        <span style="color:${folder.color}">📁</span>
-      </div>
-      <div>
-        <h1 class="text-xl font-bold text-slate-900">${escapeHtml(folder.name)}</h1>
-        ${folder.description ? `<div class="text-sm text-slate-400">${escapeHtml(folder.description)}</div>` : ''}
-      </div>
-    </div>
-    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-5">
-      ${files.length > 0 ? files.map(f => `
-        <div class="flex items-center gap-3 py-3 px-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 group">
-          <span class="text-xl flex-shrink-0">${fileIcon(f.name)}</span>
-          <div class="flex-1 min-w-0">
-            <a href="/admin/documentos/folder/${folder.id}/file/${encodeURIComponent(f.name)}" target="_blank"
-              class="text-sm text-slate-700 hover:text-blue-600 hover:underline truncate block">${escapeHtml(f.name)}</a>
-            <span class="text-xs text-slate-400">${formatBytes(f.size)}</span>
-          </div>
-          <form method="POST" action="/admin/documentos/folder/${folder.id}/file/${encodeURIComponent(f.name)}/delete"
-            onsubmit="return confirm('¿Eliminar ${escapeHtml(f.name)}?')"
-            class="opacity-0 group-hover:opacity-100 transition-opacity">
-            <button class="text-slate-300 hover:text-red-400 text-sm p-1 transition-colors">✕</button>
-          </form>
-        </div>`).join('')
-      : '<div class="text-center py-12"><div class="text-3xl mb-2">📂</div><p class="text-sm text-slate-400">Sin archivos. Subí el primero.</p></div>'}
-    </div>
-    <form method="POST" action="/admin/documentos/folder/${folder.id}/upload" enctype="multipart/form-data">
-      <label class="flex flex-col items-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl p-6 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
-        <span class="text-3xl">📎</span>
-        <span class="text-sm font-medium text-slate-600">Subir archivos</span>
-        <span class="text-xs text-slate-400">PDF, imágenes, documentos · Máx. 50MB</span>
-        <input type="file" name="files" multiple class="hidden" onchange="this.form.submit()">
-      </label>
-    </form>`;
-
-  res.send(layout(folder.name, body, { pendingCount, activePage: 'documentos', user: req.session?.user }));
+// Download routes
+router.get('/documentos/folder/:folderId/file/:filename/download', requireAuth, (req, res) => {
+  const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
+  res.download(filePath, req.params.filename);
 });
 
-router.get('/documentos/project/:projectId', requireAuth, async (req, res) => {
-  const project = await db.getProject(req.params.projectId);
-  if (!project) return res.redirect('/admin/documentos');
-  res.redirect(`/admin/projects/${req.params.projectId}`);
+router.get('/documentos/project/:projectId/file/:filename/download', requireAuth, (req, res) => {
+  const filePath = path.join(PROJECT_FILES_DIR, req.params.projectId, req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
+  res.download(filePath, req.params.filename);
 });
 
-router.post('/documentos/folder/:folderId/upload', requireAuth, (req, res, next) => {
-  req.params.folderId = req.params.folderId;
-  uploadDoc.array('files', 20)(req, res, err => {
-    if (err) console.error('[doc upload]', err.message);
-    res.redirect(`/admin/documentos/folder/${req.params.folderId}`);
-  });
+router.get('/documentos/demo/:slug/file/:filename/download', requireAuth, (req, res) => {
+  const DEMOS_BASE = path.join(__dirname, '..', 'data', 'demos');
+  const filePath = path.join(DEMOS_BASE, req.params.slug, req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
+  res.download(filePath, req.params.filename);
 });
 
+// View (not download) for custom folder files
 router.get('/documentos/folder/:folderId/file/:filename', requireAuth, (req, res) => {
   const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
   res.sendFile(filePath);
 });
 
+// Upload to custom folder
+router.post('/documentos/folder/:folderId/upload', requireAuth, (req, res) => {
+  uploadDoc.array('files', 20)(req, res, err => {
+    if (err) console.error('[doc upload]', err.message);
+    res.redirect(`/admin/documentos?type=custom&folder=${req.params.folderId}`);
+  });
+});
+
+// Delete file from custom folder
 router.post('/documentos/folder/:folderId/file/:filename/delete', requireAuth, (req, res) => {
   const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  res.redirect(`/admin/documentos/folder/${req.params.folderId}`);
+  res.redirect(`/admin/documentos?type=custom&folder=${req.params.folderId}`);
 });
 
+// Delete entire custom folder
 router.post('/documentos/folder/:folderId/delete', requireAuth, async (req, res) => {
   const dir = path.join(DOCUMENTS_DIR, req.params.folderId);
   if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   await db.deleteDocumentFolder(req.params.folderId);
   res.redirect('/admin/documentos');
+});
+
+// Move file between custom folders
+router.post('/documentos/file/move', requireAuth, (req, res) => {
+  const { filename, fromFolder, toFolder } = req.body;
+  if (!filename || !fromFolder || !toFolder) return res.redirect('/admin/documentos');
+  const src = path.join(DOCUMENTS_DIR, fromFolder, filename);
+  const destDir = path.join(DOCUMENTS_DIR, toFolder);
+  const dest = path.join(destDir, filename);
+  if (fs.existsSync(src)) {
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.renameSync(src, dest);
+  }
+  res.redirect(`/admin/documentos?type=custom&folder=${toFolder}`);
 });
 
 // ─── Demo seed: simula un lead completo para probar el flujo ─────────────────
