@@ -145,49 +145,86 @@ function timelineIcon(ev) {
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
-function layout(title, body, { pendingCount = 0, activePage = '' } = {}) {
+function layout(title, body, { pendingCount = 0, activePage = '', user = null } = {}) {
   const navItem = (href, icon, label, page) => {
     const active = activePage === page;
-    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${active ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}">
-      <span>${icon}</span><span>${label}</span>
-      ${page === 'clients' && pendingCount > 0 ? `<span class="ml-auto bg-orange-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${pendingCount}</span>` : ''}
+    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
+      <span class="text-base">${icon}</span>
+      <span>${label}</span>
+      ${page === 'clients' && pendingCount > 0 ? `<span class="ml-auto bg-orange-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>` : ''}
     </a>`;
   };
+
+  const userName = user?.name || '';
+  const userEmail = user?.email || '';
+  const userPhoto = user?.photo || '';
+  const userInitial = (userName || userEmail || 'D')[0].toUpperCase();
+
+  const userBlock = `
+    <div class="mx-3 mb-2 p-3 bg-slate-800/60 rounded-xl border border-slate-700/40">
+      <div class="flex items-center gap-2.5">
+        ${userPhoto
+          ? `<img src="${userPhoto}" class="w-8 h-8 rounded-full flex-shrink-0 ring-2 ring-blue-500/40" alt="">`
+          : `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">${userInitial}</div>`}
+        <div class="min-w-0 flex-1">
+          <div class="text-xs font-semibold text-white truncate">${escapeHtml(userName || 'David Taranto')}</div>
+          ${userEmail ? `<div class="text-[10px] text-slate-400 truncate">${escapeHtml(userEmail)}</div>` : '<div class="text-[10px] text-slate-500">Admin</div>'}
+        </div>
+      </div>
+    </div>`;
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)} · WPanalista</title>
+  <title>${escapeHtml(title)} · DT Systems</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar{width:5px;height:5px}
     ::-webkit-scrollbar-track{background:#f1f5f9}
-    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+    ::-webkit-scrollbar-thumb:hover{background:#94a3b8}
     @keyframes spin{to{transform:rotate(360deg)}}
     .spin{animation:spin 1s linear infinite}
+    body{font-feature-settings:'cv02','cv03','cv04','cv11';-webkit-font-smoothing:antialiased}
+    .nav-active{background:rgba(59,130,246,0.15)!important}
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen" style="display:flex">
-  <aside style="width:220px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-slate-900 flex flex-col">
-    <div class="p-5 border-b border-slate-700/50">
-      <div class="text-base font-bold text-white tracking-tight">WPanalista</div>
-      <div class="text-xs text-slate-500 mt-0.5">Panel de trabajo</div>
+  <aside style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-slate-900 flex flex-col border-r border-slate-700/30">
+    <!-- Brand -->
+    <div class="px-5 py-4 border-b border-slate-700/40">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
+          <span class="text-white text-[10px] font-bold tracking-tight">DT</span>
+        </div>
+        <div>
+          <div class="text-sm font-bold text-white tracking-tight">DT Systems</div>
+          <div class="text-[10px] text-slate-500 leading-none">CRM & Proyectos</div>
+        </div>
+      </div>
     </div>
-    <nav class="flex-1 p-3 space-y-0.5 mt-1">
+
+    <!-- Navigation -->
+    <nav class="flex-1 p-3 space-y-0.5 mt-2">
       ${navItem('/admin', '📊', 'Dashboard', 'dashboard')}
       ${navItem('/admin/clients', '💬', 'Leads WA', 'clients')}
       ${navItem('/admin/projects', '📁', 'Proyectos', 'projects')}
     </nav>
-    <form method="POST" action="/admin/logout" class="p-4 border-t border-slate-700/50">
-      <button class="flex items-center gap-2 text-xs text-slate-500 hover:text-red-400 transition-colors w-full">
-        🚪 Cerrar sesión
-      </button>
-    </form>
+
+    <!-- User + Logout -->
+    <div class="pb-3 border-t border-slate-700/40 pt-3">
+      ${userBlock}
+      <form method="POST" action="/admin/logout" class="px-3">
+        <button class="flex items-center gap-2 text-xs text-slate-500 hover:text-red-400 transition-colors w-full px-3 py-2 rounded-lg hover:bg-slate-800">
+          <span>🚪</span><span>Cerrar sesión</span>
+        </button>
+      </form>
+    </div>
   </aside>
-  <div style="margin-left:220px;flex:1;min-height:100vh">
-    <main class="max-w-5xl mx-auto p-6 pb-16">${body}</main>
+  <div style="margin-left:240px;flex:1;min-height:100vh">
+    <main class="max-w-6xl mx-auto p-6 pb-16">${body}</main>
   </div>
 </body>
 </html>`;
@@ -200,13 +237,13 @@ const passport = require('passport');
 function loginPage(errorMsg = '') {
   const googleConfigured = !!process.env.GOOGLE_CLIENT_ID;
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Login · WPanalista</title>
+<html><head><meta charset="utf-8"><title>Login · DT Systems</title>
 <script src="https://cdn.tailwindcss.com"></script></head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen flex items-center justify-center">
   <div class="w-full max-w-sm">
     <div class="text-center mb-8">
-      <div class="text-3xl font-bold text-white tracking-tight">WPanalista</div>
-      <div class="text-slate-400 text-sm mt-1">Panel de trabajo</div>
+      <div class="text-3xl font-bold text-white tracking-tight">DT Systems</div>
+      <div class="text-slate-400 text-sm mt-1">Gestión de leads y proyectos</div>
     </div>
     <div class="bg-white rounded-2xl shadow-2xl p-8">
       ${errorMsg ? `<div class="mb-5 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl">${errorMsg}</div>` : ''}
@@ -235,6 +272,7 @@ router.get('/login', (req, res) => {
 router.post('/login', (req, res) => {
   if (req.body.password && req.body.password === process.env.ADMIN_PASSWORD) {
     req.session.authed = true;
+    req.session.user = { name: 'David Taranto', email: 'admin' };
     return res.redirect('/admin');
   }
   res.redirect('/admin/login?error=1');
@@ -304,13 +342,13 @@ router.get('/', requireAuth, async (req, res) => {
   const pipelineHtml = STAGES.slice(0, 6).map(s => {
     const count = clients.filter(c => c.client_stage === s.key).length;
     const pct = clients.length > 0 ? Math.round(count / clients.length * 100) : 0;
-    return `<div class="flex items-center gap-3">
-      <div class="text-xs text-slate-500 w-28 truncate">${s.label}</div>
-      <div class="flex-1 bg-slate-100 rounded-full h-2">
-        <div class="h-2 rounded-full" style="width:${pct}%;background:${s.dot}"></div>
+    return `<a href="/admin/clients?stage=${s.key}" class="flex items-center gap-3 py-1 rounded-lg hover:bg-slate-50 -mx-2 px-2 transition-colors cursor-pointer group">
+      <div class="text-xs text-slate-500 w-28 truncate group-hover:text-slate-700 transition-colors">${s.label}</div>
+      <div class="flex-1 bg-slate-100 rounded-full h-1.5">
+        <div class="h-1.5 rounded-full transition-all" style="width:${Math.max(pct, count > 0 ? 8 : 0)}%;background:${s.dot}"></div>
       </div>
       <div class="text-xs font-semibold text-slate-700 w-5 text-right">${count}</div>
-    </div>`;
+    </a>`;
   }).join('');
 
   // Recent activity: last 5 leads + last 5 projects combined
@@ -370,38 +408,43 @@ router.get('/', requireAuth, async (req, res) => {
   const body = `
     <div class="flex items-center justify-between mb-8">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <h1 class="text-2xl font-bold text-slate-900">${(() => {
+          const h = new Date().getHours();
+          const name = (req.session?.user?.name || 'David').split(' ')[0];
+          const greet = h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
+          return `${greet}, ${name} 👋`;
+        })()}</h1>
         <div class="text-sm text-slate-400 mt-0.5">${new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</div>
       </div>
     </div>
     ${alertStrip}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">${metricCards}</div>
-    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-5">
-      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-5 min-w-0">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 overflow-hidden">
         <h2 class="text-sm font-semibold text-slate-700 mb-4">Pipeline WA</h2>
         <div class="space-y-3">${pipelineHtml || '<p class="text-sm text-slate-400">Sin leads</p>'}</div>
       </div>
-      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 overflow-hidden">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-sm font-semibold text-slate-700">Últimos leads</h2>
           <a href="/admin/clients" class="text-xs text-blue-600 hover:underline">Ver todos →</a>
         </div>
         ${recentLeads || '<p class="text-sm text-slate-400">Sin leads</p>'}
       </div>
-      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 overflow-hidden">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-sm font-semibold text-slate-700">Últimos proyectos</h2>
           <a href="/admin/projects" class="text-xs text-blue-600 hover:underline">Ver todos →</a>
         </div>
         ${recentProjects || '<p class="text-sm text-slate-400">Sin proyectos</p>'}
       </div>
-      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 overflow-hidden">
         <h2 class="text-sm font-semibold text-slate-700 mb-3">Actividad reciente</h2>
         <div>${activityFeed || '<p class="text-sm text-slate-400">Sin actividad todavía</p>'}</div>
       </div>
     </div>`;
 
-  res.send(layout('Dashboard', body, { pendingCount: pendingReview.length, activePage: 'dashboard' }));
+  res.send(layout('Dashboard', body, { pendingCount: pendingReview.length, activePage: 'dashboard', user: req.session?.user }));
 });
 
 // ─── WA Clients list ─────────────────────────────────────────────────────────
@@ -507,7 +550,7 @@ router.get('/clients', requireAuth, async (req, res) => {
       </table>
     </div>`;
 
-  res.send(layout('Leads WA', body, { pendingCount: pendingReview.length, activePage: 'clients' }));
+  res.send(layout('Leads WA', body, { pendingCount: pendingReview.length, activePage: 'clients', user: req.session?.user }));
 });
 
 // ─── WA Client detail ────────────────────────────────────────────────────────
@@ -515,7 +558,7 @@ router.get('/clients', requireAuth, async (req, res) => {
 router.get('/client/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
   const conv = await db.getConversation(phone);
-  if (!conv) return res.status(404).send(layout('No encontrado', '<p class="text-slate-500 p-4">Cliente no encontrado.</p>'));
+  if (!conv) return res.status(404).send(layout('No encontrado', '<p class="text-slate-500 p-4">Cliente no encontrado.</p>', { user: req.session?.user }));
 
   const nombre = conv.report?.cliente?.nombre || conv.context?.nombre || '—';
   const email = conv.report?.cliente?.email || '';
@@ -668,7 +711,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
       </div>
     </div>`;
 
-  res.send(layout(nombre, body, { pendingCount, activePage: 'clients' }));
+  res.send(layout(nombre, body, { pendingCount, activePage: 'clients', user: req.session?.user }));
 });
 
 // ─── Convertir lead WA en proyecto ──────────────────────────────────────────
@@ -711,7 +754,7 @@ router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
     </div>
     ${projectForm(prefill, '/admin/projects', 'Crear proyecto')}`;
 
-  res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects' }));
+  res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
 
 // ─── Review ──────────────────────────────────────────────────────────────────
@@ -807,7 +850,7 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
       </div>
     </div>`;
 
-  res.send(layout('Revisar demos', body, { pendingCount, activePage: 'clients' }));
+  res.send(layout('Revisar demos', body, { pendingCount, activePage: 'clients', user: req.session?.user }));
 });
 
 // ─── WA Actions ──────────────────────────────────────────────────────────────
@@ -885,7 +928,7 @@ router.get('/projects', requireAuth, async (req, res) => {
     const pendingTasks = tasks.filter(t => !t.done);
     const pct = tasks.length > 0 ? Math.round(doneTasks / tasks.length * 100) : 0;
     return `
-      <div class="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow cursor-pointer group" onclick="location.href='/admin/projects/${p.id}'">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md hover:ring-1 hover:ring-blue-100 transition-all cursor-pointer group" onclick="location.href='/admin/projects/${p.id}'">
         <div class="flex items-start justify-between mb-3">
           <div class="flex-1 min-w-0 pr-3">
             <div class="font-semibold text-slate-800 truncate">${escapeHtml(p.title || p.client_name)}</div>
@@ -921,6 +964,14 @@ router.get('/projects', requireAuth, async (req, res) => {
       </div>`;
   }).join('');
 
+  const emptyState = `
+    <div class="text-center py-20">
+      <div class="text-5xl mb-4">📋</div>
+      <h3 class="text-lg font-semibold text-slate-700 mb-2">Sin proyectos todavía</h3>
+      <p class="text-sm text-slate-400 mb-6">Creá tu primer proyecto o convertí un lead de WhatsApp.</p>
+      <a href="/admin/projects/new" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo proyecto</a>
+    </div>`;
+
   const body = `
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-slate-900">Proyectos</h1>
@@ -933,17 +984,25 @@ router.get('/projects', requireAuth, async (req, res) => {
           class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       </form>
     </div>
+    ${(() => {
+      const totalBudget = allProjects.filter(p => p.budget).length;
+      const inProgress = allProjects.filter(p => ['in_progress','review'].includes(p.status)).length;
+      const completed = allProjects.filter(p => p.status === 'done').length;
+      const planning = allProjects.filter(p => p.status === 'planning').length;
+      return `<div class="flex items-center gap-4 mb-5 text-xs text-slate-500">
+        <span>${allProjects.length} proyecto${allProjects.length !== 1 ? 's' : ''} en total</span>
+        <span class="text-slate-200">·</span>
+        <span class="text-amber-600 font-medium">${planning} en planificación</span>
+        <span class="text-slate-200">·</span>
+        <span class="text-blue-600 font-medium">${inProgress} en progreso</span>
+        <span class="text-slate-200">·</span>
+        <span class="text-emerald-600 font-medium">${completed} entregados</span>
+      </div>`;
+    })()}
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
-    ${projects.length === 0
-      ? `<div class="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-          <div class="text-4xl mb-3">📁</div>
-          <div class="text-slate-600 font-medium mb-1">Sin proyectos todavía</div>
-          <div class="text-slate-400 text-sm mb-4">Agregá proyectos para llevar un seguimiento de tu trabajo</div>
-          <a href="/admin/projects/new" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">+ Nuevo proyecto</a>
-        </div>`
-      : `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${cards}</div>`}`;
+    ${cards ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${cards}</div>` : emptyState}`;
 
-  res.send(layout('Proyectos', body, { pendingCount, activePage: 'projects' }));
+  res.send(layout('Proyectos', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
 
 // ─── New project form ─────────────────────────────────────────────────────────
@@ -1139,7 +1198,7 @@ router.get('/projects/new', requireAuth, async (req, res) => {
     <div class="mb-5"><a href="/admin/projects" class="text-sm text-slate-500 hover:text-blue-600">← Proyectos</a></div>
     <h1 class="text-2xl font-bold text-slate-900 mb-6">Nuevo proyecto</h1>
     ${projectForm({}, '/admin/projects', 'Crear proyecto')}`;
-  res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects' }));
+  res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
 
 router.post('/projects', requireAuth, async (req, res) => {
@@ -1165,7 +1224,7 @@ function formatBytes(bytes) {
 
 router.get('/projects/:id', requireAuth, async (req, res) => {
   const project = await db.getProject(req.params.id);
-  if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>'));
+  if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>', { user: req.session?.user }));
 
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
   const tasks = project.tasks || [];
@@ -1201,7 +1260,11 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
 
   const body = `
     <div class="mb-5 flex items-center justify-between">
-      <a href="/admin/projects" class="text-sm text-slate-500 hover:text-blue-600">← Proyectos</a>
+      <nav class="flex items-center gap-1.5 text-sm text-slate-400">
+        <a href="/admin/projects" class="hover:text-blue-600 transition-colors">Proyectos</a>
+        <span>/</span>
+        <span class="text-slate-600 truncate max-w-xs">${escapeHtml(project.title || project.client_name)}</span>
+      </nav>
       <div class="flex gap-3">
         <a href="/admin/projects/${project.id}/edit" class="border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm transition-colors">Editar</a>
         <form method="POST" action="/admin/projects/${project.id}/delete" onsubmit="return confirm('¿Eliminar este proyecto?')">
@@ -1212,8 +1275,19 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
 
     <div class="flex items-start justify-between mb-5">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">${escapeHtml(project.title || project.client_name)}</h1>
-        <div class="text-sm text-slate-400 mt-0.5">${escapeHtml(project.client_name)}${project.client_email ? ` · ${escapeHtml(project.client_email)}` : ''}${project.client_phone ? ` · ${escapeHtml(project.client_phone)}` : ''}</div>
+        ${(() => {
+          const avatarColors = ['bg-blue-500','bg-purple-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-indigo-500'];
+          const avatarColor = avatarColors[(project.client_name || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % avatarColors.length];
+          return `<div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 rounded-xl ${avatarColor} flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+          ${escapeHtml((project.client_name || '?')[0].toUpperCase())}
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900">${escapeHtml(project.title || project.client_name)}</h1>
+          <div class="text-sm text-slate-400">${escapeHtml(project.client_name)}${project.client_email ? ` · ${escapeHtml(project.client_email)}` : ''}${project.client_phone ? ` · ${escapeHtml(project.client_phone)}` : ''}</div>
+        </div>
+      </div>`;
+        })()}
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
         ${projectStatusBadge(project.status)}
@@ -1320,32 +1394,54 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
       </div>
 
       <div class="space-y-5">
+        ${tasks.filter(t => !t.done && t.priority === 'high').length > 0 ? `
+          <div class="bg-red-50 border border-red-200 rounded-2xl p-4">
+            <h2 class="text-xs font-bold text-red-600 uppercase tracking-wide mb-2">🔥 Alta prioridad</h2>
+            <div class="space-y-1.5">
+              ${tasks.filter(t => !t.done && t.priority === 'high').map(t => `
+                <div class="text-xs text-red-700 flex items-start gap-1.5"><span class="mt-0.5">•</span><span>${escapeHtml(t.text)}</span></div>`).join('')}
+            </div>
+          </div>` : ''}
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-4">Detalles</h2>
+          ${tasks.length > 0 ? `
+          <div class="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-xl">
+            <div class="relative flex-shrink-0" style="width:44px;height:44px">
+              <svg width="44" height="44" viewBox="0 0 44 44">
+                <circle cx="22" cy="22" r="18" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+                <circle cx="22" cy="22" r="18" fill="none" stroke="${pct === 100 ? '#10b981' : '#3b82f6'}" stroke-width="4"
+                  stroke-dasharray="${Math.round(2 * Math.PI * 18)}"
+                  stroke-dashoffset="${Math.round(2 * Math.PI * 18 * (1 - pct / 100))}"
+                  stroke-linecap="round"
+                  transform="rotate(-90 22 22)"/>
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-[10px] font-bold ${pct === 100 ? 'text-emerald-600' : 'text-blue-600'}">${pct}%</span>
+              </div>
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-slate-700">${doneTasks}/${tasks.length} tareas</div>
+              <div class="text-xs text-slate-400">${pct === 100 ? 'Completado ✓' : `${tasks.length - doneTasks} pendiente${tasks.length - doneTasks !== 1 ? 's' : ''}`}</div>
+            </div>
+          </div>` : ''}
           <div class="space-y-3 text-sm">
             ${project.type ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Tipo</div><div class="text-slate-700 font-medium">${escapeHtml(project.type)}</div></div>` : ''}
             ${project.budget ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Presupuesto</div><div class="text-slate-700 font-semibold text-base">${escapeHtml(project.budget)}</div></div>` : ''}
             <div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Estado</div>${projectStatusBadge(project.status)}</div>
-            <div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Presupuesto</div>${budgetStatusBadge(project.budget_status)}</div>
+            <div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Estado del cobro</div>${budgetStatusBadge(project.budget_status)}</div>
             <div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Última actividad</div><div class="text-slate-600">${timeAgo(project.updated_at)}</div></div>
+            ${project.client_phone ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Teléfono</div><a href="tel:${escapeHtml(project.client_phone)}" class="text-blue-600 hover:underline text-sm">${escapeHtml(project.client_phone)}</a></div>` : ''}
+            ${project.client_email ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Email</div><a href="mailto:${escapeHtml(project.client_email)}" class="text-blue-600 hover:underline text-sm truncate block">${escapeHtml(project.client_email)}</a></div>` : ''}
+            ${project.created_at ? `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Creado</div><div class="text-slate-600 text-sm">${new Date(project.created_at + (project.created_at.endsWith('Z') ? '' : 'Z')).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</div></div>` : ''}
           </div>
           <div class="mt-4 pt-4 border-t border-slate-100">
             <a href="/admin/projects/${project.id}/edit" class="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">✏️ Editar proyecto</a>
           </div>
         </div>
-
-        ${tasks.filter(t => !t.done && t.priority === 'high').length > 0 ? `
-          <div class="bg-red-50 border border-red-200 rounded-2xl p-5">
-            <h2 class="text-sm font-semibold text-red-700 mb-3">🔥 Alta prioridad</h2>
-            <div class="space-y-2">
-              ${tasks.filter(t => !t.done && t.priority === 'high').map(t => `
-                <div class="text-xs text-red-600">• ${escapeHtml(t.text)}</div>`).join('')}
-            </div>
-          </div>` : ''}
       </div>
     </div>`;
 
-  res.send(layout(project.title || project.client_name, body, { pendingCount, activePage: 'projects' }));
+  res.send(layout(project.title || project.client_name, body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
 
 // ─── Edit project ─────────────────────────────────────────────────────────────
@@ -1358,7 +1454,7 @@ router.get('/projects/:id/edit', requireAuth, async (req, res) => {
     <div class="mb-5"><a href="/admin/projects/${project.id}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(project.title || project.client_name)}</a></div>
     <h1 class="text-2xl font-bold text-slate-900 mb-6">Editar proyecto</h1>
     ${projectForm(project, `/admin/projects/${project.id}/update`, 'Guardar cambios')}`;
-  res.send(layout('Editar proyecto', body, { pendingCount, activePage: 'projects' }));
+  res.send(layout('Editar proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
 
 router.post('/projects/:id/update', requireAuth, async (req, res) => {
