@@ -27,6 +27,9 @@ app.use(session({
 // Servir los demos estáticos (landing HTML, mockups PNG, PDFs)
 app.use('/demos', express.static(path.join(__dirname, '..', 'data', 'demos')));
 
+// Servir archivos de proyectos
+app.use('/project-files', express.static(path.join(__dirname, '..', 'data', 'project-files')));
+
 // Montar panel admin
 app.use('/admin', adminRouter);
 

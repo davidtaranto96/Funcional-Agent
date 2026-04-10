@@ -1,8 +1,32 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const multer = require('multer');
 const db = require('./db');
 const orchestrator = require('./orchestrator');
+
+// ─── Multer: upload de archivos para proyectos ───────────────────────────────
+
+const PROJECT_FILES_DIR = path.join(__dirname, '..', 'data', 'project-files');
+fs.mkdirSync(PROJECT_FILES_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(PROJECT_FILES_DIR, req.params.id);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    // Preservar nombre original, pero sanitizar
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._\-áéíóúÁÉÍÓÚñÑ ]/g, '_');
+    cb(null, safe);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+});
 
 const router = express.Router();
 
@@ -299,6 +323,28 @@ router.get('/', requireAuth, async (req, res) => {
       <div>
         <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
         <div class="text-sm text-slate-400 mt-0.5">${new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</div>
+      </div>
+      <div class="flex gap-2">
+        <div class="relative" x-data="{}">
+          <button onclick="document.getElementById('demoMenu').classList.toggle('hidden')"
+            class="flex items-center gap-2 border border-slate-200 text-slate-500 hover:border-blue-400 hover:text-blue-600 px-3 py-2 rounded-xl text-xs font-medium transition-colors">
+            🧪 Demo de prueba
+          </button>
+          <div id="demoMenu" class="hidden absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 w-52 py-1">
+            <form method="POST" action="/admin/create-demo-lead">
+              <input type="hidden" name="tipo" value="web">
+              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700">🌐 Web (Panadería)</button>
+            </form>
+            <form method="POST" action="/admin/create-demo-lead">
+              <input type="hidden" name="tipo" value="bot">
+              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700">💬 Bot WA (Veterinaria)</button>
+            </form>
+            <form method="POST" action="/admin/create-demo-lead">
+              <input type="hidden" name="tipo" value="app">
+              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700">📱 App móvil (Gimnasio)</button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
     ${alertStrip}
@@ -998,12 +1044,30 @@ router.post('/projects', requireAuth, async (req, res) => {
 
 // ─── Project detail ───────────────────────────────────────────────────────────
 
+function fileIcon(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const map = { pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', webp: '🖼️', mp4: '🎬', mov: '🎬', zip: '📦', rar: '📦', fig: '🎨', sketch: '🎨', psd: '🎨', ai: '🎨' };
+  return map[ext] || '📎';
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 router.get('/projects/:id', requireAuth, async (req, res) => {
   const project = await db.getProject(req.params.id);
   if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>'));
 
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
   const tasks = project.tasks || [];
+
+  // Archivos del proyecto
+  const projectFilesDir = path.join(PROJECT_FILES_DIR, project.id);
+  const projectFiles = fs.existsSync(projectFilesDir)
+    ? fs.readdirSync(projectFilesDir).map(name => ({ name, size: fs.statSync(path.join(projectFilesDir, name)).size }))
+    : [];
   const doneTasks = tasks.filter(t => t.done).length;
   const pct = tasks.length > 0 ? Math.round(doneTasks / tasks.length * 100) : 0;
 
@@ -1082,6 +1146,40 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             <h2 class="text-sm font-semibold text-slate-700 mb-3">Notas</h2>
             <p class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(project.notes)}</p>
           </div>` : ''}
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-700">Archivos</h2>
+            <span class="text-xs text-slate-400">${projectFiles.length} archivo${projectFiles.length !== 1 ? 's' : ''}</span>
+          </div>
+          ${projectFiles.length > 0 ? `
+            <div class="space-y-1.5 mb-4">
+              ${projectFiles.map(f => `
+                <div class="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-slate-50 group">
+                  <span class="text-xl flex-shrink-0">${fileIcon(f.name)}</span>
+                  <div class="flex-1 min-w-0">
+                    <a href="/project-files/${project.id}/${encodeURIComponent(f.name)}" target="_blank"
+                      class="text-sm text-slate-700 hover:text-blue-600 hover:underline truncate block">${escapeHtml(f.name)}</a>
+                    <span class="text-xs text-slate-400">${formatBytes(f.size)}</span>
+                  </div>
+                  <form method="POST" action="/admin/projects/${project.id}/files/${encodeURIComponent(f.name)}/delete" onsubmit="return confirm('¿Eliminar ${escapeHtml(f.name)}?')" class="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button class="text-slate-300 hover:text-red-400 text-sm transition-colors p-1">✕</button>
+                  </form>
+                </div>`).join('')}
+            </div>` : `
+            <div class="text-center py-6 mb-3">
+              <div class="text-3xl mb-2">📂</div>
+              <p class="text-sm text-slate-400">Sin archivos todavía</p>
+            </div>`}
+          <form method="POST" action="/admin/projects/${project.id}/upload" enctype="multipart/form-data">
+            <label class="flex flex-col items-center gap-2 border-2 border-dashed border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+              <span class="text-xl">📎</span>
+              <span class="text-sm text-slate-500 font-medium">Subir archivos</span>
+              <span class="text-xs text-slate-400">PDF, imágenes, docs, videos · Máx. 20MB</span>
+              <input type="file" name="files" multiple class="hidden" onchange="this.form.submit()">
+            </label>
+          </form>
+        </div>
       </div>
 
       <div class="space-y-5">
@@ -1146,6 +1244,97 @@ router.post('/projects/:id/task-toggle', requireAuth, async (req, res) => {
 router.post('/projects/:id/delete', requireAuth, async (req, res) => {
   await db.deleteProject(req.params.id);
   res.redirect('/admin/projects');
+});
+
+// ─── Archivos de proyecto ─────────────────────────────────────────────────────
+
+router.post('/projects/:id/upload', requireAuth, (req, res, next) => {
+  upload.array('files', 20)(req, res, err => {
+    if (err) console.error('[upload] Error:', err.message);
+    res.redirect(`/admin/projects/${req.params.id}`);
+  });
+});
+
+router.post('/projects/:id/files/:filename/delete', requireAuth, (req, res) => {
+  const filePath = path.join(PROJECT_FILES_DIR, req.params.id, req.params.filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+// ─── Demo seed: simula un lead completo para probar el flujo ─────────────────
+
+router.post('/create-demo-lead', requireAuth, async (req, res) => {
+  const tipo = req.body.tipo || 'web';
+
+  const DEMOS = {
+    web: {
+      phone: 'whatsapp:+5493878000001',
+      report: {
+        cliente: { nombre: 'Panadería El Hornito', telefono: '+5493878000001', email: 'hornito@demo.com', contacto_extra: '' },
+        proyecto: {
+          tipo: 'Página web para panadería',
+          descripcion: 'Página web para mostrar productos, horarios, hacer pedidos por WhatsApp y tener presencia online. El negocio está en el centro de Salta.',
+          funcionalidades: ['Galería de productos con fotos', 'Horarios de atención', 'Botón de pedido por WhatsApp', 'Mapa de ubicación', 'Sección de promociones'],
+          plataforma: 'web',
+          estado_actual: 'Solo tienen Instagram',
+        },
+        requisitos: { plazo: '3 semanas', presupuesto: '$80.000 ARS', urgencia: 'media', stack_sugerido: '', notas_adicionales: 'Quieren colores cálidos, que se vea artesanal' },
+        resumen_ejecutivo: 'Panadería familiar en el centro de Salta que necesita página web para mostrar sus productos y recibir pedidos por WhatsApp. Parten de cero, solo tienen Instagram.',
+      },
+    },
+    bot: {
+      phone: 'whatsapp:+5493878000002',
+      report: {
+        cliente: { nombre: 'Veterinaria PetCare', telefono: '+5493878000002', email: 'petcare@demo.com', contacto_extra: '' },
+        proyecto: {
+          tipo: 'Bot de WhatsApp para veterinaria',
+          descripcion: 'Bot de WhatsApp que responda consultas frecuentes, gestione turnos automáticamente y avise cuando está listo el turno.',
+          funcionalidades: ['Agendar turnos automáticamente', 'Consultas de precios y servicios', 'Recordatorio de turno por WhatsApp', 'Historial de mascotas', 'Derivar a atención humana si es urgente'],
+          plataforma: 'whatsapp',
+          estado_actual: 'Atienden todo manualmente por WhatsApp',
+        },
+        requisitos: { plazo: '4 semanas', presupuesto: '$120.000 ARS', urgencia: 'alta', stack_sugerido: '', notas_adicionales: 'Mucho volumen en diciembre, necesitan automatizar antes de fin de año' },
+        resumen_ejecutivo: 'Veterinaria con alto volumen de consultas que necesita un bot de WhatsApp para automatizar turnos y consultas frecuentes.',
+      },
+    },
+    app: {
+      phone: 'whatsapp:+5493878000003',
+      report: {
+        cliente: { nombre: 'Gimnasio FitMax', telefono: '+5493878000003', email: 'fitmax@demo.com', contacto_extra: '' },
+        proyecto: {
+          tipo: 'App móvil para gimnasio',
+          descripcion: 'App para que los socios del gimnasio vean clases, reserven lugares, paguen su cuota y controlen su asistencia desde el celular.',
+          funcionalidades: ['Ver calendario de clases', 'Reservar lugar en clases', 'Pago de cuota online', 'Control de asistencia', 'Notificaciones de clases nuevas'],
+          plataforma: 'app móvil (iOS/Android)',
+          estado_actual: 'Todo manual en papel y WhatsApp',
+        },
+        requisitos: { plazo: '2 meses', presupuesto: '$300.000 ARS', urgencia: 'media', stack_sugerido: 'Flutter + Firebase', notas_adicionales: 'Colores negro y naranja flúo' },
+        resumen_ejecutivo: 'Gimnasio en Salta que quiere digitalizar toda la gestión de socios con una app mobile completa.',
+      },
+    },
+  };
+
+  const demo = DEMOS[tipo] || DEMOS.web;
+
+  // Crear o resetear el lead de demo en la DB
+  await db.upsertConversation(demo.phone, {
+    history: [
+      { role: 'user', content: 'Hola, me interesa hacer un proyecto digital' },
+      { role: 'assistant', content: '¡Hola! Soy el asistente de David. Contame qué necesitás.' },
+      { role: 'user', content: `Necesito ${demo.report.proyecto.tipo.toLowerCase()} para mi negocio` },
+      { role: 'assistant', content: 'Perfecto, te entiendo. Armé un resumen de lo que me contaste...' },
+    ],
+    stage: 'done',
+    context: { nombre: demo.report.cliente.nombre },
+    report: demo.report,
+  });
+  await db.updateClientStage(demo.phone, 'qualified');
+  await db.appendTimelineEvent(demo.phone, { event: 'report_generated', note: 'Lead de demo creado manualmente' });
+
+  // Disparar generación de demos
+  orchestrator.processNewReport(demo.phone, demo.report).catch(console.error);
+
+  res.redirect(`/admin/client/${encodeURIComponent(demo.phone)}`);
 });
 
 module.exports = router;
