@@ -4,8 +4,9 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.7.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.8.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
+const { generateReport } = require('./reports');
 
 // ─── Multer: upload de archivos para proyectos ───────────────────────────────
 
@@ -948,9 +949,14 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
             ${conv.demo_notes ? `<div class="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 mb-3 whitespace-pre-line">${escapeHtml(conv.demo_notes)}</div>` : ''}
           ` : ''}
           ${conv.report ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Convertir en proyecto</a>` : ''}
+          ${!conv.report && (conv.history||[]).length > 3 ? `
+          <form method="POST" action="/admin/force-report/${phoneUrl}" class="mb-3" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Generando...'">
+            <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">📋 Generar reporte manualmente</button>
+          </form>` : ''}
+          ${conv.report ? `
           <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
             <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">🔄 Regenerar demos</button>
-          </form>
+          </form>` : ''}
           <a href="https://wa.me/${phoneSlug(phone)}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-emerald-200 text-emerald-700 hover:bg-emerald-50 py-2.5 rounded-xl text-sm font-medium mb-2 transition-colors">💬 Abrir en WhatsApp</a>
           ${demoLinks}
           ${conv.drive_folder_id ? `<a href="https://drive.google.com/drive/folders/${conv.drive_folder_id}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-slate-200 text-slate-600 hover:bg-slate-50 py-2 rounded-xl text-sm mt-2 transition-colors">📁 Drive</a>` : ''}
@@ -1193,6 +1199,31 @@ router.post('/regenerate/:phone', requireAuth, async (req, res) => {
   const conv = await db.getConversation(phone);
   if (conv?.report) orchestrator.processNewReport(phone, conv.report).catch(err => console.error('Error regenerando:', err));
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+});
+
+// Generar reporte manualmente para conversaciones que quedaron a mitad
+router.post('/force-report/:phone', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  try {
+    const conv = await db.getConversation(phone);
+    if (!conv || !conv.history?.length) {
+      return res.redirect(`/admin/client/${encodeURIComponent(phone)}?error=no_history`);
+    }
+    // Generar reporte a partir del historial existente
+    const report = await generateReport(conv.history, phone);
+    if (!report) {
+      return res.redirect(`/admin/client/${encodeURIComponent(phone)}?error=report_failed`);
+    }
+    // Guardar reporte y marcar stage como done
+    await db.upsertConversation(phone, { report, stage: 'done' });
+    await db.appendTimelineEvent(phone, { event: 'report_generated', note: 'Generado manualmente desde el panel' });
+    // Arrancar generación de demos
+    orchestrator.processNewReport(phone, report).catch(err => console.error('Error en orchestrator (force):', err));
+    res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+  } catch (err) {
+    console.error('Error en force-report:', err);
+    res.redirect(`/admin/client/${encodeURIComponent(phone)}?error=exception`);
+  }
 });
 
 router.post('/notes/:phone', requireAuth, async (req, res) => {
