@@ -1,5 +1,17 @@
 require('dotenv').config();
 
+// ── Safety net: evitar que errores no capturados maten el proceso ─────────────
+process.on('unhandledRejection', (reason) => {
+  console.error('[SAFETY] Unhandled Promise Rejection — el proceso NO se va a caer:', reason?.message || reason);
+  if (reason?.stack) console.error(reason.stack);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[SAFETY] Uncaught Exception — el proceso NO se va a caer:', err.message);
+  if (err.stack) console.error(err.stack);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 const path = require('path');
 const express = require('express');
 const session = require('express-session');

@@ -141,6 +141,19 @@ function parseConv(row) {
   };
 }
 
+// Parsea JSON con tolerancia a double-stringify y datos corruptos
+function safeParseArray(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(String(raw));
+    // Double-stringify: si parseó como string, intentar un segundo parse
+    if (typeof parsed === 'string') {
+      try { const p2 = JSON.parse(parsed); return Array.isArray(p2) ? p2 : []; } catch { return []; }
+    }
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
 function parseProject(row) {
   if (!row) return null;
   return {
@@ -154,9 +167,9 @@ function parseProject(row) {
     status: String(row.status || 'planning'),
     budget: String(row.budget || ''),
     budget_status: String(row.budget_status || 'not_quoted'),
-    tasks: row.tasks ? JSON.parse(String(row.tasks)) : [],
+    tasks: safeParseArray(row.tasks),
     notes: String(row.notes || ''),
-    updates_log: row.updates_log ? JSON.parse(String(row.updates_log)) : [],
+    updates_log: safeParseArray(row.updates_log),
     is_personal: Number(row.is_personal || 0) === 1,
     category: String(row.category || 'cliente'),
     deadline: row.deadline || null,

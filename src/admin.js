@@ -1,10 +1,13 @@
+// Catch async route errors and pass them to Express error handler (Express 4.x fix)
+require('express-async-errors');
+
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.4'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.5'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -3337,6 +3340,26 @@ router.post('/create-demo-lead', requireAuth, async (req, res) => {
   orchestrator.processNewReport(demo.phone, demo.report).catch(console.error);
 
   res.redirect(`/admin/client/${encodeURIComponent(demo.phone)}`);
+});
+
+// ─── Global error handler para rutas del admin ───────────────────────────────
+// Captura cualquier error lanzado desde route handlers (sync o async con express-async-errors)
+router.use((err, req, res, next) => {
+  console.error('[admin] Error en ruta', req.method, req.path, ':', err?.message || err);
+  console.error(err?.stack);
+  if (res.headersSent) return next(err);
+  try {
+    res.status(500).send(layout('Error interno', `
+      <div class="flex flex-col items-center justify-center py-20 text-center">
+        <div class="text-5xl mb-4">⚠️</div>
+        <h1 class="text-xl font-bold text-slate-800 mb-2">Algo salió mal</h1>
+        <p class="text-slate-500 mb-6 max-w-md">${escapeHtml(err?.message || 'Error desconocido')}</p>
+        <a href="/admin" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">← Volver al inicio</a>
+      </div>
+    `, { user: req.session?.user }));
+  } catch (e) {
+    res.status(500).send('<h1>Error interno</h1><a href="/admin">Volver</a>');
+  }
 });
 
 module.exports = router;
