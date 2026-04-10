@@ -41,6 +41,26 @@ async function init() {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      client_name TEXT NOT NULL DEFAULT '',
+      client_phone TEXT DEFAULT '',
+      client_email TEXT DEFAULT '',
+      title TEXT NOT NULL DEFAULT '',
+      type TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      status TEXT DEFAULT 'planning',
+      budget TEXT DEFAULT '',
+      budget_status TEXT DEFAULT 'not_quoted',
+      tasks TEXT DEFAULT '[]',
+      notes TEXT DEFAULT '',
+      created_by TEXT DEFAULT 'david',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Migraciones idempotentes: agregar columnas si la DB ya existía sin ellas
   const migrations = [
     'ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0',
@@ -250,9 +270,64 @@ function getClientsByStage(clientStage) {
   return results;
 }
 
+// ─── Projects ───────────────────────────────────────────────────────────────
+
+function parseProject(row) {
+  return { ...row, tasks: row.tasks ? JSON.parse(row.tasks) : [] };
+}
+
+function listProjects() {
+  const results = [];
+  const stmt = db.prepare('SELECT * FROM projects ORDER BY updated_at DESC');
+  while (stmt.step()) results.push(parseProject(stmt.getAsObject()));
+  stmt.free();
+  return results;
+}
+
+function getProject(id) {
+  const stmt = db.prepare('SELECT * FROM projects WHERE id = ?');
+  stmt.bind([id]);
+  if (!stmt.step()) { stmt.free(); return null; }
+  const row = stmt.getAsObject();
+  stmt.free();
+  return parseProject(row);
+}
+
+function createProject(data) {
+  const id = `proj_${Date.now()}`;
+  db.run(
+    `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, data.client_name || '', data.client_phone || '', data.client_email || '',
+     data.title || '', data.type || '', data.description || '',
+     data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
+     JSON.stringify(data.tasks || []), data.notes || '', data.created_by || 'david']
+  );
+  save();
+  return id;
+}
+
+function updateProject(id, data) {
+  db.run(
+    `UPDATE projects SET client_name=?, client_phone=?, client_email=?, title=?, type=?, description=?,
+     status=?, budget=?, budget_status=?, tasks=?, notes=?, updated_at=datetime('now') WHERE id=?`,
+    [data.client_name || '', data.client_phone || '', data.client_email || '',
+     data.title || '', data.type || '', data.description || '',
+     data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
+     JSON.stringify(data.tasks || []), data.notes || '', id]
+  );
+  save();
+}
+
+function deleteProject(id) {
+  db.run('DELETE FROM projects WHERE id = ?', [id]);
+  save();
+}
+
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
   updateDemoStatus, updateClientStage, setDriveFolderId, setNotes,
   appendTimelineEvent, listAllClients, getClientsByStage,
+  listProjects, getProject, createProject, updateProject, deleteProject,
 };
