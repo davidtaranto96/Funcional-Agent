@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.2.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.4.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 
 // ─── Multer: upload de archivos para proyectos ───────────────────────────────
@@ -29,6 +29,22 @@ const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
 });
+
+const DOCUMENTS_DIR = path.join(__dirname, '..', 'data', 'documents');
+fs.mkdirSync(DOCUMENTS_DIR, { recursive: true });
+
+const docStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(DOCUMENTS_DIR, req.params.folderId || 'general');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._\-áéíóúÁÉÍÓÚñÑ ]/g, '_');
+    cb(null, safe);
+  },
+});
+const uploadDoc = multer({ storage: docStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -257,6 +273,12 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
           ${navItem('/admin/tasks', '✅', 'Tareas', 'tasks')}
         </div>
       </div>
+      <div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recursos</div>
+        <div class="space-y-0.5">
+          ${navItem('/admin/documentos', '📂', 'Documentos', 'documentos')}
+        </div>
+      </div>
     </nav>
 
     <!-- User + Logout -->
@@ -270,7 +292,7 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
     </div>
   </aside>
   <div style="margin-left:240px;flex:1;min-height:100vh">
-    <main class="max-w-6xl mx-auto p-6 pb-16">${body}</main>
+    <main class="max-w-7xl mx-auto p-6 pb-16">${body}</main>
   </div>
 </body>
 </html>`;
@@ -580,6 +602,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/clients', requireAuth, async (req, res) => {
   const filter = req.query.stage || 'all';
   const search = (req.query.q || '').toLowerCase();
+  const view = req.query.view || 'list'; // 'list' or 'kanban'
   let clients = await db.listAllClients();
   const allClients = clients;
   const pendingReview = allClients.filter(c => c.demo_status === 'pending_review');
@@ -633,11 +656,53 @@ router.get('/clients', requireAuth, async (req, res) => {
       </tr>`;
   }).join('');
 
+  // Kanban view: group clients by stage
+  const kanbanHtml = (() => {
+    const kanbanStages = STAGES.slice(0, 7); // exclude 'dormant' for space
+    return `
+      <div class="flex gap-4 overflow-x-auto pb-4" style="min-height:60vh">
+        ${kanbanStages.map(s => {
+          const stageClients = clients.filter(c => c.client_stage === s.key);
+          return `
+            <div class="flex-shrink-0 w-64">
+              <div class="flex items-center gap-2 mb-3 px-1">
+                <div class="w-2 h-2 rounded-full" style="background:${s.dot}"></div>
+                <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">${s.label}</span>
+                <span class="ml-auto text-xs font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">${stageClients.length}</span>
+              </div>
+              <div class="space-y-2">
+                ${stageClients.length > 0 ? stageClients.map(c => {
+                  const nombre = c.report?.cliente?.nombre || c.context?.nombre || '—';
+                  const tipo = c.report?.proyecto?.tipo || '';
+                  return `
+                    <div class="bg-white rounded-xl border border-slate-200 p-3 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all"
+                         onclick="location.href='/admin/client/${encodeURIComponent(c.phone)}'">
+                      <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(nombre)}</div>
+                      ${tipo ? `<div class="text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(tipo)}</div>` : ''}
+                      <div class="flex items-center justify-between mt-2">
+                        ${demoStatusBadge(c.demo_status)}
+                        <span class="text-[10px] text-slate-300">${timeAgo(c.updated_at)}</span>
+                      </div>
+                    </div>`;
+                }).join('')
+                : `<div class="text-center py-4 text-xs text-slate-300 border border-dashed border-slate-100 rounded-xl">Sin leads</div>`}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  })();
+
   const body = `
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-slate-900">Leads WhatsApp</h1>
       <div class="flex items-center gap-2">
         <span class="text-sm text-slate-400">${clients.length} resultado${clients.length !== 1 ? 's' : ''}</span>
+        <div class="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5">
+          <a href="/admin/clients?stage=${escapeHtml(filter)}&view=list${search ? '&q='+encodeURIComponent(search) : ''}"
+            class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === 'list' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'}">☰ Lista</a>
+          <a href="/admin/clients?stage=${escapeHtml(filter)}&view=kanban${search ? '&q='+encodeURIComponent(search) : ''}"
+            class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === 'kanban' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'}">⊞ Kanban</a>
+        </div>
         <div class="relative group">
           <button class="text-xs border border-dashed border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-500 px-3 py-1.5 rounded-lg transition-colors">
             + Lead de prueba
@@ -656,11 +721,13 @@ router.get('/clients', requireAuth, async (req, res) => {
     <div class="flex items-center gap-3 mb-4">
       <form method="GET" action="/admin/clients" class="flex-1">
         <input type="hidden" name="stage" value="${escapeHtml(filter)}">
+        <input type="hidden" name="view" value="${escapeHtml(view)}">
         <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por nombre, teléfono o proyecto..."
           class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       </form>
     </div>
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
+    ${view === 'kanban' ? kanbanHtml : `
     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <table class="w-full">
         <thead class="border-b border-slate-100">
@@ -676,7 +743,7 @@ router.get('/clients', requireAuth, async (req, res) => {
         </thead>
         <tbody>${rows || '<tr><td class="px-4 py-12 text-center text-slate-400 text-sm" colspan="7">Sin resultados</td></tr>'}</tbody>
       </table>
-    </div>`;
+    </div>`}`;
 
   res.send(layout('Leads WA', body, { pendingCount: pendingReview.length, activePage: 'clients', user: req.session?.user }));
 });
@@ -1268,21 +1335,19 @@ router.get('/projects', requireAuth, async (req, res) => {
           class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       </form>
     </div>
-    ${(() => {
-      const totalBudget = allProjects.filter(p => p.budget).length;
-      const inProgress = allProjects.filter(p => ['in_progress','review'].includes(p.status)).length;
-      const completed = allProjects.filter(p => p.status === 'done').length;
-      const planning = allProjects.filter(p => p.status === 'planning').length;
-      return `<div class="flex items-center gap-4 mb-5 text-xs text-slate-500">
-        <span>${allProjects.length} proyecto${allProjects.length !== 1 ? 's' : ''} en total</span>
-        <span class="text-slate-200">·</span>
-        <span class="text-amber-600 font-medium">${planning} en planificación</span>
-        <span class="text-slate-200">·</span>
-        <span class="text-blue-600 font-medium">${inProgress} en progreso</span>
-        <span class="text-slate-200">·</span>
-        <span class="text-emerald-600 font-medium">${completed} entregados</span>
-      </div>`;
-    })()}
+    <div class="flex items-center gap-3 mb-5 flex-wrap">
+      ${[
+        { label: 'Total', value: allProjects.length, color: 'text-slate-600', bg: 'bg-slate-100' },
+        { label: 'Planificando', value: allProjects.filter(p => p.status === 'planning').length, color: 'text-amber-700', bg: 'bg-amber-50' },
+        { label: 'En progreso', value: allProjects.filter(p => p.status === 'in_progress').length, color: 'text-blue-700', bg: 'bg-blue-50' },
+        { label: 'En revisión', value: allProjects.filter(p => p.status === 'review').length, color: 'text-purple-700', bg: 'bg-purple-50' },
+        { label: 'Entregados', value: allProjects.filter(p => p.status === 'delivered').length, color: 'text-emerald-700', bg: 'bg-emerald-50' },
+      ].filter(s => s.value > 0 || s.label === 'Total').map(s => `
+        <div class="flex items-center gap-2 ${s.bg} px-3 py-1.5 rounded-full">
+          <span class="text-xs font-bold ${s.color}">${s.value}</span>
+          <span class="text-xs ${s.color} opacity-70">${s.label}</span>
+        </div>`).join('')}
+    </div>
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
     ${cards ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${cards}</div>` : emptyState}`;
 
@@ -2226,6 +2291,224 @@ router.post('/clientes/:id/notes', requireAuth, async (req, res) => {
 router.post('/clientes/:id/delete', requireAuth, async (req, res) => {
   await db.deleteClientRecord(req.params.id);
   res.redirect('/admin/clientes');
+});
+
+// ─── Documentos ───────────────────────────────────────────────────────────────
+
+router.get('/documentos', requireAuth, async (req, res) => {
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+  const folders = await db.listDocumentFolders();
+  const projects = await db.listProjects();
+
+  // Custom folders: scan data/documents/
+  const customFolders = folders.map(f => {
+    const dir = path.join(DOCUMENTS_DIR, f.id);
+    const files = fs.existsSync(dir)
+      ? fs.readdirSync(dir).map(name => ({ name, size: fs.statSync(path.join(dir, name)).size, folder: f.id, folderName: f.name }))
+      : [];
+    return { ...f, files, type: 'custom' };
+  });
+
+  // Project folders: from data/project-files/
+  const projectFolders = projects
+    .map(p => {
+      const dir = path.join(PROJECT_FILES_DIR, p.id);
+      const files = fs.existsSync(dir)
+        ? fs.readdirSync(dir).map(name => ({ name, size: fs.statSync(path.join(dir, name)).size, folder: p.id, folderName: p.title || p.client_name }))
+        : [];
+      return { id: p.id, name: p.title || p.client_name, color: '#8b5cf6', description: p.client_name, files, type: 'project', projectId: p.id };
+    })
+    .filter(f => f.files.length > 0);
+
+  const allFolders = [...customFolders, ...projectFolders];
+  const totalFiles = allFolders.reduce((n, f) => n + f.files.length, 0);
+  const totalSize = allFolders.reduce((n, f) => n + f.files.reduce((s, file) => s + file.size, 0), 0);
+
+  const folderCards = allFolders.map(f => `
+    <a href="/admin/documentos/${f.type === 'project' ? 'project' : 'folder'}/${f.id}" class="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer block group">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl" style="background:${f.color}18">
+          <span style="color:${f.color}">📁</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">${escapeHtml(f.name)}</div>
+          <div class="text-xs text-slate-400 mt-0.5">${f.files.length} archivo${f.files.length !== 1 ? 's' : ''}</div>
+          ${f.description ? `<div class="text-xs text-slate-300 truncate mt-0.5">${escapeHtml(f.description)}</div>` : ''}
+        </div>
+        ${f.type === 'project' ? '<span class="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">Proyecto</span>' : ''}
+      </div>
+    </a>`).join('');
+
+  // All files flat list
+  const allFiles = allFolders.flatMap(f => f.files.map(file => ({ ...file, folderName: f.name, folderType: f.type })));
+
+  const fileRows = allFiles.slice(0, 20).map(f => `
+    <div class="flex items-center gap-3 py-2.5 px-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 group">
+      <span class="text-xl flex-shrink-0">${fileIcon(f.name)}</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-slate-700 truncate">${escapeHtml(f.name)}</div>
+        <div class="text-xs text-slate-400">${escapeHtml(f.folderName)} · ${formatBytes(f.size)}</div>
+      </div>
+    </div>`).join('');
+
+  // Create folder modal form
+  const newFolderForm = `
+    <details class="group">
+      <summary class="list-none cursor-pointer">
+        <button class="border border-dashed border-slate-200 text-slate-500 hover:border-blue-400 hover:text-blue-600 px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+          + Nueva carpeta
+        </button>
+      </summary>
+      <div class="mt-2 bg-white border border-slate-200 rounded-2xl p-5 shadow-lg">
+        <h3 class="text-sm font-semibold text-slate-700 mb-4">Nueva carpeta</h3>
+        <form method="POST" action="/admin/documentos/folder/new" class="space-y-3">
+          <input type="text" name="name" placeholder="Nombre de la carpeta" required
+            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="text" name="description" placeholder="Descripción (opcional)"
+            class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">Color</label>
+            <div class="flex gap-2">
+              ${['#3b82f6','#8b5cf6','#10b981','#f59e0b','#f43f5e','#64748b'].map(c =>
+                `<label class="cursor-pointer"><input type="radio" name="color" value="${c}" class="sr-only"><div class="w-6 h-6 rounded-full border-2 border-white shadow hover:scale-110 transition-transform" style="background:${c}"></div></label>`).join('')}
+            </div>
+          </div>
+          <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">Crear carpeta</button>
+        </form>
+      </div>
+    </details>`;
+
+  const body = `
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Documentos</h1>
+        <div class="text-sm text-slate-400 mt-0.5">${totalFiles} archivos · ${formatBytes(totalSize)}</div>
+      </div>
+      ${newFolderForm}
+    </div>
+
+    ${allFolders.length > 0 ? `
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">${folderCards}</div>
+    ` : `
+      <div class="text-center py-16 mb-8">
+        <div class="text-5xl mb-4">📂</div>
+        <h3 class="text-lg font-semibold text-slate-700 mb-2">Sin carpetas todavía</h3>
+        <p class="text-sm text-slate-400">Creá una carpeta o subí archivos desde los proyectos.</p>
+      </div>
+    `}
+
+    ${allFiles.length > 0 ? `
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-slate-700">Archivos recientes</h2>
+          <span class="text-xs text-slate-400">${allFiles.length} en total</span>
+        </div>
+        ${fileRows}
+        ${allFiles.length > 20 ? `<div class="px-4 py-3 text-xs text-slate-400 text-center border-t border-slate-100">Mostrando 20 de ${allFiles.length}</div>` : ''}
+      </div>
+    ` : ''}`;
+
+  res.send(layout('Documentos', body, { pendingCount, activePage: 'documentos', user: req.session?.user }));
+});
+
+router.post('/documentos/folder/new', requireAuth, async (req, res) => {
+  const { name, color, description } = req.body;
+  if (!name?.trim()) return res.redirect('/admin/documentos');
+  const id = await db.createDocumentFolder({ name: name.trim(), color: color || '#3b82f6', description: description || '' });
+  fs.mkdirSync(path.join(DOCUMENTS_DIR, id), { recursive: true });
+  res.redirect(`/admin/documentos/folder/${id}`);
+});
+
+router.get('/documentos/folder/:folderId', requireAuth, async (req, res) => {
+  const folders = await db.listDocumentFolders();
+  const folder = folders.find(f => f.id === req.params.folderId);
+  if (!folder) return res.redirect('/admin/documentos');
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+
+  const dir = path.join(DOCUMENTS_DIR, folder.id);
+  fs.mkdirSync(dir, { recursive: true });
+  const files = fs.readdirSync(dir).map(name => ({ name, size: fs.statSync(path.join(dir, name)).size }));
+
+  const body = `
+    <div class="mb-5 flex items-center justify-between">
+      <nav class="flex items-center gap-1.5 text-sm text-slate-400">
+        <a href="/admin/documentos" class="hover:text-blue-600">Documentos</a>
+        <span>/</span>
+        <span class="text-slate-700 font-medium">${escapeHtml(folder.name)}</span>
+      </nav>
+      <form method="POST" action="/admin/documentos/folder/${folder.id}/delete" onsubmit="return confirm('¿Eliminar esta carpeta y todos sus archivos?')">
+        <button class="border border-red-200 text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs transition-colors">Eliminar carpeta</button>
+      </form>
+    </div>
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style="background:${folder.color}18">
+        <span style="color:${folder.color}">📁</span>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">${escapeHtml(folder.name)}</h1>
+        ${folder.description ? `<div class="text-sm text-slate-400">${escapeHtml(folder.description)}</div>` : ''}
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-5">
+      ${files.length > 0 ? files.map(f => `
+        <div class="flex items-center gap-3 py-3 px-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 group">
+          <span class="text-xl flex-shrink-0">${fileIcon(f.name)}</span>
+          <div class="flex-1 min-w-0">
+            <a href="/admin/documentos/folder/${folder.id}/file/${encodeURIComponent(f.name)}" target="_blank"
+              class="text-sm text-slate-700 hover:text-blue-600 hover:underline truncate block">${escapeHtml(f.name)}</a>
+            <span class="text-xs text-slate-400">${formatBytes(f.size)}</span>
+          </div>
+          <form method="POST" action="/admin/documentos/folder/${folder.id}/file/${encodeURIComponent(f.name)}/delete"
+            onsubmit="return confirm('¿Eliminar ${escapeHtml(f.name)}?')"
+            class="opacity-0 group-hover:opacity-100 transition-opacity">
+            <button class="text-slate-300 hover:text-red-400 text-sm p-1 transition-colors">✕</button>
+          </form>
+        </div>`).join('')
+      : '<div class="text-center py-12"><div class="text-3xl mb-2">📂</div><p class="text-sm text-slate-400">Sin archivos. Subí el primero.</p></div>'}
+    </div>
+    <form method="POST" action="/admin/documentos/folder/${folder.id}/upload" enctype="multipart/form-data">
+      <label class="flex flex-col items-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl p-6 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+        <span class="text-3xl">📎</span>
+        <span class="text-sm font-medium text-slate-600">Subir archivos</span>
+        <span class="text-xs text-slate-400">PDF, imágenes, documentos · Máx. 50MB</span>
+        <input type="file" name="files" multiple class="hidden" onchange="this.form.submit()">
+      </label>
+    </form>`;
+
+  res.send(layout(folder.name, body, { pendingCount, activePage: 'documentos', user: req.session?.user }));
+});
+
+router.get('/documentos/project/:projectId', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.projectId);
+  if (!project) return res.redirect('/admin/documentos');
+  res.redirect(`/admin/projects/${req.params.projectId}`);
+});
+
+router.post('/documentos/folder/:folderId/upload', requireAuth, (req, res, next) => {
+  req.params.folderId = req.params.folderId;
+  uploadDoc.array('files', 20)(req, res, err => {
+    if (err) console.error('[doc upload]', err.message);
+    res.redirect(`/admin/documentos/folder/${req.params.folderId}`);
+  });
+});
+
+router.get('/documentos/folder/:folderId/file/:filename', requireAuth, (req, res) => {
+  const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
+  res.sendFile(filePath);
+});
+
+router.post('/documentos/folder/:folderId/file/:filename/delete', requireAuth, (req, res) => {
+  const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  res.redirect(`/admin/documentos/folder/${req.params.folderId}`);
+});
+
+router.post('/documentos/folder/:folderId/delete', requireAuth, async (req, res) => {
+  const dir = path.join(DOCUMENTS_DIR, req.params.folderId);
+  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  await db.deleteDocumentFolder(req.params.folderId);
+  res.redirect('/admin/documentos');
 });
 
 // ─── Demo seed: simula un lead completo para probar el flujo ─────────────────

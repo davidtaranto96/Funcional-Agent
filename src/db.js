@@ -82,6 +82,16 @@ async function init() {
     )
   `);
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS document_folders (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL DEFAULT '',
+      color TEXT DEFAULT '#3b82f6',
+      description TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Migraciones idempotentes
   const migrations = [
     `ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0`,
@@ -401,6 +411,23 @@ async function getProjectsByClientId(clientId) {
   return result.rows.map(parseProject);
 }
 
+// ─── Document Folders ─────────────────────────────────────────────────────────
+async function listDocumentFolders() {
+  const db = getDb();
+  const result = await db.execute('SELECT * FROM document_folders ORDER BY name ASC');
+  return result.rows.map(r => ({ id: r.id, name: String(r.name||''), color: String(r.color||'#3b82f6'), description: String(r.description||''), created_at: r.created_at }));
+}
+async function createDocumentFolder(data) {
+  const id = `df_${Date.now()}`;
+  const db = getDb();
+  await db.execute({ sql: `INSERT INTO document_folders (id, name, color, description) VALUES (?,?,?,?)`, args: [id, data.name||'', data.color||'#3b82f6', data.description||''] });
+  return id;
+}
+async function deleteDocumentFolder(id) {
+  const db = getDb();
+  await db.execute({ sql: 'DELETE FROM document_folders WHERE id = ?', args: [id] });
+}
+
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
@@ -408,4 +435,5 @@ module.exports = {
   appendTimelineEvent, listAllClients, getClientsByStage,
   listProjects, getProject, createProject, updateProject, deleteProject, addProjectUpdate,
   listClientRecords, getClientRecord, createClientRecord, updateClientRecord, deleteClientRecord, getProjectsByClientId,
+  listDocumentFolders, createDocumentFolder, deleteDocumentFolder,
 };
