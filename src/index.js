@@ -12,9 +12,12 @@ const db = require('./db');
 const orchestrator = require('./orchestrator');
 const adminRouter = require('./admin');
 
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
 const app = express();
-app.use(express.urlencoded({ extended: false })); // Twilio manda form-encoded
-app.use(express.json()); // Para el endpoint /context
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
 // Sesiones para el panel admin
 app.use(session({
@@ -23,6 +26,23 @@ app.use(session({
   saveUninitialized: false,
   cookie: { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
 }));
+
+// Google OAuth — solo si está configurado
+if (process.env.GOOGLE_CLIENT_ID) {
+  const ALLOWED = (process.env.ADMIN_ALLOWED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${(process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '')}/admin/auth/google/callback`,
+  }, (at, rt, profile, done) => {
+    const email = (profile.emails?.[0]?.value || '').toLowerCase();
+    if (ALLOWED.length === 0 || ALLOWED.includes(email)) {
+      return done(null, { email, name: profile.displayName, photo: profile.photos?.[0]?.value });
+    }
+    return done(null, false);
+  }));
+  app.use(passport.initialize());
+}
 
 // Servir los demos estáticos (landing HTML, mockups PNG, PDFs)
 app.use('/demos', express.static(path.join(__dirname, '..', 'data', 'demos')));

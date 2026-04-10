@@ -194,8 +194,11 @@ function layout(title, body, { pendingCount = 0, activePage = '' } = {}) {
 
 // ─── Login ───────────────────────────────────────────────────────────────────
 
-router.get('/login', (req, res) => {
-  res.send(`<!DOCTYPE html>
+const passport = require('passport');
+
+function loginPage(errorMsg = '') {
+  const googleConfigured = !!process.env.GOOGLE_CLIENT_ID;
+  return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Login · WPanalista</title>
 <script src="https://cdn.tailwindcss.com"></script></head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen flex items-center justify-center">
@@ -204,25 +207,49 @@ router.get('/login', (req, res) => {
       <div class="text-3xl font-bold text-white tracking-tight">WPanalista</div>
       <div class="text-slate-400 text-sm mt-1">Panel de trabajo</div>
     </div>
-    <form method="POST" action="/admin/login" class="bg-white rounded-2xl shadow-2xl p-8">
-      <label class="block text-sm font-medium text-slate-600 mb-2">Contraseña</label>
-      <input type="password" name="password" autofocus placeholder="••••••••"
-        class="w-full border border-slate-200 rounded-xl px-4 py-3 mb-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-      ${req.query.error ? '<p class="text-red-500 text-xs mb-3">Contraseña incorrecta</p>' : '<div class="mb-3"></div>'}
-      <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold text-sm transition-colors">Entrar</button>
-    </form>
+    <div class="bg-white rounded-2xl shadow-2xl p-8">
+      ${errorMsg ? `<div class="mb-5 px-4 py-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl">${errorMsg}</div>` : ''}
+      ${googleConfigured ? `
+      <a href="/admin/auth/google"
+        class="flex items-center justify-center gap-3 w-full border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 font-semibold py-3 rounded-xl transition-colors mb-4">
+        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
+        Continuar con Google
+      </a>
+      <div class="relative my-4"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-100"></div></div><div class="relative flex justify-center"><span class="bg-white px-3 text-xs text-slate-400">o usá contraseña</span></div></div>` : ''}
+      <form method="POST" action="/admin/login">
+        <input type="password" name="password" autofocus placeholder="Contraseña"
+          class="w-full border border-slate-200 rounded-xl px-4 py-3 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        <button class="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-semibold text-sm transition-colors">Entrar</button>
+      </form>
+    </div>
   </div>
-</body></html>`);
+</body></html>`;
+}
+
+router.get('/login', (req, res) => {
+  const errors = { 1: 'Contraseña incorrecta', 2: 'Email no autorizado para acceder al panel' };
+  res.send(loginPage(errors[req.query.error] || ''));
 });
 
 router.post('/login', (req, res) => {
-  const { password } = req.body;
-  if (password && password === process.env.ADMIN_PASSWORD) {
+  if (req.body.password && req.body.password === process.env.ADMIN_PASSWORD) {
     req.session.authed = true;
     return res.redirect('/admin');
   }
   res.redirect('/admin/login?error=1');
 });
+
+// Google OAuth routes
+router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+
+router.get('/auth/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: '/admin/login?error=2' }),
+  (req, res) => {
+    req.session.authed = true;
+    req.session.user = req.user;
+    res.redirect('/admin');
+  }
+);
 
 router.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/admin/login'));
