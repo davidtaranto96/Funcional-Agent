@@ -126,7 +126,7 @@ app.post('/webhook', async (req, res) => {
           targetPhone = parts.slice(1).join('').trim();
           if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
         } else {
-          const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
+          const pendientes = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review');
           if (pendientes.length === 0) {
             await sendMessage(fromKey, '⚠️ No hay demos pendientes para aprobar.');
             return;
@@ -149,7 +149,7 @@ app.post('/webhook', async (req, res) => {
           targetPhone = parts.slice(1).join('').trim();
           if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
         } else {
-          const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
+          const pendientes = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review');
           if (pendientes.length === 0) {
             await sendMessage(fromKey, '⚠️ No hay demos pendientes.');
             return;

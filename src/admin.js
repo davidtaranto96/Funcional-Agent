@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const db = require('./db');
 const orchestrator = require('./orchestrator');
@@ -477,12 +479,13 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
   const funcList = (proyecto.funcionalidades || []).map(f =>
     `<li class="flex items-start gap-2 text-sm"><span class="text-blue-500">✓</span><span>${escapeHtml(f)}</span></li>`).join('');
 
-  const demoLinks = conv.demo_status && conv.demo_status !== 'none' ? `
-    <div class="space-y-2 mb-4 pt-3 border-t border-slate-100">
-      <a href="/demos/${slug}/landing.html" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:underline">🌐 Ver landing</a>
-      <a href="/demos/${slug}/whatsapp.html" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:underline">💬 Ver mockup WhatsApp</a>
-      <a href="/demos/${slug}/propuesta.pdf" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:underline">📄 Ver PDF</a>
-    </div>` : '';
+  const demosDir = path.join(__dirname, '..', 'data', 'demos', slug);
+  const demoFileLinks = conv.demo_status && conv.demo_status !== 'none' ? [
+    fs.existsSync(path.join(demosDir, 'landing.html'))    ? `<a href="/demos/${slug}/landing.html" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:underline">🌐 Ver landing</a>` : '',
+    fs.existsSync(path.join(demosDir, 'whatsapp.html'))   ? `<a href="/demos/${slug}/whatsapp.html" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:underline">💬 Ver mockup WhatsApp</a>` : '',
+    fs.existsSync(path.join(demosDir, 'propuesta.pdf'))   ? `<a href="/demos/${slug}/propuesta.pdf" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:underline">📄 Ver PDF</a>` : '',
+  ].filter(Boolean) : [];
+  const demoLinks = demoFileLinks.length ? `<div class="space-y-2 mb-4 pt-3 border-t border-slate-100">${demoFileLinks.join('')}</div>` : '';
 
   const infoRows = [
     ['Tipo', proyecto.tipo], ['Plataforma', proyecto.plataforma],
@@ -667,6 +670,7 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
 
 router.post('/stage/:phone', requireAuth, async (req, res) => {
   const { stage } = req.body;
+  if (!STAGES.find(s => s.key === stage)) return res.redirect(`/admin/client/${encodeURIComponent(req.params.phone)}`);
   await db.updateClientStage(req.params.phone, stage);
   await db.appendTimelineEvent(req.params.phone, { event: 'stage_changed', note: `Movido a "${STAGES.find(s=>s.key===stage)?.label||stage}"` });
   res.redirect(`/admin/client/${encodeURIComponent(req.params.phone)}`);

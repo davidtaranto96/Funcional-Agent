@@ -112,16 +112,21 @@ async function sendApprovedDemoToClient(phone) {
   const mockupUrl = `${getAppUrl()}/demos/${slug}/whatsapp.html`;
   const localDir = localDemoDir(phone);
 
+  const hasLanding = fs.existsSync(path.join(localDir, 'landing.html'));
+  const hasWAMockup = fs.existsSync(path.join(localDir, 'whatsapp.html'));
+
   try {
     await sendMessage(phone,
       `${nombre}, estuve armando algo para vos basado en lo que charlamos. Te paso una propuesta visual así te hacés una idea concreta 👇`);
   } catch (err) { console.error('Error WA intro:', err.message); }
 
-  try {
-    await sendMessage(phone, `🌐 *Propuesta visual:*\n${landingUrl}`);
-  } catch (err) { console.error('Error WA landing:', err.message); }
+  if (hasLanding) {
+    try {
+      await sendMessage(phone, `🌐 *Propuesta visual:*\n${landingUrl}`);
+    } catch (err) { console.error('Error WA landing:', err.message); }
+  }
 
-  if (fs.existsSync(path.join(localDir, 'whatsapp.html'))) {
+  if (hasWAMockup) {
     try {
       await sendMessage(phone, `📱 *Así se vería el asistente en tu negocio:*\n${mockupUrl}`);
     } catch (err) { console.error('Error WA mockup:', err.message); }
