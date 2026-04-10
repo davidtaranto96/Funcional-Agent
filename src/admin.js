@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.8.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -237,13 +237,12 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
     .nav-active{background:rgba(59,130,246,0.15)!important}
     .card-hover{transition:box-shadow 0.2s,transform 0.2s}
     .card-hover:hover{box-shadow:0 8px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
-    #sidebar{transition:transform 0.25s ease}
-    #sidebar-backdrop{transition:opacity 0.25s ease}
+    #sidebar{transition:transform 0.28s cubic-bezier(.4,0,.2,1)}
+    #sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:19;opacity:0;visibility:hidden;transition:opacity 0.28s ease,visibility 0.28s ease}
+    #sidebar-backdrop.open{opacity:1;visibility:visible}
     @media(max-width:767px){
       #sidebar{transform:translateX(-100%)}
       #sidebar.open{transform:translateX(0)}
-      #sidebar-backdrop{display:block!important}
-      #sidebar-backdrop.open{opacity:1;pointer-events:auto}
       #main-wrapper{margin-left:0!important}
     }
   </style>
@@ -317,14 +316,25 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
     </div>
     <main class="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 pb-16 min-h-screen">${body}</main>
   </div>
-  <div id="sidebar-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:19;opacity:0;pointer-events:none" onclick="toggleSidebar()"></div>
+  <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
   <script>
   function toggleSidebar(){
     const s=document.getElementById('sidebar');
     const b=document.getElementById('sidebar-backdrop');
-    s.classList.toggle('open');
-    b.classList.toggle('open');
+    const isOpen=s.classList.contains('open');
+    if(isOpen){closeSidebar();}else{
+      s.classList.add('open');
+      b.classList.add('open');
+      document.body.style.overflow='hidden';
+    }
   }
+  function closeSidebar(){
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-backdrop').classList.remove('open');
+    document.body.style.overflow='';
+  }
+  // Cerrar con tecla Escape
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeSidebar();});
   </script>
 </body>
 </html>`;
@@ -697,6 +707,40 @@ router.get('/clients', requireAuth, async (req, res) => {
       ${t.label} <span class="text-xs ${filter === t.key ? 'opacity-70' : 'text-slate-400'}">${t.count}</span>
     </a>`).join('');
 
+  // Mobile cards + desktop table rows
+  const mobileCards = clients.map(c => {
+    const nombre = c.report?.cliente?.nombre || c.context?.nombre || '—';
+    const tipo = c.report?.proyecto?.tipo || '';
+    const phoneUrl = encodeURIComponent(c.phone);
+    const steps = processSteps(c);
+    const done = steps.filter(s => s.done).length;
+    const pct = Math.round(done / steps.length * 100);
+    return `
+      <a href="/admin/client/${phoneUrl}" class="block bg-white rounded-2xl border border-slate-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all active:scale-[0.99]">
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-slate-800 truncate">${escapeHtml(nombre)}</div>
+            <div class="text-xs text-slate-400 truncate mt-0.5">${escapeHtml(tipo || c.phone)}</div>
+          </div>
+          ${c.demo_status === 'pending_review'
+            ? `<span class="flex-shrink-0 bg-orange-100 text-orange-700 text-xs font-semibold px-2 py-1 rounded-lg">Revisar</span>`
+            : stageBadge(c.client_stage)}
+        </div>
+        <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class="bg-slate-100 rounded-full h-1.5 flex-1 max-w-[80px]">
+              <div class="h-1.5 rounded-full bg-blue-500" style="width:${pct}%"></div>
+            </div>
+            <span class="text-xs text-slate-400">${done}/${steps.length}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            ${demoStatusBadge(c.demo_status)}
+            <span class="text-xs text-slate-300">${timeAgo(c.updated_at)}</span>
+          </div>
+        </div>
+      </a>`;
+  }).join('');
+
   const rows = clients.map(c => {
     const nombre = c.report?.cliente?.nombre || c.context?.nombre || '—';
     const tipo = c.report?.proyecto?.tipo || '—';
@@ -804,7 +848,14 @@ router.get('/clients', requireAuth, async (req, res) => {
     </div>
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
     ${view === 'kanban' ? kanbanHtml : `
-    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <!-- Mobile: cards -->
+    <div class="md:hidden space-y-3">
+      ${clients.length === 0
+        ? `<div class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-sm">Sin resultados</div>`
+        : mobileCards}
+    </div>
+    <!-- Desktop: table -->
+    <div class="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div class="overflow-x-auto">
       <table class="w-full min-w-[600px]">
         <thead class="border-b border-slate-100">
@@ -943,19 +994,26 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
       <div class="space-y-5">
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-3">Acciones</h2>
-          ${conv.demo_status === 'pending_review' ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">👁 Revisar demos</a>` : ''}
-          ${conv.demo_status === 'changes_requested' ? `
-            <a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-2 transition-colors">✏ Ver / aprobar (con correcciones)</a>
-            ${conv.demo_notes ? `<div class="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 mb-3 whitespace-pre-line">${escapeHtml(conv.demo_notes)}</div>` : ''}
-          ` : ''}
-          ${conv.report ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Convertir en proyecto</a>` : ''}
+          ${/* ── Acción principal según estado ── */
+            conv.demo_status === 'pending_review'
+              ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">👁 Revisar demos</a>`
+            : conv.demo_status === 'changes_requested'
+              ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-2 transition-colors">✏ Ver / aprobar correcciones</a>
+                 ${conv.demo_notes ? `<div class="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 mb-3 whitespace-pre-line">${escapeHtml(conv.demo_notes)}</div>` : ''}`
+            : (conv.demo_status === 'sent' || conv.demo_status === 'approved') && conv.client_stage !== 'won'
+              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-sm font-bold mb-3 transition-colors shadow-md shadow-emerald-200">🏆 Confirmar proyecto ganado</a>`
+            : conv.client_stage === 'won' && conv.report
+              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50 py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Ver / editar proyecto</a>`
+            : conv.report
+              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-slate-700 hover:bg-slate-800 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Convertir en proyecto</a>`
+            : ''}
           ${!conv.report && (conv.history||[]).length > 3 ? `
           <form method="POST" action="/admin/force-report/${phoneUrl}" class="mb-3" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Generando...'">
             <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">📋 Generar reporte manualmente</button>
           </form>` : ''}
           ${conv.report ? `
           <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
-            <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">🔄 Regenerar demos</button>
+            <button class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-2 rounded-xl text-sm font-medium transition-colors">🔄 Regenerar demos</button>
           </form>` : ''}
           <a href="https://wa.me/${phoneSlug(phone)}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-emerald-200 text-emerald-700 hover:bg-emerald-50 py-2.5 rounded-xl text-sm font-medium mb-2 transition-colors">💬 Abrir en WhatsApp</a>
           ${demoLinks}
@@ -1020,7 +1078,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
   res.send(layout(nombre, body, { pendingCount, activePage: 'clients', user: req.session?.user }));
 });
 
-// ─── Convertir lead WA en proyecto ──────────────────────────────────────────
+// ─── Confirmar proyecto ganado desde lead WA ─────────────────────────────────
 
 router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
   const phone = req.params.phone;
@@ -1028,40 +1086,214 @@ router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
   if (!conv?.report) return res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 
   const r = conv.report;
+  const nombre = r.cliente?.nombre || phone;
+  const tipo = r.proyecto?.tipo || '';
+  const presupuesto = r.requisitos?.presupuesto || '';
+  const phoneUrl = encodeURIComponent(phone);
+  const slug = phoneSlug(phone);
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
 
-  // Pre-cargar datos del reporte en el formulario de proyecto
-  const prefill = {
-    client_name:   r.cliente?.nombre || '',
-    client_phone:  phoneSlug(phone),
-    client_email:  r.cliente?.email || '',
-    title:         r.proyecto?.tipo ? `${r.proyecto.tipo} — ${r.cliente?.nombre || ''}`.trim() : '',
-    type:          r.proyecto?.tipo || '',
-    description:   [r.proyecto?.descripcion, r.resumen_ejecutivo].filter(Boolean).join('\n\n'),
-    budget:        r.requisitos?.presupuesto || '',
-    budget_status: 'not_quoted',
-    status:        'planning',
-    notes:         r.requisitos?.notas_adicionales || '',
-    tasks: (r.proyecto?.funcionalidades || []).map(f => ({
-      text: f, done: false, priority: 'medium', assignee: 'david',
-    })),
+  const funcionalidades = (r.proyecto?.funcionalidades || []);
+  const hasLanding = fs.existsSync(path.join(__dirname, '..', 'data', 'demos', slug, 'landing.html'));
+  const hasPDF     = fs.existsSync(path.join(__dirname, '..', 'data', 'demos', slug, 'propuesta.pdf'));
+
+  const body = `
+    <div class="mb-5 flex items-center gap-2 text-sm text-slate-500">
+      <a href="/admin/client/${phoneUrl}" class="hover:text-blue-600">← ${escapeHtml(nombre)}</a>
+      <span>/</span><span>Confirmar proyecto</span>
+    </div>
+
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-lg">🏆</div>
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold text-slate-900">Confirmar proyecto ganado</h1>
+        <div class="text-sm text-slate-400 mt-0.5">Este lead se convierte en proyecto activo</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Formulario principal -->
+      <div class="lg:col-span-2">
+        <form method="POST" action="/admin/client/${phoneUrl}/to-project">
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Título del proyecto</label>
+              <input type="text" name="title" required value="${escapeHtml(tipo ? tipo + ' — ' + nombre : nombre)}"
+                class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Presupuesto acordado</label>
+                <input type="text" name="budget" placeholder="Ej: $300 USD, $150.000 ARS"
+                  value="${escapeHtml(presupuesto)}"
+                  class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Estado del pago</label>
+                <select name="budget_status" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="not_quoted">Sin cotizar</option>
+                  <option value="quoted">Cotizado</option>
+                  <option value="approved" selected>Aprobado ✓</option>
+                  <option value="partial">Pago parcial</option>
+                  <option value="paid">Pagado ✓</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Estado del proyecto</label>
+                <select name="status" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="planning" selected>Planificando</option>
+                  <option value="in_progress">En curso</option>
+                  <option value="waiting_client">Esperando cliente</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Categoría</label>
+                <select name="category" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  ${PROJECT_CATEGORIES.map(c => `<option value="${c.key}" ${c.key==='cliente'?'selected':''}>${c.dot} ${c.label}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Fecha límite (opcional)</label>
+              <input type="date" name="deadline"
+                class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Notas adicionales</label>
+              <textarea name="notes" rows="3" placeholder="Acuerdos, condiciones, detalles importantes..."
+                class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+            </div>
+
+            ${funcionalidades.length > 0 ? `
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tareas iniciales (del análisis del lead)</label>
+              <div class="space-y-1.5">
+                ${funcionalidades.map((f, i) => `
+                <label class="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer hover:text-slate-900">
+                  <input type="checkbox" name="include_task_${i}" value="${escapeHtml(f)}" checked
+                    class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
+                  ${escapeHtml(f)}
+                </label>`).join('')}
+              </div>
+            </div>` : ''}
+
+            <!-- Campos ocultos del lead -->
+            <input type="hidden" name="from_lead" value="${phoneUrl}">
+            <input type="hidden" name="client_name" value="${escapeHtml(r.cliente?.nombre || '')}">
+            <input type="hidden" name="client_phone" value="${escapeHtml(phoneSlug(phone))}">
+            <input type="hidden" name="client_email" value="${escapeHtml(r.cliente?.email || '')}">
+            <input type="hidden" name="type" value="${escapeHtml(tipo)}">
+            <input type="hidden" name="description" value="${escapeHtml([r.proyecto?.descripcion, r.resumen_ejecutivo].filter(Boolean).join('\n\n'))}">
+            <input type="hidden" name="funcs_count" value="${funcionalidades.length}">
+            ${funcionalidades.map((f, i) => `<input type="hidden" name="func_${i}" value="${escapeHtml(f)}">`).join('')}
+
+          </div>
+
+          <button type="submit" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-2xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+            🏆 Confirmar proyecto y marcar lead como ganado
+          </button>
+        </form>
+      </div>
+
+      <!-- Panel lateral: resumen del lead -->
+      <div class="space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Datos del lead</h2>
+          <div class="space-y-3">
+            <div><div class="text-[10px] text-slate-400 uppercase tracking-wide">Cliente</div><div class="text-sm font-medium text-slate-800">${escapeHtml(nombre)}</div></div>
+            ${r.cliente?.email ? `<div><div class="text-[10px] text-slate-400 uppercase tracking-wide">Email</div><div class="text-sm text-slate-700">${escapeHtml(r.cliente.email)}</div></div>` : ''}
+            ${tipo ? `<div><div class="text-[10px] text-slate-400 uppercase tracking-wide">Tipo</div><div class="text-sm text-slate-700">${escapeHtml(tipo)}</div></div>` : ''}
+            ${presupuesto ? `<div><div class="text-[10px] text-slate-400 uppercase tracking-wide">Presupuesto mencionado</div><div class="text-sm text-slate-700">${escapeHtml(presupuesto)}</div></div>` : ''}
+            ${r.requisitos?.plazo ? `<div><div class="text-[10px] text-slate-400 uppercase tracking-wide">Plazo</div><div class="text-sm text-slate-700">${escapeHtml(r.requisitos.plazo)}</div></div>` : ''}
+          </div>
+        </div>
+
+        ${(hasLanding || hasPDF) ? `
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Demos generados</h2>
+          <div class="space-y-2">
+            ${hasLanding ? `<a href="/demos/${slug}/landing.html" target="_blank" class="flex items-center gap-2 text-sm text-blue-600 hover:underline">🌐 Ver landing page</a>` : ''}
+            ${hasPDF ? `<a href="/demos/${slug}/propuesta.pdf" target="_blank" class="flex items-center gap-2 text-sm text-blue-600 hover:underline">📄 Ver propuesta PDF</a>` : ''}
+          </div>
+          <p class="text-xs text-slate-400 mt-3">Los demos quedan linkados al proyecto automáticamente.</p>
+        </div>` : ''}
+
+        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+          <div class="text-xs font-semibold text-emerald-700 mb-1">Al confirmar:</div>
+          <ul class="text-xs text-emerald-600 space-y-1">
+            <li>✓ Se crea el proyecto con todos los datos</li>
+            <li>✓ El lead pasa a estado <strong>Ganado 🏆</strong></li>
+            <li>✓ Las tareas del análisis se pre-cargan</li>
+            <li>✓ Los demos quedan vinculados</li>
+          </ul>
+        </div>
+      </div>
+    </div>`;
+
+  res.send(layout('Confirmar proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
+});
+
+router.post('/client/:phone/to-project', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  const conv = await db.getConversation(phone);
+  if (!conv?.report) return res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+
+  const r = conv.report;
+  const slug = phoneSlug(phone);
+  const { title, budget, budget_status, status, category, deadline, notes, client_name, client_phone, client_email, type, description, funcs_count } = req.body;
+
+  // Construir tareas: solo las que el usuario marcó
+  const tasks = [];
+  const count = parseInt(funcs_count || '0', 10);
+  for (let i = 0; i < count; i++) {
+    const checked = req.body[`include_task_${i}`];
+    const funcText = req.body[`func_${i}`];
+    if (checked && funcText) {
+      tasks.push({ text: funcText, done: false, priority: 'medium', assignee: 'david' });
+    }
+  }
+
+  // Agregar nota de demos generados en la descripción
+  const demoNote = [];
+  if (fs.existsSync(path.join(__dirname, '..', 'data', 'demos', slug, 'landing.html')))
+    demoNote.push(`🌐 Landing: ${(process.env.APP_URL || '').replace(/\/$/,'')}/demos/${slug}/landing.html`);
+  if (fs.existsSync(path.join(__dirname, '..', 'data', 'demos', slug, 'propuesta.pdf')))
+    demoNote.push(`📄 PDF: ${(process.env.APP_URL || '').replace(/\/$/,'')}/demos/${slug}/propuesta.pdf`);
+
+  const fullDescription = [description, demoNote.length ? '--- Demos ---\n' + demoNote.join('\n') : ''].filter(Boolean).join('\n\n');
+
+  const project = {
+    client_name: client_name || r.cliente?.nombre || '',
+    client_phone: client_phone || phoneSlug(phone),
+    client_email: client_email || r.cliente?.email || '',
+    title: title || type || client_name || '',
+    type: type || '',
+    description: fullDescription,
+    budget: budget || '',
+    budget_status: budget_status || 'approved',
+    status: status || 'planning',
+    category: category || 'cliente',
+    deadline: deadline || '',
+    notes: notes || '',
+    tasks: JSON.stringify(tasks),
+    is_personal: false,
   };
 
-  const nombre = r.cliente?.nombre || phone;
-  const clientList = await db.listClientRecords();
-  const body = `
-    <div class="mb-5 flex items-center gap-3">
-      <a href="/admin/client/${encodeURIComponent(phone)}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(nombre)}</a>
-      <span class="text-slate-300">/</span>
-      <span class="text-sm text-slate-500">Convertir en proyecto</span>
-    </div>
-    <div class="flex items-center gap-3 mb-6">
-      <h1 class="text-2xl font-bold text-slate-900">Nuevo proyecto</h1>
-      <span class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">Pre-cargado del lead WA</span>
-    </div>
-    ${projectForm(prefill, '/admin/projects', 'Crear proyecto', clientList)}`;
+  const newProject = await db.createProject(project);
 
-  res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
+  // Marcar el lead como ganado
+  await db.updateClientStage(phone, 'won');
+  await db.appendTimelineEvent(phone, { event: 'stage_changed', note: `Proyecto ganado — creado proyecto #${newProject.id}` });
+
+  res.redirect(`/admin/projects/${newProject.id}`);
 });
 
 // ─── Review ──────────────────────────────────────────────────────────────────
@@ -1174,7 +1406,11 @@ router.post('/approve/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
   await db.updateDemoStatus(phone, 'approved');
   await db.appendTimelineEvent(phone, { event: 'demo_approved', note: 'Aprobado desde el panel' });
-  orchestrator.sendApprovedDemoToClient(phone).catch(err => console.error('Error enviando demo:', err));
+  try {
+    await orchestrator.sendApprovedDemoToClient(phone);
+  } catch (err) {
+    console.error('Error enviando demo al cliente:', err);
+  }
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 });
 
