@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.1'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.9.2'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -817,6 +817,10 @@ router.get('/clients', requireAuth, async (req, res) => {
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
       <h1 class="text-xl md:text-2xl font-bold text-slate-900">Leads WhatsApp</h1>
       <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="location.reload()" title="Actualizar" class="flex items-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Actualizar
+        </button>
         <span class="text-sm text-slate-400">${clients.length} resultado${clients.length !== 1 ? 's' : ''}</span>
         <div class="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5">
           <a href="/admin/clients?stage=${escapeHtml(filter)}&view=list${search ? '&q='+encodeURIComponent(search) : ''}"
@@ -1488,8 +1492,12 @@ router.get('/tasks', requireAuth, async (req, res) => {
 
   const filter = req.query.filter || 'all'; // all | high | overdue | today
 
-  // Gather all pending tasks with project context
+  // Clientes primero por defecto — personal/diseño van al fondo
+  const CAT_PRIORITY = { cliente: 0, ventas: 1, desarrollo: 2, diseño: 3, personal: 4, otro: 5 };
+
+  // Gather all pending tasks with project context, clientes first
   let taskGroups = projects
+    .sort((a, b) => (CAT_PRIORITY[a.category] ?? 99) - (CAT_PRIORITY[b.category] ?? 99))
     .map(p => ({
       project: p,
       tasks: (p.tasks || []).filter(t => !t.done),
@@ -1591,6 +1599,7 @@ router.get('/tasks', requireAuth, async (req, res) => {
 router.get('/projects', requireAuth, async (req, res) => {
   const filter = req.query.status || 'all';
   const search = (req.query.q || '').toLowerCase();
+  const sort = req.query.sort || 'clientes'; // clientes | recientes | deadline | status
   let projects = await db.listProjects();
   const allProjects = projects;
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
@@ -1602,6 +1611,26 @@ router.get('/projects', requireAuth, async (req, res) => {
     projects = projects.filter(p => (p.category || 'cliente') === catKey);
   } else if (filter !== 'all') {
     projects = projects.filter(p => p.status === filter);
+  }
+
+  // Ordenamiento
+  const CAT_ORDER = { cliente: 0, ventas: 1, desarrollo: 2, diseño: 3, personal: 4, otro: 5 };
+  const STATUS_ORDER = { in_progress: 0, review: 1, waiting_client: 2, waiting_payment: 3, planning: 4, delivered: 5, paused: 6, cancelled: 7 };
+  if (sort === 'clientes') {
+    projects.sort((a, b) => {
+      const ca = CAT_ORDER[a.category] ?? 99;
+      const cb = CAT_ORDER[b.category] ?? 99;
+      if (ca !== cb) return ca - cb;
+      return new Date(b.updated_at) - new Date(a.updated_at);
+    });
+  } else if (sort === 'recientes') {
+    projects.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  } else if (sort === 'deadline') {
+    const withDl = projects.filter(p => p.deadline).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+    const noDl = projects.filter(p => !p.deadline).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    projects = [...withDl, ...noDl];
+  } else if (sort === 'status') {
+    projects.sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99));
   }
 
   const tabs = [
@@ -1685,11 +1714,23 @@ router.get('/projects', requireAuth, async (req, res) => {
       <h1 class="text-xl md:text-2xl font-bold text-slate-900">Proyectos</h1>
       <a href="/admin/projects/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo proyecto</a>
     </div>
-    <div class="flex items-center gap-3 mb-4">
-      <form method="GET" action="/admin/projects" class="flex-1">
+    <div class="flex items-center gap-2 mb-4">
+      <form method="GET" action="/admin/projects" class="flex-1 flex items-center gap-2">
         <input type="hidden" name="status" value="${escapeHtml(filter)}">
+        <input type="hidden" name="sort" value="${escapeHtml(sort)}">
         <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por cliente, título o tipo..."
-          class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          class="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </form>
+      <form method="GET" action="/admin/projects">
+        <input type="hidden" name="status" value="${escapeHtml(filter)}">
+        <input type="hidden" name="q" value="${escapeHtml(search)}">
+        <select name="sort" onchange="this.form.submit()"
+          class="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+          <option value="clientes" ${sort==='clientes'?'selected':''}>🔵 Clientes primero</option>
+          <option value="status"   ${sort==='status'?'selected':''}>📊 Por estado</option>
+          <option value="deadline" ${sort==='deadline'?'selected':''}>📅 Por deadline</option>
+          <option value="recientes"${sort==='recientes'?'selected':''}>🕐 Más recientes</option>
+        </select>
       </form>
     </div>
     <div class="flex items-center gap-3 mb-5 flex-wrap">
