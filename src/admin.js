@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.6.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '1.7.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 
 // ─── Multer: upload de archivos para proyectos ───────────────────────────────
@@ -236,10 +236,19 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
     .nav-active{background:rgba(59,130,246,0.15)!important}
     .card-hover{transition:box-shadow 0.2s,transform 0.2s}
     .card-hover:hover{box-shadow:0 8px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
+    #sidebar{transition:transform 0.25s ease}
+    #sidebar-backdrop{transition:opacity 0.25s ease}
+    @media(max-width:767px){
+      #sidebar{transform:translateX(-100%)}
+      #sidebar.open{transform:translateX(0)}
+      #sidebar-backdrop{display:block!important}
+      #sidebar-backdrop.open{opacity:1;pointer-events:auto}
+      #main-wrapper{margin-left:0!important}
+    }
   </style>
 </head>
 <body class="bg-slate-50/80 text-slate-800 min-h-screen" style="display:flex;background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%)">
-  <aside style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-[#0f172a] flex flex-col border-r border-white/5">
+  <aside id="sidebar" style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-[#0f172a] flex flex-col border-r border-white/5">
     <!-- Brand -->
     <div class="px-4 py-4 border-b border-white/5">
       <div class="flex items-center gap-3">
@@ -293,9 +302,29 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
       </form>
     </div>
   </aside>
-  <div style="margin-left:240px;flex:1;min-height:100vh">
-    <main class="max-w-7xl mx-auto p-6 pb-16 min-h-screen">${body}</main>
+  <div id="main-wrapper" style="margin-left:240px;flex:1;min-height:100vh">
+    <div class="md:hidden flex items-center gap-3 px-4 py-3 bg-[#0f172a] border-b border-white/10 sticky top-0 z-10">
+      <button onclick="toggleSidebar()" class="text-white p-1.5 rounded-lg hover:bg-white/10">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+          <span class="text-white text-[9px] font-black">DT</span>
+        </div>
+        <span class="text-white text-sm font-bold">DT Systems</span>
+      </div>
+    </div>
+    <main class="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 pb-16 min-h-screen">${body}</main>
   </div>
+  <div id="sidebar-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:19;opacity:0;pointer-events:none" onclick="toggleSidebar()"></div>
+  <script>
+  function toggleSidebar(){
+    const s=document.getElementById('sidebar');
+    const b=document.getElementById('sidebar-backdrop');
+    s.classList.toggle('open');
+    b.classList.toggle('open');
+  }
+  </script>
 </body>
 </html>`;
 }
@@ -427,7 +456,7 @@ router.get('/', requireAuth, async (req, res) => {
       <div class="flex items-start justify-between">
         <div>
           <div class="text-xs font-medium opacity-75 uppercase tracking-wide">${m.label}</div>
-          <div class="text-4xl font-bold mt-1">${m.value}</div>
+          <div class="text-3xl md:text-4xl font-bold mt-1">${m.value}</div>
           <div class="text-xs opacity-60 mt-1">${m.sub}</div>
         </div>
         <div class="text-3xl opacity-50">${m.icon}</div>
@@ -437,7 +466,7 @@ router.get('/', requireAuth, async (req, res) => {
 
   // Alert strip
   const alertStrip = pendingReview.length ? `
-    <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3">
+    <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
       <span class="text-2xl">⚠️</span>
       <div class="flex-1">
         <div class="font-semibold text-orange-800 text-sm">Demos esperando tu revisión</div>
@@ -536,9 +565,9 @@ router.get('/', requireAuth, async (req, res) => {
     .slice(0, 6);
 
   const body = `
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">${(() => {
+        <h1 class="text-xl md:text-2xl font-bold text-slate-900">${(() => {
           const h = new Date().getHours();
           const name = (req.session?.user?.name || 'David').split(' ')[0];
           const greet = h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
@@ -548,7 +577,7 @@ router.get('/', requireAuth, async (req, res) => {
       </div>
     </div>
     ${alertStrip}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">${metricCards}</div>
+    <div class="grid grid-cols-2 gap-3 md:gap-4 mb-6 lg:grid-cols-4">${metricCards}</div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
       <!-- Pipeline WA -->
       <div class="bg-white rounded-2xl border border-slate-200 p-5 overflow-hidden">
@@ -704,11 +733,12 @@ router.get('/clients', requireAuth, async (req, res) => {
   const kanbanHtml = (() => {
     const kanbanStages = STAGES.slice(0, 7); // exclude 'dormant' for space
     return `
-      <div class="flex gap-4 overflow-x-auto pb-4" style="min-height:60vh">
+      <div class="overflow-x-auto pb-4">
+      <div class="flex gap-4" style="min-height:60vh;min-width:max-content">
         ${kanbanStages.map(s => {
           const stageClients = clients.filter(c => c.client_stage === s.key);
           return `
-            <div class="flex-shrink-0 w-64">
+            <div class="flex-shrink-0" style="width:260px">
               <div class="flex items-center gap-2 mb-3 px-1">
                 <div class="w-2 h-2 rounded-full" style="background:${s.dot}"></div>
                 <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">${s.label}</span>
@@ -733,13 +763,14 @@ router.get('/clients', requireAuth, async (req, res) => {
               </div>
             </div>`;
         }).join('')}
+      </div>
       </div>`;
   })();
 
   const body = `
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-slate-900">Leads WhatsApp</h1>
-      <div class="flex items-center gap-2">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+      <h1 class="text-xl md:text-2xl font-bold text-slate-900">Leads WhatsApp</h1>
+      <div class="flex items-center gap-2 flex-wrap">
         <span class="text-sm text-slate-400">${clients.length} resultado${clients.length !== 1 ? 's' : ''}</span>
         <div class="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5">
           <a href="/admin/clients?stage=${escapeHtml(filter)}&view=list${search ? '&q='+encodeURIComponent(search) : ''}"
@@ -773,7 +804,8 @@ router.get('/clients', requireAuth, async (req, res) => {
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
     ${view === 'kanban' ? kanbanHtml : `
     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <table class="w-full">
+      <div class="overflow-x-auto">
+      <table class="w-full min-w-[600px]">
         <thead class="border-b border-slate-100">
           <tr class="text-xs text-slate-400 uppercase">
             <th class="px-4 py-3 text-left font-medium">Cliente</th>
@@ -787,6 +819,7 @@ router.get('/clients', requireAuth, async (req, res) => {
         </thead>
         <tbody>${rows || '<tr><td class="px-4 py-12 text-center text-slate-400 text-sm" colspan="7">Sin resultados</td></tr>'}</tbody>
       </table>
+      </div>
     </div>`}`;
 
   res.send(layout('Leads WA', body, { pendingCount: pendingReview.length, activePage: 'clients', user: req.session?.user }));
@@ -874,14 +907,14 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
 
   const body = `
     <div class="mb-5"><a href="/admin/clients" class="text-sm text-slate-500 hover:text-blue-600">← Leads WA</a></div>
-    <div class="flex items-start justify-between mb-5">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">${escapeHtml(nombre)}</h1>
+        <h1 class="text-xl md:text-2xl font-bold text-slate-900">${escapeHtml(nombre)}</h1>
         <div class="flex items-center gap-2 mt-1 text-xs text-slate-400">
           <span>${escapeHtml(phone)}</span>${email ? `<span>·</span><span>${escapeHtml(email)}</span>` : ''}
         </div>
       </div>
-      <div class="flex items-center gap-2">${stageBadge(conv.client_stage)} ${demoStatusBadge(conv.demo_status)}</div>
+      <div class="flex items-center gap-2 flex-wrap">${stageBadge(conv.client_stage)} ${demoStatusBadge(conv.demo_status)}</div>
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-5">
@@ -897,7 +930,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-4">Proyecto</h2>
           ${resumen ? `<p class="text-sm text-slate-600 mb-4 leading-relaxed">${escapeHtml(resumen)}</p>` : ''}
-          ${infoRows.length ? `<div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">${infoRows.map(([k,v]) => `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">${k}</div><div class="text-slate-700 font-medium">${escapeHtml(v)}</div></div>`).join('')}</div>` : ''}
+          ${infoRows.length ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">${infoRows.map(([k,v]) => `<div><div class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">${k}</div><div class="text-slate-700 font-medium">${escapeHtml(v)}</div></div>`).join('')}</div>` : ''}
           ${funcList ? `<div class="mt-4 pt-4 border-t border-slate-100"><div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Funcionalidades</div><ul class="space-y-1.5">${funcList}</ul></div>` : ''}
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
@@ -1258,7 +1291,7 @@ router.get('/tasks', requireAuth, async (req, res) => {
   const body = `
     <div class="flex items-center gap-3 mb-6">
       <div class="flex-1">
-        <h1 class="text-2xl font-bold text-slate-900">Tareas pendientes</h1>
+        <h1 class="text-xl md:text-2xl font-bold text-slate-900">Tareas pendientes</h1>
         <div class="text-sm text-slate-400 mt-0.5">${totalPending} tarea${totalPending !== 1 ? 's' : ''} sin completar en ${projects.filter(p => (p.tasks||[]).some(t=>!t.done)).length} proyectos</div>
       </div>
     </div>
@@ -1368,8 +1401,8 @@ router.get('/projects', requireAuth, async (req, res) => {
     </div>`;
 
   const body = `
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-slate-900">Proyectos</h1>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+      <h1 class="text-xl md:text-2xl font-bold text-slate-900">Proyectos</h1>
       <a href="/admin/projects/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo proyecto</a>
     </div>
     <div class="flex items-center gap-3 mb-4">
@@ -1431,8 +1464,8 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
               </select>
               <div class="text-[10px] text-slate-400 mt-1">Seleccioná un cliente para pre-cargar sus datos</div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div class="col-span-2 lg:col-span-1">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2 lg:col-span-1">
                 <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Nombre del cliente *</label>
                 <input type="text" name="client_name" value="${escapeHtml(data.client_name || '')}" required
                   class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: María García">
@@ -1458,7 +1491,7 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
                 <input type="text" name="title" value="${escapeHtml(data.title || '')}" required
                   class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: Web para tienda de ropa">
               </div>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Tipo</label>
                   <input type="text" name="type" value="${escapeHtml(data.type || '')}"
@@ -1480,7 +1513,7 @@ function projectForm(data = {}, action = '/admin/projects', btnLabel = 'Crear pr
                 <textarea name="notes" rows="3" placeholder="Contactos involucrados, pendientes de consultar, contexto extra..."
                   class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500">${escapeHtml(data.notes || '')}</textarea>
               </div>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Categoría</label>
                   <select name="category" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -1717,13 +1750,13 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
     </form>`).join('');
 
   const body = `
-    <div class="mb-5 flex items-center justify-between">
+    <div class="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <nav class="flex items-center gap-1.5 text-sm text-slate-400">
         <a href="/admin/projects" class="hover:text-blue-600 transition-colors">Proyectos</a>
         <span>/</span>
         <span class="text-slate-600 truncate max-w-xs">${escapeHtml(project.title || project.client_name)}</span>
       </nav>
-      <div class="flex gap-3">
+      <div class="flex gap-3 flex-wrap">
         <a href="/admin/projects/${project.id}/edit" class="border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm transition-colors">Editar</a>
         <form method="POST" action="/admin/projects/${project.id}/delete" onsubmit="return confirm('¿Eliminar este proyecto?')">
           <button class="border border-red-200 text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl text-sm transition-colors">Eliminar</button>
@@ -1731,7 +1764,7 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
       </div>
     </div>
 
-    <div class="flex items-start justify-between mb-5">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
       <div>
         ${(() => {
           const avatarColors = ['bg-blue-500','bg-purple-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-indigo-500'];
@@ -2021,8 +2054,8 @@ function clientForm(data = {}, action = '/admin/clientes', btnLabel = 'Guardar')
           <div class="bg-white rounded-2xl border border-slate-200 p-5">
             <h2 class="text-sm font-semibold text-slate-700 mb-4">Datos del cliente</h2>
             <div class="space-y-4">
-              <div class="grid grid-cols-2 gap-4">
-                <div class="col-span-2">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="sm:col-span-2">
                   <label class="text-xs text-slate-500 uppercase tracking-wide block mb-1">Nombre completo *</label>
                   <input type="text" name="name" value="${escapeHtml(data.name || '')}" required
                     class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: María García">
@@ -2128,9 +2161,9 @@ router.get('/clientes', requireAuth, async (req, res) => {
   </div>`;
 
   const body = `
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">Clientes</h1>
+        <h1 class="text-xl md:text-2xl font-bold text-slate-900">Clientes</h1>
         <div class="text-sm text-slate-400 mt-0.5">${clients.length} cliente${clients.length !== 1 ? 's' : ''} en total</div>
       </div>
       <a href="/admin/clientes/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo cliente</a>
@@ -2145,7 +2178,8 @@ router.get('/clientes', requireAuth, async (req, res) => {
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
     ${filtered.length === 0 && clients.length === 0 ? emptyState : `
     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <table class="w-full">
+      <div class="overflow-x-auto">
+      <table class="w-full min-w-[560px]">
         <thead class="border-b border-slate-100">
           <tr class="text-xs text-slate-400 uppercase">
             <th class="px-4 py-3 text-left font-medium">Cliente</th>
@@ -2158,6 +2192,7 @@ router.get('/clientes', requireAuth, async (req, res) => {
         </thead>
         <tbody>${rows || '<tr><td class="px-4 py-12 text-center text-slate-400 text-sm" colspan="6">Sin resultados</td></tr>'}</tbody>
       </table>
+      </div>
     </div>`}`;
 
   res.send(layout('Clientes', body, { pendingCount, activePage: 'clientes', user: req.session?.user }));
@@ -2211,13 +2246,13 @@ router.get('/clientes/:id', requireAuth, async (req, res) => {
   const waLead = client.phone ? allWa.find(c => c.phone.includes(client.phone.replace(/\D/g, '')) || client.phone.includes(c.phone.replace(/\D/g, ''))) : null;
 
   const body = `
-    <div class="mb-5 flex items-center justify-between">
+    <div class="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <nav class="flex items-center gap-1.5 text-sm text-slate-400">
         <a href="/admin/clientes" class="hover:text-blue-600">Clientes</a>
         <span>/</span>
         <span class="text-slate-600 truncate">${escapeHtml(client.name)}</span>
       </nav>
-      <div class="flex gap-2">
+      <div class="flex gap-2 flex-wrap">
         <a href="/admin/clientes/${client.id}/edit" class="border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm transition-colors">Editar</a>
         <form method="POST" action="/admin/clientes/${client.id}/delete" onsubmit="return confirm('¿Eliminar este cliente?')">
           <button class="border border-red-200 text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl text-sm transition-colors">Eliminar</button>
@@ -2356,9 +2391,9 @@ router.post('/clientes/:id/delete', requireAuth, async (req, res) => {
 
 function docLayout(title, sidebarHtml, contentHtml, { pendingCount = 0, user = null } = {}) {
   return layout(title, `
-    <div class="flex gap-0 -mx-6 -mt-6" style="min-height:calc(100vh - 40px)">
+    <div class="flex gap-0 -mx-4 md:-mx-6 -mt-4 md:-mt-6" style="min-height:calc(100vh - 40px)">
       <!-- Left sidebar -->
-      <div class="w-56 flex-shrink-0 border-r border-slate-200 bg-white px-3 py-5 flex flex-col gap-1" style="min-height:calc(100vh - 40px)">
+      <div class="hidden md:flex w-56 flex-shrink-0 border-r border-slate-200 bg-white px-3 py-5 flex-col gap-1" style="min-height:calc(100vh - 40px)">
         <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-2">Mi Drive</div>
         ${sidebarHtml}
         <div class="mt-4 pt-4 border-t border-slate-100">
@@ -2385,7 +2420,7 @@ function docLayout(title, sidebarHtml, contentHtml, { pendingCount = 0, user = n
         </div>
       </div>
       <!-- Main content -->
-      <div class="flex-1 px-6 py-5 overflow-auto bg-slate-50">
+      <div class="flex-1 min-w-0 px-4 md:px-6 py-5 overflow-auto bg-slate-50">
         ${contentHtml}
       </div>
     </div>`, { pendingCount, activePage: 'documentos', user });
@@ -2625,7 +2660,7 @@ router.get('/documentos', requireAuth, async (req, res) => {
         <div class="mb-7">
           <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">${g.label}</div>
           ${g.folders.length > 0
-            ? `<div class="grid grid-cols-3 lg:grid-cols-5 gap-3">${g.folders.map(folderCardHtml).join('')}</div>`
+            ? `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">${g.folders.map(folderCardHtml).join('')}</div>`
             : g.emptyMsg ? `<p class="text-xs text-slate-400">${g.emptyMsg}</p>` : ''}
         </div>`).join('')}`;
   } else if (currentFolderObj) {
@@ -2676,7 +2711,7 @@ router.get('/documentos', requireAuth, async (req, res) => {
       ${currentFiles.length === 0
         ? `<div class="text-center py-20"><div class="text-5xl mb-3">📂</div><p class="text-sm text-slate-400">Sin archivos. Subí el primero.</p></div>`
         : view === 'grid'
-          ? `<div class="grid grid-cols-3 lg:grid-cols-5 gap-3">
+          ? `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               ${currentFiles.map(f => fileCard(f, getDownloadHref(f), getDeleteAction(f), true)).join('')}
              </div>`
           : `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
