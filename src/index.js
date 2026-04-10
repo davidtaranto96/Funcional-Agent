@@ -106,7 +106,7 @@ app.post('/webhook', async (req, res) => {
       const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
       if (cmd === 'PENDIENTES') {
-        const pendientes = db.listAllClients().filter(c => c.demo_status === 'pending_review');
+        const pendientes = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review');
         if (pendientes.length === 0) {
           await sendMessage(fromKey, '✅ No hay demos pendientes de revisión.');
         } else {
@@ -133,10 +133,10 @@ app.post('/webhook', async (req, res) => {
           }
           targetPhone = pendientes[0].phone;
         }
-        const conv = db.getConversation(targetPhone);
+        const conv = await db.getConversation(targetPhone);
         const nombre = conv?.report?.cliente?.nombre || targetPhone;
-        db.updateDemoStatus(targetPhone, 'approved');
-        db.appendTimelineEvent(targetPhone, { event: 'demo_approved', note: 'Aprobado desde WhatsApp' });
+        await db.updateDemoStatus(targetPhone, 'approved');
+        await db.appendTimelineEvent(targetPhone, { event: 'demo_approved', note: 'Aprobado desde WhatsApp' });
         orchestrator.sendApprovedDemoToClient(targetPhone).catch(console.error);
         await sendMessage(fromKey, `✅ *Aprobado.* Mandando demo a ${nombre}...`);
         return;
@@ -156,8 +156,8 @@ app.post('/webhook', async (req, res) => {
           }
           targetPhone = pendientes[0].phone;
         }
-        db.updateDemoStatus(targetPhone, 'rejected');
-        db.appendTimelineEvent(targetPhone, { event: 'demo_rejected', note: 'Rechazado desde WhatsApp' });
+        await db.updateDemoStatus(targetPhone, 'rejected');
+        await db.appendTimelineEvent(targetPhone, { event: 'demo_rejected', note: 'Rechazado desde WhatsApp' });
         await sendMessage(fromKey, `❌ Demo rechazado.`);
         return;
       }
@@ -167,7 +167,7 @@ app.post('/webhook', async (req, res) => {
         const parts = text.trim().split(/\s+/);
         let targetPhone = parts.length > 1 ? parts.slice(1).join('').trim() : null;
         if (targetPhone && !targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:+${targetPhone.replace(/[^0-9]/g,'')}`;
-        const all = db.listAllClients();
+        const all = await db.listAllClients();
         if (!targetPhone) {
           const resumen = all.slice(-5).map(c => {
             const nombre = c.report?.cliente?.nombre || c.phone;
@@ -175,7 +175,7 @@ app.post('/webhook', async (req, res) => {
           }).join('\n');
           await sendMessage(fromKey, `📊 *Últimos 5 clientes:*\n\n${resumen || 'Sin clientes aún.'}`);
         } else {
-          const conv = db.getConversation(targetPhone);
+          const conv = await db.getConversation(targetPhone);
           if (!conv) { await sendMessage(fromKey, `❌ No encontré al cliente ${targetPhone}`); return; }
           const nombre = conv.report?.cliente?.nombre || targetPhone;
           const timeline = (conv.timeline || []).slice(-3).map(e => `• ${e.event}: ${e.note||''}`).join('\n');
@@ -191,7 +191,7 @@ app.post('/webhook', async (req, res) => {
         let targetPhone = parts.length > 1 ? parts.slice(1).join('').trim() : null;
         if (!targetPhone) { await sendMessage(fromKey, '⚠️ Usá: REPORTE +5493878599185'); return; }
         if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:+${targetPhone.replace(/[^0-9]/g,'')}`;
-        const conv = db.getConversation(targetPhone);
+        const conv = await db.getConversation(targetPhone);
         if (!conv?.report) { await sendMessage(fromKey, `❌ ${targetPhone} no tiene reporte todavía.`); return; }
         await sendMessage(fromKey, `🔄 Regenerando demos para ${conv.report?.cliente?.nombre || targetPhone}...`);
         orchestrator.processNewReport(targetPhone, conv.report).catch(console.error);
@@ -221,11 +221,11 @@ app.post('/webhook', async (req, res) => {
     if (result.stage === 'done' && result.previousStage === 'confirming') {
       console.log(`[index] 🎯 Transición confirming→done para ${fromKey} — generando reporte...`);
       try {
-        const conv = db.getConversation(fromKey);
+        const conv = await db.getConversation(fromKey);
         const report = await generateReport(conv.history, fromKey);
         console.log(`[index] Reporte generado: ${report?.cliente?.nombre}`);
 
-        db.upsertConversation(fromKey, { report });
+        await db.upsertConversation(fromKey, { report });
 
         // Notificar a David por WhatsApp
         const waReport = formatReportWhatsApp(report);
@@ -268,12 +268,12 @@ app.post('/webhook', async (req, res) => {
 
     // Si hay una modificación post-reporte, notificar a David
     if (result.stage === 'done' && result.previousStage === 'done' && text) {
-      const conv = db.getConversation(fromKey);
+      const conv = await db.getConversation(fromKey);
       const nombre = conv?.report?.cliente?.nombre || fromKey;
       const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
       await sendMessage(process.env.DAVID_PHONE,
         `📝 *Cambio pedido por ${nombre}*\n📱 ${fromKey}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(fromKey)}`);
-      db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: text.slice(0, 200) });
+      await db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: text.slice(0, 200) });
     }
 
     try {
@@ -288,7 +288,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // Endpoint para setear contexto previo de un cliente
-app.post('/context', (req, res) => {
+app.post('/context', async (req, res) => {
   const { phone, context } = req.body;
 
   if (!phone || !context) {
@@ -297,18 +297,18 @@ app.post('/context', (req, res) => {
 
   // Normalizar formato del teléfono
   const normalizedPhone = phone.startsWith('whatsapp:') ? phone : `whatsapp:${phone}`;
-  db.setContext(normalizedPhone, context);
+  await db.setContext(normalizedPhone, context);
 
   res.json({ ok: true, phone: normalizedPhone });
 });
 
 // Resetear conversación de un cliente
-app.post('/reset', (req, res) => {
+app.post('/reset', async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: 'Se requiere phone' });
 
   const normalizedPhone = phone.startsWith('whatsapp:') ? phone : `whatsapp:${phone}`;
-  db.upsertConversation(normalizedPhone, {
+  await db.upsertConversation(normalizedPhone, {
     history: [],
     stage: 'greeting',
     context: {},
@@ -327,7 +327,7 @@ app.post('/start', async (req, res) => {
 
   // Guardar contexto si viene
   if (context) {
-    db.setContext(normalizedPhone, context);
+    await db.setContext(normalizedPhone, context);
   }
 
   try {
@@ -345,22 +345,22 @@ app.post('/start', async (req, res) => {
 async function checkStaleConversations() {
   try {
     // 24hs sin respuesta → mensaje de seguimiento al cliente
-    const stale = db.getStaleConversations(24);
+    const stale = await db.getStaleConversations(24);
     for (const conv of stale) {
       console.log(`Follow-up automático para ${conv.phone}`);
       await sendMessage(conv.phone,
         'Hola! Te escribo de nuevo de parte de David. ¿Pudiste pensar un poco más sobre el proyecto? Si tenés alguna duda o querés retomar la charla, acá estoy 😊');
-      db.markFollowupSent(conv.phone);
+      await db.markFollowupSent(conv.phone);
     }
 
     // 48hs después del follow-up (72hs total) → notificar a David
-    const abandoned = db.getAbandonedConversations(48);
+    const abandoned = await db.getAbandonedConversations(48);
     for (const conv of abandoned) {
       const nombre = conv.context?.nombre || conv.phone;
       console.log(`Cliente frío: ${conv.phone}`);
       await sendMessage(process.env.DAVID_PHONE,
         `❄️ *Cliente sin respuesta — ${nombre}*\n📱 ${conv.phone}\nNo respondió después de 72hs. Quizás quieras contactarlo directamente.`);
-      db.markAbandoned(conv.phone);
+      await db.markAbandoned(conv.phone);
     }
   } catch (err) {
     console.error('Error en follow-up check:', err);
@@ -370,17 +370,6 @@ async function checkStaleConversations() {
 // Inicializar DB y arrancar servidor
 const PORT = process.env.PORT || 3000;
 
-// Test de Drive — GET /drive-test
-app.get('/drive-test', async (req, res) => {
-  const drive = require('./drive');
-  if (!drive.isConfigured()) return res.json({ ok: false, error: 'Drive no configurado' });
-  try {
-    const folder = await drive.createClientFolder('test-health-check', 'test000');
-    res.json({ ok: true, folder });
-  } catch (err) {
-    res.json({ ok: false, error: err.message });
-  }
-});
 
 db.init().then(() => {
   app.listen(PORT, () => {

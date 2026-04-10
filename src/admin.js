@@ -204,9 +204,9 @@ router.post('/logout', (req, res) => {
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
-router.get('/', requireAuth, (req, res) => {
-  const clients = db.listAllClients();
-  const projects = db.listProjects();
+router.get('/', requireAuth, async (req, res) => {
+  const clients = await db.listAllClients();
+  const projects = await db.listProjects();
 
   const pendingReview = clients.filter(c => c.demo_status === 'pending_review');
   const ganados = clients.filter(c => c.client_stage === 'won').length;
@@ -327,10 +327,10 @@ router.get('/', requireAuth, (req, res) => {
 
 // ─── WA Clients list ─────────────────────────────────────────────────────────
 
-router.get('/clients', requireAuth, (req, res) => {
+router.get('/clients', requireAuth, async (req, res) => {
   const filter = req.query.stage || 'all';
   const search = (req.query.q || '').toLowerCase();
-  let clients = db.listAllClients();
+  let clients = await db.listAllClients();
   const allClients = clients;
   const pendingReview = allClients.filter(c => c.demo_status === 'pending_review');
 
@@ -418,9 +418,9 @@ router.get('/clients', requireAuth, (req, res) => {
 
 // ─── WA Client detail ────────────────────────────────────────────────────────
 
-router.get('/client/:phone', requireAuth, (req, res) => {
+router.get('/client/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
-  const conv = db.getConversation(phone);
+  const conv = await db.getConversation(phone);
   if (!conv) return res.status(404).send(layout('No encontrado', '<p class="text-slate-500 p-4">Cliente no encontrado.</p>'));
 
   const nombre = conv.report?.cliente?.nombre || conv.context?.nombre || '—';
@@ -430,7 +430,7 @@ router.get('/client/:phone', requireAuth, (req, res) => {
   const resumen = conv.report?.resumen_ejecutivo || '';
   const slug = phoneSlug(phone);
   const phoneUrl = encodeURIComponent(phone);
-  const allClients = db.listAllClients();
+  const allClients = await db.listAllClients();
   const pendingCount = allClients.filter(c => c.demo_status === 'pending_review').length;
 
   const steps = processSteps(conv);
@@ -573,15 +573,15 @@ router.get('/client/:phone', requireAuth, (req, res) => {
 
 // ─── Review ──────────────────────────────────────────────────────────────────
 
-router.get('/review/:phone', requireAuth, (req, res) => {
+router.get('/review/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
-  const conv = db.getConversation(phone);
+  const conv = await db.getConversation(phone);
   if (!conv) return res.status(404).send('No encontrado');
 
   const slug = phoneSlug(phone);
   const nombre = conv.report?.cliente?.nombre || phone;
   const phoneUrl = encodeURIComponent(phone);
-  const pendingCount = db.listAllClients().filter(c => c.demo_status === 'pending_review').length;
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
 
   const body = `
     <div class="mb-5"><a href="/admin/client/${phoneUrl}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(nombre)}</a></div>
@@ -621,48 +621,48 @@ router.get('/review/:phone', requireAuth, (req, res) => {
 
 // ─── WA Actions ──────────────────────────────────────────────────────────────
 
-router.post('/stage/:phone', requireAuth, (req, res) => {
+router.post('/stage/:phone', requireAuth, async (req, res) => {
   const { stage } = req.body;
-  db.updateClientStage(req.params.phone, stage);
-  db.appendTimelineEvent(req.params.phone, { event: 'stage_changed', note: `Movido a "${STAGES.find(s=>s.key===stage)?.label||stage}"` });
+  await db.updateClientStage(req.params.phone, stage);
+  await db.appendTimelineEvent(req.params.phone, { event: 'stage_changed', note: `Movido a "${STAGES.find(s=>s.key===stage)?.label||stage}"` });
   res.redirect(`/admin/client/${encodeURIComponent(req.params.phone)}`);
 });
 
 router.post('/approve/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
-  db.updateDemoStatus(phone, 'approved');
-  db.appendTimelineEvent(phone, { event: 'demo_approved', note: 'Aprobado desde el panel' });
+  await db.updateDemoStatus(phone, 'approved');
+  await db.appendTimelineEvent(phone, { event: 'demo_approved', note: 'Aprobado desde el panel' });
   orchestrator.sendApprovedDemoToClient(phone).catch(err => console.error('Error enviando demo:', err));
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 });
 
-router.post('/reject/:phone', requireAuth, (req, res) => {
+router.post('/reject/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
-  db.updateDemoStatus(phone, 'rejected');
-  db.appendTimelineEvent(phone, { event: 'demo_rejected', note: 'Rechazado desde el panel' });
+  await db.updateDemoStatus(phone, 'rejected');
+  await db.appendTimelineEvent(phone, { event: 'demo_rejected', note: 'Rechazado desde el panel' });
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 });
 
-router.post('/regenerate/:phone', requireAuth, (req, res) => {
+router.post('/regenerate/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
-  const conv = db.getConversation(phone);
+  const conv = await db.getConversation(phone);
   if (conv?.report) orchestrator.processNewReport(phone, conv.report).catch(err => console.error('Error regenerando:', err));
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 });
 
-router.post('/notes/:phone', requireAuth, (req, res) => {
-  db.setNotes(req.params.phone, req.body.notes || '');
+router.post('/notes/:phone', requireAuth, async (req, res) => {
+  await db.setNotes(req.params.phone, req.body.notes || '');
   res.redirect(`/admin/client/${encodeURIComponent(req.params.phone)}`);
 });
 
 // ─── Projects list ───────────────────────────────────────────────────────────
 
-router.get('/projects', requireAuth, (req, res) => {
+router.get('/projects', requireAuth, async (req, res) => {
   const filter = req.query.status || 'all';
   const search = (req.query.q || '').toLowerCase();
-  let projects = db.listProjects();
+  let projects = await db.listProjects();
   const allProjects = projects;
-  const pendingCount = db.listAllClients().filter(c => c.demo_status === 'pending_review').length;
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
 
   if (search) projects = projects.filter(p =>
     p.client_name.toLowerCase().includes(search) || p.title.toLowerCase().includes(search) || p.type.toLowerCase().includes(search));
@@ -932,8 +932,8 @@ function taskRowHtml(task, i) {
   </div>`;
 }
 
-router.get('/projects/new', requireAuth, (req, res) => {
-  const pendingCount = db.listAllClients().filter(c => c.demo_status === 'pending_review').length;
+router.get('/projects/new', requireAuth, async (req, res) => {
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
   const body = `
     <div class="mb-5"><a href="/admin/projects" class="text-sm text-slate-500 hover:text-blue-600">← Proyectos</a></div>
     <h1 class="text-2xl font-bold text-slate-900 mb-6">Nuevo proyecto</h1>
@@ -941,20 +941,20 @@ router.get('/projects/new', requireAuth, (req, res) => {
   res.send(layout('Nuevo proyecto', body, { pendingCount, activePage: 'projects' }));
 });
 
-router.post('/projects', requireAuth, (req, res) => {
+router.post('/projects', requireAuth, async (req, res) => {
   let tasks = [];
   try { tasks = JSON.parse(req.body.tasks || '[]'); } catch (e) {}
-  const id = db.createProject({ ...req.body, tasks });
+  const id = await db.createProject({ ...req.body, tasks });
   res.redirect(`/admin/projects/${id}`);
 });
 
 // ─── Project detail ───────────────────────────────────────────────────────────
 
-router.get('/projects/:id', requireAuth, (req, res) => {
-  const project = db.getProject(req.params.id);
+router.get('/projects/:id', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.id);
   if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>'));
 
-  const pendingCount = db.listAllClients().filter(c => c.demo_status === 'pending_review').length;
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
   const tasks = project.tasks || [];
   const doneTasks = tasks.filter(t => t.done).length;
   const pct = tasks.length > 0 ? Math.round(doneTasks / tasks.length * 100) : 0;
@@ -1067,10 +1067,10 @@ router.get('/projects/:id', requireAuth, (req, res) => {
 
 // ─── Edit project ─────────────────────────────────────────────────────────────
 
-router.get('/projects/:id/edit', requireAuth, (req, res) => {
-  const project = db.getProject(req.params.id);
+router.get('/projects/:id/edit', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.id);
   if (!project) return res.redirect('/admin/projects');
-  const pendingCount = db.listAllClients().filter(c => c.demo_status === 'pending_review').length;
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
   const body = `
     <div class="mb-5"><a href="/admin/projects/${project.id}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(project.title || project.client_name)}</a></div>
     <h1 class="text-2xl font-bold text-slate-900 mb-6">Editar proyecto</h1>
@@ -1078,25 +1078,25 @@ router.get('/projects/:id/edit', requireAuth, (req, res) => {
   res.send(layout('Editar proyecto', body, { pendingCount, activePage: 'projects' }));
 });
 
-router.post('/projects/:id/update', requireAuth, (req, res) => {
+router.post('/projects/:id/update', requireAuth, async (req, res) => {
   let tasks = [];
   try { tasks = JSON.parse(req.body.tasks || '[]'); } catch (e) {}
-  db.updateProject(req.params.id, { ...req.body, tasks });
+  await db.updateProject(req.params.id, { ...req.body, tasks });
   res.redirect(`/admin/projects/${req.params.id}`);
 });
 
-router.post('/projects/:id/task-toggle', requireAuth, (req, res) => {
-  const project = db.getProject(req.params.id);
+router.post('/projects/:id/task-toggle', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.id);
   if (!project) return res.redirect('/admin/projects');
   const idx = parseInt(req.body.idx, 10);
   const tasks = project.tasks || [];
   if (tasks[idx]) tasks[idx].done = req.body.done === 'on';
-  db.updateProject(req.params.id, { ...project, tasks });
+  await db.updateProject(req.params.id, { ...project, tasks });
   res.redirect(`/admin/projects/${req.params.id}`);
 });
 
-router.post('/projects/:id/delete', requireAuth, (req, res) => {
-  db.deleteProject(req.params.id);
+router.post('/projects/:id/delete', requireAuth, async (req, res) => {
+  await db.deleteProject(req.params.id);
   res.redirect('/admin/projects');
 });
 

@@ -119,7 +119,7 @@ async function handleMessage(phone, userText) {
   locks.set(phone, promise);
 
   try {
-    let conv = db.getConversation(phone);
+    let conv = await db.getConversation(phone);
     if (!conv) {
       conv = { history: [], stage: 'greeting', context: {}, report: null };
     }
@@ -168,7 +168,7 @@ async function handleMessage(phone, userText) {
       newStage = 'gathering';
     }
 
-    db.upsertConversation(phone, {
+    await db.upsertConversation(phone, {
       history,
       stage: newStage,
       context: conv.context,

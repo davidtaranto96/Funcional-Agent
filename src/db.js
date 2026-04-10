@@ -1,29 +1,30 @@
-const fs = require('fs');
+const { createClient } = require('@libsql/client');
 const path = require('path');
-const initSqlJs = require('sql.js');
+const fs = require('fs');
 
-const dataDir = path.join(__dirname, '..', 'data');
-fs.mkdirSync(dataDir, { recursive: true });
+// Si TURSO_DATABASE_URL está seteado → usa Turso cloud (recomendado para producción)
+// Si no → usa SQLite local en el Volume de Railway (fallback)
+let client;
 
-const DB_PATH = path.join(dataDir, 'conversations.db');
+function getDb() {
+  if (!client) {
+    const dataDir = path.join(__dirname, '..', 'data');
+    fs.mkdirSync(dataDir, { recursive: true });
 
-let db;
+    const url = process.env.TURSO_DATABASE_URL
+      || `file:${path.join(dataDir, 'conversations.db')}`;
+    const authToken = process.env.TURSO_AUTH_TOKEN;
 
-// sql.js requiere inicialización async, pero después las queries son sync
-async function init() {
-  if (db) return;
-
-  const SQL = await initSqlJs();
-
-  // Cargar DB existente si hay, sino crear nueva
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
+    client = createClient({ url, authToken });
+    console.log(`[db] Usando: ${url.startsWith('libsql') || url.startsWith('https') ? 'Turso cloud' : 'SQLite local'}`);
   }
+  return client;
+}
 
-  db.run(`
+async function init() {
+  const db = getDb();
+
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS conversations (
       phone TEXT PRIMARY KEY,
       history TEXT DEFAULT '[]',
@@ -41,7 +42,7 @@ async function init() {
     )
   `);
 
-  db.run(`
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       client_name TEXT NOT NULL DEFAULT '',
@@ -61,267 +62,224 @@ async function init() {
     )
   `);
 
-  // Migraciones idempotentes: agregar columnas si la DB ya existía sin ellas
+  // Migraciones idempotentes
   const migrations = [
-    'ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0',
-    'ALTER TABLE conversations ADD COLUMN drive_folder_id TEXT',
-    "ALTER TABLE conversations ADD COLUMN demo_status TEXT DEFAULT 'none'",
-    "ALTER TABLE conversations ADD COLUMN client_stage TEXT DEFAULT 'lead'",
-    "ALTER TABLE conversations ADD COLUMN timeline TEXT DEFAULT '[]'",
-    "ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''",
+    `ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0`,
+    `ALTER TABLE conversations ADD COLUMN drive_folder_id TEXT`,
+    `ALTER TABLE conversations ADD COLUMN demo_status TEXT DEFAULT 'none'`,
+    `ALTER TABLE conversations ADD COLUMN client_stage TEXT DEFAULT 'lead'`,
+    `ALTER TABLE conversations ADD COLUMN timeline TEXT DEFAULT '[]'`,
+    `ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''`,
   ];
   for (const sql of migrations) {
-    try { db.run(sql); } catch (e) { /* columna ya existe */ }
+    try { await db.execute(sql); } catch (e) { /* columna ya existe */ }
   }
-
-  save();
 }
 
-// Persistir a disco después de cada escritura
-function save() {
-  const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
-}
+// ─── Helpers de parsing ───────────────────────────────────────────────────────
 
-function getConversation(phone) {
-  const stmt = db.prepare('SELECT * FROM conversations WHERE phone = ?');
-  stmt.bind([phone]);
-
-  if (!stmt.step()) {
-    stmt.free();
-    return null;
-  }
-
-  const row = stmt.getAsObject();
-  stmt.free();
-
+function parseConv(row) {
+  if (!row) return null;
   return {
-    ...row,
-    history: JSON.parse(row.history),
-    context: JSON.parse(row.context),
-    report: row.report ? JSON.parse(row.report) : null,
-    timeline: row.timeline ? JSON.parse(row.timeline) : [],
+    phone: row.phone,
+    history: JSON.parse(String(row.history || '[]')),
+    stage: String(row.stage || 'greeting'),
+    context: JSON.parse(String(row.context || '{}')),
+    report: row.report ? JSON.parse(String(row.report)) : null,
+    followup_sent: Number(row.followup_sent || 0),
+    drive_folder_id: row.drive_folder_id || null,
+    demo_status: String(row.demo_status || 'none'),
+    client_stage: String(row.client_stage || 'lead'),
+    timeline: row.timeline ? JSON.parse(String(row.timeline)) : [],
+    notes: String(row.notes || ''),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
-
-function upsertConversation(phone, fields) {
-  const current = getConversation(phone);
-  const data = {
-    $phone: phone,
-    $history: JSON.stringify(fields.history ?? current?.history ?? []),
-    $stage: fields.stage ?? current?.stage ?? 'greeting',
-    $context: JSON.stringify(fields.context ?? current?.context ?? {}),
-    $report: fields.report ? JSON.stringify(fields.report) : (current?.report ? JSON.stringify(current.report) : null),
-  };
-
-  db.run(`
-    INSERT INTO conversations (phone, history, stage, context, report, updated_at)
-    VALUES ($phone, $history, $stage, $context, $report, datetime('now'))
-    ON CONFLICT(phone) DO UPDATE SET
-      history = $history,
-      stage = $stage,
-      context = $context,
-      report = $report,
-      updated_at = datetime('now')
-  `, data);
-
-  save();
-}
-
-function setContext(phone, context) {
-  const current = getConversation(phone);
-  if (current) {
-    db.run('UPDATE conversations SET context = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-      [JSON.stringify(context), phone]);
-  } else {
-    db.run('INSERT INTO conversations (phone, context) VALUES (?, ?)',
-      [phone, JSON.stringify(context)]);
-  }
-  save();
-}
-
-// Conversaciones sin respuesta del cliente hace más de X horas
-// Solo en fases activas (gathering/confirming) y sin follow-up enviado
-function getStaleConversations(hoursAgo) {
-  const results = [];
-  const stmt = db.prepare(`
-    SELECT * FROM conversations
-    WHERE stage IN ('gathering', 'confirming')
-    AND followup_sent = 0
-    AND updated_at <= datetime('now', ?)
-  `);
-  stmt.bind([`-${hoursAgo} hours`]);
-
-  while (stmt.step()) {
-    const row = stmt.getAsObject();
-    results.push({
-      ...row,
-      history: JSON.parse(row.history),
-      context: JSON.parse(row.context),
-      report: row.report ? JSON.parse(row.report) : null,
-    });
-  }
-  stmt.free();
-  return results;
-}
-
-// Conversaciones con follow-up enviado hace más de X horas (para notificar a David)
-function getAbandonedConversations(hoursAfterFollowup) {
-  const results = [];
-  const stmt = db.prepare(`
-    SELECT * FROM conversations
-    WHERE stage IN ('gathering', 'confirming')
-    AND followup_sent = 1
-    AND updated_at <= datetime('now', ?)
-  `);
-  stmt.bind([`-${hoursAfterFollowup} hours`]);
-
-  while (stmt.step()) {
-    const row = stmt.getAsObject();
-    results.push({
-      ...row,
-      history: JSON.parse(row.history),
-      context: JSON.parse(row.context),
-    });
-  }
-  stmt.free();
-  return results;
-}
-
-function markFollowupSent(phone) {
-  db.run('UPDATE conversations SET followup_sent = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-    [1, phone]);
-  save();
-}
-
-function markAbandoned(phone) {
-  db.run('UPDATE conversations SET followup_sent = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-    [2, phone]);
-  save();
-}
-
-// ---------- CRM / Demos ----------
-
-function updateDemoStatus(phone, status) {
-  db.run('UPDATE conversations SET demo_status = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-    [status, phone]);
-  save();
-}
-
-function updateClientStage(phone, clientStage) {
-  db.run('UPDATE conversations SET client_stage = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-    [clientStage, phone]);
-  save();
-}
-
-function setDriveFolderId(phone, folderId) {
-  db.run('UPDATE conversations SET drive_folder_id = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-    [folderId, phone]);
-  save();
-}
-
-function setNotes(phone, notes) {
-  db.run('UPDATE conversations SET notes = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-    [notes, phone]);
-  save();
-}
-
-function appendTimelineEvent(phone, event) {
-  const current = getConversation(phone);
-  const timeline = current?.timeline || [];
-  timeline.push({ date: new Date().toISOString(), ...event });
-  db.run('UPDATE conversations SET timeline = ?, updated_at = datetime(\'now\') WHERE phone = ?',
-    [JSON.stringify(timeline), phone]);
-  save();
-}
-
-function listAllClients() {
-  const results = [];
-  const stmt = db.prepare('SELECT * FROM conversations ORDER BY updated_at DESC');
-  while (stmt.step()) {
-    const row = stmt.getAsObject();
-    results.push({
-      ...row,
-      history: JSON.parse(row.history),
-      context: JSON.parse(row.context),
-      report: row.report ? JSON.parse(row.report) : null,
-      timeline: row.timeline ? JSON.parse(row.timeline) : [],
-    });
-  }
-  stmt.free();
-  return results;
-}
-
-function getClientsByStage(clientStage) {
-  const results = [];
-  const stmt = db.prepare('SELECT * FROM conversations WHERE client_stage = ? ORDER BY updated_at DESC');
-  stmt.bind([clientStage]);
-  while (stmt.step()) {
-    const row = stmt.getAsObject();
-    results.push({
-      ...row,
-      history: JSON.parse(row.history),
-      context: JSON.parse(row.context),
-      report: row.report ? JSON.parse(row.report) : null,
-      timeline: row.timeline ? JSON.parse(row.timeline) : [],
-    });
-  }
-  stmt.free();
-  return results;
-}
-
-// ─── Projects ───────────────────────────────────────────────────────────────
 
 function parseProject(row) {
-  return { ...row, tasks: row.tasks ? JSON.parse(row.tasks) : [] };
+  if (!row) return null;
+  return {
+    id: row.id,
+    client_name: String(row.client_name || ''),
+    client_phone: String(row.client_phone || ''),
+    client_email: String(row.client_email || ''),
+    title: String(row.title || ''),
+    type: String(row.type || ''),
+    description: String(row.description || ''),
+    status: String(row.status || 'planning'),
+    budget: String(row.budget || ''),
+    budget_status: String(row.budget_status || 'not_quoted'),
+    tasks: row.tasks ? JSON.parse(String(row.tasks)) : [],
+    notes: String(row.notes || ''),
+    created_by: String(row.created_by || 'david'),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
-function listProjects() {
-  const results = [];
-  const stmt = db.prepare('SELECT * FROM projects ORDER BY updated_at DESC');
-  while (stmt.step()) results.push(parseProject(stmt.getAsObject()));
-  stmt.free();
-  return results;
+// ─── Conversations ────────────────────────────────────────────────────────────
+
+async function getConversation(phone) {
+  const db = getDb();
+  const result = await db.execute({ sql: 'SELECT * FROM conversations WHERE phone = ?', args: [phone] });
+  return result.rows.length ? parseConv(result.rows[0]) : null;
 }
 
-function getProject(id) {
-  const stmt = db.prepare('SELECT * FROM projects WHERE id = ?');
-  stmt.bind([id]);
-  if (!stmt.step()) { stmt.free(); return null; }
-  const row = stmt.getAsObject();
-  stmt.free();
-  return parseProject(row);
+async function upsertConversation(phone, fields) {
+  const current = await getConversation(phone);
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT INTO conversations (phone, history, stage, context, report, updated_at)
+          VALUES (?, ?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(phone) DO UPDATE SET
+            history = excluded.history,
+            stage = excluded.stage,
+            context = excluded.context,
+            report = excluded.report,
+            updated_at = datetime('now')`,
+    args: [
+      phone,
+      JSON.stringify(fields.history ?? current?.history ?? []),
+      fields.stage ?? current?.stage ?? 'greeting',
+      JSON.stringify(fields.context ?? current?.context ?? {}),
+      fields.report ? JSON.stringify(fields.report) : (current?.report ? JSON.stringify(current.report) : null),
+    ],
+  });
 }
 
-function createProject(data) {
+async function setContext(phone, context) {
+  const current = await getConversation(phone);
+  const db = getDb();
+  if (current) {
+    await db.execute({
+      sql: `UPDATE conversations SET context = ?, updated_at = datetime('now') WHERE phone = ?`,
+      args: [JSON.stringify(context), phone],
+    });
+  } else {
+    await db.execute({
+      sql: `INSERT INTO conversations (phone, context) VALUES (?, ?)`,
+      args: [phone, JSON.stringify(context)],
+    });
+  }
+}
+
+async function getStaleConversations(hoursAgo) {
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT * FROM conversations WHERE stage IN ('gathering','confirming') AND followup_sent = 0 AND updated_at <= datetime('now', ?)`,
+    args: [`-${hoursAgo} hours`],
+  });
+  return result.rows.map(parseConv);
+}
+
+async function getAbandonedConversations(hoursAfterFollowup) {
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT * FROM conversations WHERE stage IN ('gathering','confirming') AND followup_sent = 1 AND updated_at <= datetime('now', ?)`,
+    args: [`-${hoursAfterFollowup} hours`],
+  });
+  return result.rows.map(parseConv);
+}
+
+async function markFollowupSent(phone) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET followup_sent = 1, updated_at = datetime('now') WHERE phone = ?`, args: [phone] });
+}
+
+async function markAbandoned(phone) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET followup_sent = 2, updated_at = datetime('now') WHERE phone = ?`, args: [phone] });
+}
+
+// ─── CRM / Demos ──────────────────────────────────────────────────────────────
+
+async function updateDemoStatus(phone, status) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET demo_status = ?, updated_at = datetime('now') WHERE phone = ?`, args: [status, phone] });
+}
+
+async function updateClientStage(phone, clientStage) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET client_stage = ?, updated_at = datetime('now') WHERE phone = ?`, args: [clientStage, phone] });
+}
+
+async function setDriveFolderId(phone, folderId) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET drive_folder_id = ?, updated_at = datetime('now') WHERE phone = ?`, args: [folderId, phone] });
+}
+
+async function setNotes(phone, notes) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET notes = ?, updated_at = datetime('now') WHERE phone = ?`, args: [notes, phone] });
+}
+
+async function appendTimelineEvent(phone, event) {
+  const current = await getConversation(phone);
+  const db = getDb();
+  const timeline = current?.timeline || [];
+  timeline.push({ date: new Date().toISOString(), ...event });
+  await db.execute({
+    sql: `UPDATE conversations SET timeline = ?, updated_at = datetime('now') WHERE phone = ?`,
+    args: [JSON.stringify(timeline), phone],
+  });
+}
+
+async function listAllClients() {
+  const db = getDb();
+  const result = await db.execute('SELECT * FROM conversations ORDER BY updated_at DESC');
+  return result.rows.map(parseConv);
+}
+
+async function getClientsByStage(clientStage) {
+  const db = getDb();
+  const result = await db.execute({ sql: 'SELECT * FROM conversations WHERE client_stage = ? ORDER BY updated_at DESC', args: [clientStage] });
+  return result.rows.map(parseConv);
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+async function listProjects() {
+  const db = getDb();
+  const result = await db.execute('SELECT * FROM projects ORDER BY updated_at DESC');
+  return result.rows.map(parseProject);
+}
+
+async function getProject(id) {
+  const db = getDb();
+  const result = await db.execute({ sql: 'SELECT * FROM projects WHERE id = ?', args: [id] });
+  return result.rows.length ? parseProject(result.rows[0]) : null;
+}
+
+async function createProject(data) {
   const id = `proj_${Date.now()}`;
-  db.run(
-    `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, data.client_name || '', data.client_phone || '', data.client_email || '',
-     data.title || '', data.type || '', data.description || '',
-     data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
-     JSON.stringify(data.tasks || []), data.notes || '', data.created_by || 'david']
-  );
-  save();
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.client_name || '', data.client_phone || '', data.client_email || '',
+           data.title || '', data.type || '', data.description || '',
+           data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
+           JSON.stringify(data.tasks || []), data.notes || '', data.created_by || 'david'],
+  });
   return id;
 }
 
-function updateProject(id, data) {
-  db.run(
-    `UPDATE projects SET client_name=?, client_phone=?, client_email=?, title=?, type=?, description=?,
-     status=?, budget=?, budget_status=?, tasks=?, notes=?, updated_at=datetime('now') WHERE id=?`,
-    [data.client_name || '', data.client_phone || '', data.client_email || '',
-     data.title || '', data.type || '', data.description || '',
-     data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
-     JSON.stringify(data.tasks || []), data.notes || '', id]
-  );
-  save();
+async function updateProject(id, data) {
+  const db = getDb();
+  await db.execute({
+    sql: `UPDATE projects SET client_name=?, client_phone=?, client_email=?, title=?, type=?, description=?,
+          status=?, budget=?, budget_status=?, tasks=?, notes=?, updated_at=datetime('now') WHERE id=?`,
+    args: [data.client_name || '', data.client_phone || '', data.client_email || '',
+           data.title || '', data.type || '', data.description || '',
+           data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
+           JSON.stringify(data.tasks || []), data.notes || '', id],
+  });
 }
 
-function deleteProject(id) {
-  db.run('DELETE FROM projects WHERE id = ?', [id]);
-  save();
+async function deleteProject(id) {
+  const db = getDb();
+  await db.execute({ sql: 'DELETE FROM projects WHERE id = ?', args: [id] });
 }
 
 module.exports = {
