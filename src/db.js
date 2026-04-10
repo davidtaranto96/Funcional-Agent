@@ -58,6 +58,8 @@ async function init() {
       tasks TEXT DEFAULT '[]',
       notes TEXT DEFAULT '',
       updates_log TEXT DEFAULT '[]',
+      is_personal INTEGER DEFAULT 0,
+      deadline TEXT,
       created_by TEXT DEFAULT 'david',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -81,6 +83,8 @@ async function init() {
   // Projects migrations
   const projectMigrations = [
     `ALTER TABLE projects ADD COLUMN updates_log TEXT DEFAULT '[]'`,
+    `ALTER TABLE projects ADD COLUMN is_personal INTEGER DEFAULT 0`,
+    `ALTER TABLE projects ADD COLUMN deadline TEXT`,
   ];
   for (const sql of projectMigrations) {
     try { await db.execute(sql); } catch (e) { /* already exists */ }
@@ -125,6 +129,8 @@ function parseProject(row) {
     tasks: row.tasks ? JSON.parse(String(row.tasks)) : [],
     notes: String(row.notes || ''),
     updates_log: row.updates_log ? JSON.parse(String(row.updates_log)) : [],
+    is_personal: Number(row.is_personal || 0) === 1,
+    deadline: row.deadline || null,
     created_by: String(row.created_by || 'david'),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -273,12 +279,13 @@ async function createProject(data) {
   const id = `proj_${Date.now()}`;
   const db = getDb();
   await db.execute({
-    sql: `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, is_personal, deadline, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [id, data.client_name || '', data.client_phone || '', data.client_email || '',
            data.title || '', data.type || '', data.description || '',
            data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
-           JSON.stringify(data.tasks || []), data.notes || '', data.created_by || 'david'],
+           JSON.stringify(data.tasks || []), data.notes || '', data.is_personal ? 1 : 0,
+           data.deadline || null, data.created_by || 'david'],
   });
   return id;
 }
@@ -287,11 +294,12 @@ async function updateProject(id, data) {
   const db = getDb();
   await db.execute({
     sql: `UPDATE projects SET client_name=?, client_phone=?, client_email=?, title=?, type=?, description=?,
-          status=?, budget=?, budget_status=?, tasks=?, notes=?, updated_at=datetime('now') WHERE id=?`,
+          status=?, budget=?, budget_status=?, tasks=?, notes=?, is_personal=?, deadline=?, updated_at=datetime('now') WHERE id=?`,
     args: [data.client_name || '', data.client_phone || '', data.client_email || '',
            data.title || '', data.type || '', data.description || '',
            data.status || 'planning', data.budget || '', data.budget_status || 'not_quoted',
-           JSON.stringify(data.tasks || []), data.notes || '', id],
+           JSON.stringify(data.tasks || []), data.notes || '', data.is_personal ? 1 : 0,
+           data.deadline || null, id],
   });
 }
 
