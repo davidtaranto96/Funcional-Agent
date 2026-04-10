@@ -71,12 +71,13 @@ const STAGES = [
 ];
 
 const DEMO_STATUS = {
-  none:           { label: '—',              badge: 'bg-gray-100 text-gray-400' },
-  generating:     { label: '⚙ Generando',    badge: 'bg-yellow-100 text-yellow-700' },
-  pending_review: { label: '👁 Para revisar', badge: 'bg-orange-100 text-orange-700 font-semibold' },
-  approved:       { label: '✓ Aprobado',     badge: 'bg-green-100 text-green-700' },
-  sent:           { label: '✈ Enviado',      badge: 'bg-indigo-100 text-indigo-700' },
-  rejected:       { label: '✗ Rechazado',    badge: 'bg-red-100 text-red-700' },
+  none:               { label: '—',                  badge: 'bg-gray-100 text-gray-400' },
+  generating:         { label: '⚙ Generando',        badge: 'bg-yellow-100 text-yellow-700' },
+  pending_review:     { label: '👁 Para revisar',     badge: 'bg-orange-100 text-orange-700 font-semibold' },
+  changes_requested:  { label: '✏ Con correcciones', badge: 'bg-violet-100 text-violet-700 font-semibold' },
+  approved:           { label: '✓ Aprobado',         badge: 'bg-green-100 text-green-700' },
+  sent:               { label: '✈ Enviado',          badge: 'bg-indigo-100 text-indigo-700' },
+  rejected:           { label: '✗ Rechazado',        badge: 'bg-red-100 text-red-700' },
 };
 
 const PROJECT_STATUS = [
@@ -351,28 +352,6 @@ router.get('/', requireAuth, async (req, res) => {
         <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
         <div class="text-sm text-slate-400 mt-0.5">${new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</div>
       </div>
-      <div class="flex gap-2">
-        <div class="relative" x-data="{}">
-          <button onclick="document.getElementById('demoMenu').classList.toggle('hidden')"
-            class="flex items-center gap-2 border border-slate-200 text-slate-500 hover:border-blue-400 hover:text-blue-600 px-3 py-2 rounded-xl text-xs font-medium transition-colors">
-            🧪 Demo de prueba
-          </button>
-          <div id="demoMenu" class="hidden absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 w-52 py-1">
-            <form method="POST" action="/admin/create-demo-lead">
-              <input type="hidden" name="tipo" value="web">
-              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700">🌐 Web (Panadería)</button>
-            </form>
-            <form method="POST" action="/admin/create-demo-lead">
-              <input type="hidden" name="tipo" value="bot">
-              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700">💬 Bot WA (Veterinaria)</button>
-            </form>
-            <form method="POST" action="/admin/create-demo-lead">
-              <input type="hidden" name="tipo" value="app">
-              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700">📱 App móvil (Gimnasio)</button>
-            </form>
-          </div>
-        </div>
-      </div>
     </div>
     ${alertStrip}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">${metricCards}</div>
@@ -604,6 +583,10 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-3">Acciones</h2>
           ${conv.demo_status === 'pending_review' ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">👁 Revisar demos</a>` : ''}
+          ${conv.demo_status === 'changes_requested' ? `
+            <a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-2 transition-colors">✏ Ver / aprobar (con correcciones)</a>
+            ${conv.demo_notes ? `<div class="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 mb-3 whitespace-pre-line">${escapeHtml(conv.demo_notes)}</div>` : ''}
+          ` : ''}
           ${conv.report ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Convertir en proyecto</a>` : ''}
           <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
             <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">🔄 Regenerar demos</button>
@@ -703,6 +686,37 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
   const phoneUrl = encodeURIComponent(phone);
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
 
+  // Verificar qué archivos existen
+  const DEMOS_DIR = path.join(__dirname, '..', 'data', 'demos');
+  const localDir  = path.join(DEMOS_DIR, slug);
+  const hasLanding = fs.existsSync(path.join(localDir, 'landing.html'));
+  const hasWA      = fs.existsSync(path.join(localDir, 'whatsapp.html'));
+  const hasPDF     = fs.existsSync(path.join(localDir, 'propuesta.pdf'));
+
+  const demoItems = [
+    hasLanding && ['🌐 Landing HTML',         `/demos/${slug}/landing.html`,  'iframe'],
+    hasWA      && ['💬 Mockup WhatsApp',       `/demos/${slug}/whatsapp.html`, 'iframe'],
+    hasPDF     && ['📄 Mini-propuesta PDF',    `/demos/${slug}/propuesta.pdf`, 'pdf'],
+  ].filter(Boolean);
+
+  const demoPreviews = demoItems.map(([title, url, type]) => `
+    <div class="bg-white rounded-2xl border border-slate-200 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-700">${title}</h2>
+        <a href="${url}" target="_blank" class="text-xs text-blue-600 hover:underline">Abrir ↗</a>
+      </div>
+      ${type === 'iframe'
+        ? `<iframe src="${url}" class="w-full rounded-xl border border-slate-100" style="height:560px"></iframe>`
+        : `<object data="${url}" type="application/pdf" class="w-full rounded-xl border border-slate-100" style="height:560px"><a href="${url}" class="text-blue-600 text-sm hover:underline">Descargar PDF</a></object>`}
+    </div>`).join('');
+
+  // Nota de correcciones previas (si la hubiera)
+  const prevNote = conv.demo_notes ? `
+    <div class="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-5">
+      <div class="text-xs font-semibold text-violet-600 mb-1">✏ Correcciones solicitadas antes</div>
+      <p class="text-sm text-violet-800 whitespace-pre-line">${escapeHtml(conv.demo_notes)}</p>
+    </div>` : '';
+
   const body = `
     <div class="mb-5"><a href="/admin/client/${phoneUrl}" class="text-sm text-slate-500 hover:text-blue-600">← ${escapeHtml(nombre)}</a></div>
     <div class="flex items-start justify-between mb-6">
@@ -710,30 +724,47 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
         <h1 class="text-2xl font-bold">Revisar demos</h1>
         <div class="text-sm text-slate-400 mt-0.5">${escapeHtml(nombre)} · ${escapeHtml(phone)}</div>
       </div>
-      <div class="flex gap-3">
+    </div>
+    ${prevNote}
+    ${demoItems.length === 0
+      ? `<div class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-amber-700 text-sm mb-5">⚠ No hay archivos de demo generados todavía para este cliente.</div>`
+      : `<div class="grid grid-cols-1 ${demoItems.length > 1 ? 'lg:grid-cols-' + Math.min(demoItems.length, 3) : ''} gap-5 mb-8">${demoPreviews}</div>`}
+
+    <!-- Panel de acciones -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 max-w-2xl">
+      <h2 class="text-sm font-semibold text-slate-700 mb-5">¿Qué hacemos con esta demo?</h2>
+      <div class="grid grid-cols-1 gap-4">
+
+        <!-- Opción 1: Pedir cambios -->
+        <details class="group border border-violet-200 rounded-xl overflow-hidden">
+          <summary class="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-violet-50 text-sm font-medium text-violet-700 list-none">
+            <span>✏ Pedir cambios antes de enviar</span>
+            <span class="group-open:rotate-180 transition-transform text-violet-400">▼</span>
+          </summary>
+          <div class="px-4 pb-4 pt-2 bg-violet-50">
+            <p class="text-xs text-violet-600 mb-2">Describí qué querés que cambie. El estado quedará como "Con correcciones" y vas a poder regenerar desde la ficha del cliente.</p>
+            <form method="POST" action="/admin/request-changes/${phoneUrl}">
+              <textarea name="notes" rows="3" placeholder="Ej: Cambiar los colores a azul y blanco. El título principal debería decir 'Bienvenido a...'."
+                class="w-full border border-violet-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-400 mb-3 bg-white"></textarea>
+              <button class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">Guardar correcciones</button>
+            </form>
+          </div>
+        </details>
+
+        <!-- Opción 2: Rechazar -->
         <form method="POST" action="/admin/reject/${phoneUrl}">
-          <button class="px-4 py-2.5 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-sm font-medium transition-colors">✗ Rechazar</button>
+          <button class="w-full px-4 py-3 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-sm font-medium transition-colors text-left">
+            ✗ Rechazar y descartar esta demo
+          </button>
         </form>
+
+        <!-- Opción 3: Aprobar -->
         <form method="POST" action="/admin/approve/${phoneUrl}">
-          <button class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold transition-colors">✓ Aprobar y enviar al cliente</button>
+          <button class="w-full px-6 py-3.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold transition-colors">
+            ✓ Aprobar y enviar al cliente ahora
+          </button>
         </form>
       </div>
-    </div>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-      ${[
-        ['🌐 Landing HTML', `/demos/${slug}/landing.html`, 'iframe'],
-        ['💬 Mockup WhatsApp', `/demos/${slug}/whatsapp.html`, 'iframe'],
-        ['📄 Mini-propuesta PDF', `/demos/${slug}/propuesta.pdf`, 'pdf'],
-      ].map(([title, url, type]) => `
-        <div class="bg-white rounded-2xl border border-slate-200 p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-slate-700">${title}</h2>
-            <a href="${url}" target="_blank" class="text-xs text-blue-600 hover:underline">Abrir ↗</a>
-          </div>
-          ${type === 'iframe'
-            ? `<iframe src="${url}" class="w-full rounded-xl border border-slate-100" style="height:560px"></iframe>`
-            : `<object data="${url}" type="application/pdf" class="w-full rounded-xl border border-slate-100" style="height:560px"><a href="${url}" class="text-blue-600 text-sm hover:underline">Descargar PDF</a></object>`}
-        </div>`).join('')}
     </div>`;
 
   res.send(layout('Revisar demos', body, { pendingCount, activePage: 'clients' }));
@@ -761,6 +792,15 @@ router.post('/reject/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
   await db.updateDemoStatus(phone, 'rejected');
   await db.appendTimelineEvent(phone, { event: 'demo_rejected', note: 'Rechazado desde el panel' });
+  res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+});
+
+router.post('/request-changes/:phone', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  const notes = (req.body.notes || '').trim();
+  await db.updateDemoStatus(phone, 'changes_requested');
+  await db.setDemoNotes(phone, notes);
+  await db.appendTimelineEvent(phone, { event: 'changes_requested', note: notes || 'Correcciones solicitadas sin nota' });
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 });
 

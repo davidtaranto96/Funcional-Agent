@@ -276,18 +276,23 @@ async function generateMiniPDF(report) {
 }
 
 function detectDemoTypes(report) {
-  const fields = [
-    report.proyecto?.tipo || '',
-    report.proyecto?.descripcion || '',
-    (report.proyecto?.funcionalidades || []).join(' '),
-    report.proyecto?.plataforma || '',
-  ].join(' ').toLowerCase();
+  const tipo         = (report.proyecto?.tipo || '').toLowerCase();
+  const descripcion  = (report.proyecto?.descripcion || '').toLowerCase();
+  const plataforma   = (report.proyecto?.plataforma || '').toLowerCase();
+  const funcionales  = (report.proyecto?.funcionalidades || []).join(' ').toLowerCase();
+  const allText      = [tipo, descripcion, plataforma, funcionales].join(' ');
 
-  const waKeywords = ['whatsapp', 'bot', 'chatbot', 'automatizac', 'asistente automático', 'mensaje automático'];
-  const webKeywords = ['web', 'página', 'pagina', 'sitio', 'landing', 'tienda', 'shop', 'ecommerce', 'e-commerce', 'app', 'aplicación', 'aplicacion', 'sistema', 'dashboard', 'panel', 'gestión', 'gestion', 'plataforma'];
+  // ── WA bot: debe ser explícitamente un bot/automatización, NO "botón de WhatsApp"
+  // Usamos lookahead/lookbehind para que "bot" no coincida con "botón" (ó es fuera de \w en JS)
+  // pero sí con "bot de whatsapp", "chatbot", "bot de mensajes", etc.
+  const waBotPattern = /chatbot|bot\s+de\s+whatsapp|bot\s+de\s+mensajes|asistente\s+autom[aá]tico|automatizaci[oó]n\s+de\s+(whatsapp|mensajes)|respuestas\s+autom[aá]ticas|asistente\s+de\s+whatsapp|(?<![a-záéíóúüñ])bot(?![a-záéíóúüñ])/i;
 
-  const needsWA  = waKeywords.some(k => fields.includes(k));
-  const needsWeb = webKeywords.some(k => fields.includes(k));
+  const webKeywords = ['web', 'página', 'pagina', 'sitio', 'landing', 'tienda', 'shop', 'ecommerce',
+    'e-commerce', 'app', 'aplicación', 'aplicacion', 'sistema', 'dashboard', 'panel', 'gestión',
+    'gestion', 'plataforma'];
+
+  const needsWA  = waBotPattern.test(allText);
+  const needsWeb = webKeywords.some(k => allText.includes(k));
 
   return {
     landing: needsWeb || !needsWA,  // si no es WA puro, siempre hacemos visual web/app

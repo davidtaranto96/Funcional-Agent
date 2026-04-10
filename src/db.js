@@ -37,6 +37,7 @@ async function init() {
       client_stage TEXT DEFAULT 'lead',
       timeline TEXT DEFAULT '[]',
       notes TEXT DEFAULT '',
+      demo_notes TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -70,6 +71,7 @@ async function init() {
     `ALTER TABLE conversations ADD COLUMN client_stage TEXT DEFAULT 'lead'`,
     `ALTER TABLE conversations ADD COLUMN timeline TEXT DEFAULT '[]'`,
     `ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''`,
+    `ALTER TABLE conversations ADD COLUMN demo_notes TEXT DEFAULT ''`,
   ];
   for (const sql of migrations) {
     try { await db.execute(sql); } catch (e) { /* columna ya existe */ }
@@ -92,6 +94,7 @@ function parseConv(row) {
     client_stage: String(row.client_stage || 'lead'),
     timeline: row.timeline ? JSON.parse(String(row.timeline)) : [],
     notes: String(row.notes || ''),
+    demo_notes: String(row.demo_notes || ''),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -214,6 +217,11 @@ async function setNotes(phone, notes) {
   await db.execute({ sql: `UPDATE conversations SET notes = ?, updated_at = datetime('now') WHERE phone = ?`, args: [notes, phone] });
 }
 
+async function setDemoNotes(phone, notes) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET demo_notes = ?, updated_at = datetime('now') WHERE phone = ?`, args: [notes, phone] });
+}
+
 async function appendTimelineEvent(phone, event) {
   const current = await getConversation(phone);
   const db = getDb();
@@ -285,7 +293,7 @@ async function deleteProject(id) {
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
-  updateDemoStatus, updateClientStage, setDriveFolderId, setNotes,
+  updateDemoStatus, updateClientStage, setDriveFolderId, setNotes, setDemoNotes,
   appendTimelineEvent, listAllClients, getClientsByStage,
   listProjects, getProject, createProject, updateProject, deleteProject,
 };
