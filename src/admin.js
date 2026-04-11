@@ -3924,13 +3924,29 @@ router.get('/documentos', requireAuth, async (req, res) => {
   const demoFolders = waClients.filter(c => c.demo_status && c.demo_status !== 'none' && c.demo_status !== 'generating').map(c => {
     const slug = (c.phone || '').replace(/[^0-9]/g, '');
     const dir = path.join(DEMOS_BASE, slug);
-    const files = fs.existsSync(dir)
-      ? fs.readdirSync(dir).filter(n => !n.startsWith('.')).map(name => {
-          const fp = path.join(dir, name);
+    let files = [];
+    if (fs.existsSync(dir)) {
+      // Top-level files
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || entry.name === 'versions.json') continue;
+        const fp = path.join(dir, entry.name);
+        if (entry.isFile()) {
           const stat = fs.statSync(fp);
-          return { name, size: stat.size, mtime: stat.mtime, type: 'demo', folderId: slug, folderName: c.report?.cliente?.nombre || c.phone };
-        })
-      : [];
+          files.push({ name: entry.name, size: stat.size, mtime: stat.mtime, type: 'demo', folderId: slug, folderName: c.report?.cliente?.nombre || c.phone, version: 'actual' });
+        } else if (entry.isDirectory() && entry.name.match(/^v\d+$/)) {
+          // Version directory (v1, v2, etc.)
+          const vFiles = fs.readdirSync(fp).filter(n => !n.startsWith('.'));
+          for (const vf of vFiles) {
+            const vfp = path.join(fp, vf);
+            if (fs.statSync(vfp).isFile()) {
+              const stat = fs.statSync(vfp);
+              files.push({ name: `${entry.name}/${vf}`, size: stat.size, mtime: stat.mtime, type: 'demo', folderId: slug, folderName: c.report?.cliente?.nombre || c.phone, version: entry.name });
+            }
+          }
+        }
+      }
+    }
     return { id: slug, name: c.report?.cliente?.nombre || c.phone, color: '#0ea5e9', description: 'Demo WA', files, type: 'demo', phone: c.phone };
   }).filter(f => f.files.length > 0);
 
@@ -4011,6 +4027,7 @@ router.get('/documentos', requireAuth, async (req, res) => {
       <div class="bg-white border border-slate-200 rounded-xl p-3 hover:shadow-md hover:border-blue-200 transition-all group flex flex-col gap-2">
         <div class="flex items-start justify-between gap-1">
           <span class="text-3xl leading-none">${bigIcon(f.name)}</span>
+          ${f.version && f.version !== 'actual' ? `<span class="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded-full font-medium">${f.version}</span>` : ''}
           <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <a href="${downloadHref}" download class="text-slate-400 hover:text-blue-600 p-1 rounded transition-colors" title="Descargar">⬇</a>
             ${deleteAction ? `
@@ -4131,8 +4148,8 @@ router.get('/documentos', requireAuth, async (req, res) => {
       return null; // demos can't be deleted from here
     };
 
-    const uploadSection = (type === 'custom') ? `
-      <form method="POST" action="/admin/documentos/folder/${folderId}/upload" enctype="multipart/form-data" class="mt-5">
+    const uploadSection = (type === 'custom' || type === 'demo') ? `
+      <form method="POST" action="/admin/documentos/${type === 'demo' ? 'demo' : 'folder'}/${folderId}/upload" enctype="multipart/form-data" class="mt-5">
         <label class="flex items-center justify-center gap-3 border-2 border-dashed border-slate-200 rounded-2xl py-5 px-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
           <span class="text-2xl">📎</span>
           <div>
@@ -4162,19 +4179,29 @@ router.get('/documentos', requireAuth, async (req, res) => {
           ${deleteSection}
         </div>
       </div>
-      ${currentFiles.length === 0
-        ? `<div class="text-center py-20"><div class="text-5xl mb-3">📂</div><p class="text-sm text-slate-400">Sin archivos. Subí el primero.</p></div>`
-        : view === 'grid'
-          ? `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              ${currentFiles.map(f => fileCard(f, getDownloadHref(f), getDeleteAction(f), true)).join('')}
-             </div>`
-          : `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              ${currentFiles.map(f => fileRow(f, getDownloadHref(f), getDeleteAction(f))).join('')}
-             </div>`}
+      ${(() => {
+        // For demo folders, group by version (actual first, then newest versions)
+        const sortedFiles = type === 'demo'
+          ? [...currentFiles].sort((a, b) => {
+              if (a.version === 'actual' && b.version !== 'actual') return -1;
+              if (a.version !== 'actual' && b.version === 'actual') return 1;
+              return (b.version || '').localeCompare(a.version || '');
+            })
+          : currentFiles;
+        return sortedFiles.length === 0
+          ? `<div class="text-center py-20"><div class="text-5xl mb-3">📂</div><p class="text-sm text-slate-400">Sin archivos. Subí el primero.</p></div>`
+          : view === 'grid'
+            ? `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                ${sortedFiles.map(f => fileCard(f, getDownloadHref(f), getDeleteAction(f), true)).join('')}
+               </div>`
+            : `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                ${sortedFiles.map(f => fileRow(f, getDownloadHref(f), getDeleteAction(f))).join('')}
+               </div>`;
+      })()}
       ${uploadSection}`;
   }
 
-  const storageBarWidth = Math.min(Math.round((usedBytes / (512 * 1024 * 1024)) * 100), 95); // assume ~512MB as soft reference
+  const storageBarWidth = Math.min(Math.round((usedBytes / (1 * 1024 * 1024 * 1024)) * 100), 95);
   const sidebarHtmlFull = sidebarHtml + `
   <div style="margin-top:auto;padding-top:16px;border-top:1px solid #f1f5f9;padding-left:8px;padding-right:8px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -4184,7 +4211,7 @@ router.get('/documentos', requireAuth, async (req, res) => {
     <div style="background:#f1f5f9;border-radius:9999px;height:5px;width:100%">
       <div style="height:5px;border-radius:9999px;background:linear-gradient(to right,#60a5fa,#6366f1);width:${storageBarWidth}%"></div>
     </div>
-    <div style="font-size:10px;color:#cbd5e1;margin-top:4px">Railway Volume</div>
+    <div style="font-size:10px;color:#cbd5e1;margin-top:4px">${storageLabel} de ~1 GB · Railway Volume</div>
   </div>`;
 
   res.send(docLayout('Documentos', sidebarHtmlFull, contentHtml, { pendingCount, user: req.session?.user }));
@@ -4213,9 +4240,11 @@ router.get('/documentos/project/:projectId/file/:filename/download', requireAuth
 
 router.get('/documentos/demo/:slug/file/:filename/download', requireAuth, (req, res) => {
   const DEMOS_BASE = path.join(__dirname, '..', 'data', 'demos');
-  const filePath = safePath(DEMOS_BASE, req.params.slug, req.params.filename);
+  const filename = decodeURIComponent(req.params.filename);
+  // Handle version paths like "v1/landing.html"
+  const filePath = safePath(DEMOS_BASE, req.params.slug, ...filename.split('/'));
   if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
-  res.download(filePath, req.params.filename);
+  res.download(filePath, filename.split('/').pop());
 });
 
 // View (not download) for custom folder files
@@ -4230,6 +4259,26 @@ router.post('/documentos/folder/:folderId/upload', requireAuth, (req, res) => {
   uploadDoc.array('files', 20)(req, res, err => {
     if (err) console.error('[doc upload]', err.message);
     res.redirect(`/admin/documentos?type=custom&folder=${req.params.folderId}`);
+  });
+});
+
+// Upload to demo folder
+router.post('/documentos/demo/:slug/upload', requireAuth, (req, res) => {
+  const DEMOS_BASE = path.join(__dirname, '..', 'data', 'demos');
+  const destDir = path.join(DEMOS_BASE, req.params.slug);
+  fs.mkdirSync(destDir, { recursive: true });
+
+  const demoUpload = multer({
+    storage: multer.diskStorage({
+      destination: (r, f, cb) => cb(null, destDir),
+      filename: (r, file, cb) => cb(null, file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')),
+    }),
+    limits: { fileSize: 50 * 1024 * 1024 },
+  });
+
+  demoUpload.array('files', 20)(req, res, err => {
+    if (err) console.error('[demo upload]', err.message);
+    res.redirect(`/admin/documentos?type=demo&folder=${req.params.slug}`);
   });
 });
 
