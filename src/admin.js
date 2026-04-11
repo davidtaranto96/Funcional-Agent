@@ -1100,6 +1100,18 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
       <div class="flex items-center gap-2 flex-wrap">${stageBadge(conv.client_stage)} ${demoStatusBadge(conv.demo_status)}</div>
     </div>
 
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
+      <form method="POST" action="/admin/archive/${phoneUrl}" class="inline">
+        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-700 rounded-lg text-xs font-medium transition-colors">📦 Archivar</button>
+      </form>
+      <form method="POST" action="/admin/reset-conv/${phoneUrl}" class="inline" onsubmit="return confirm('Esto borra toda la conversación y reinicia el contacto. ¿Seguro?')">
+        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-600 hover:text-amber-700 rounded-lg text-xs font-medium transition-colors">🔄 Resetear</button>
+      </form>
+      <form method="POST" action="/admin/delete-conv/${phoneUrl}" class="inline" onsubmit="return confirm('BORRAR PERMANENTE. No se puede deshacer. ¿Seguro?')">
+        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-500 hover:text-red-600 rounded-lg text-xs font-medium transition-colors">🗑️ Eliminar</button>
+      </form>
+    </div>
+
     <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-5">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-semibold text-slate-700">Progreso del proceso</h2>
@@ -1123,43 +1135,107 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
           <h2 class="text-sm font-semibold text-slate-700 mb-4">Conversación (${(conv.history||[]).length} mensajes)</h2>
           <div class="max-h-80 overflow-y-auto pr-1">${history || '<p class="text-sm text-slate-400">Sin mensajes</p>'}</div>
         </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-2">Historial de eventos</h2>
+          <div class="max-h-72 overflow-y-auto">${timeline || '<p class="text-sm text-slate-400">Sin eventos registrados</p>'}</div>
+        </div>
       </div>
 
       <div class="space-y-5">
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
-          <h2 class="text-sm font-semibold text-slate-700 mb-3">Acciones</h2>
-          ${/* ── Acción principal según estado ── */
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-700">Acciones</h2>
+            <span class="text-[10px] px-2 py-0.5 rounded-full ${
+              conv.demo_status === 'generating' ? 'bg-yellow-100 text-yellow-700 animate-pulse' :
+              conv.demo_status === 'pending_review' ? 'bg-orange-100 text-orange-700' :
+              conv.demo_status === 'rejected' ? 'bg-red-100 text-red-600' :
+              conv.demo_status === 'changes_requested' ? 'bg-violet-100 text-violet-700' :
+              conv.demo_status === 'sent' ? 'bg-emerald-100 text-emerald-700' :
+              conv.demo_status === 'approved' ? 'bg-green-100 text-green-700' :
+              'bg-slate-100 text-slate-500'
+            }">${
+              conv.demo_status === 'generating' ? 'Generando...' :
+              conv.demo_status === 'pending_review' ? 'Esperando review' :
+              conv.demo_status === 'rejected' ? 'Rechazada' :
+              conv.demo_status === 'changes_requested' ? 'Con correcciones' :
+              conv.demo_status === 'sent' ? 'Enviado' :
+              conv.demo_status === 'approved' ? 'Aprobado' :
+              !conv.report ? 'Sin reporte' : 'Listo'
+            }</span>
+          </div>
+
+          ${/* ── Estado: Generando ── */
+            conv.demo_status === 'generating'
+              ? `<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-3 text-center">
+                   <div class="text-2xl mb-2">&#9881;</div>
+                   <div class="text-xs font-semibold text-yellow-700">Generando demos...</div>
+                   <div class="text-[10px] text-yellow-600 mt-1">Esto puede tardar unos segundos</div>
+                 </div>`
+
+          : /* ── Estado: Pendiente de review ── */
             conv.demo_status === 'pending_review'
-              ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">👁 Revisar demos</a>`
-            : conv.demo_status === 'rejected'
-              ? `<div class="bg-red-50 border border-red-200 rounded-xl p-3 mb-3">
-                   <div class="text-xs font-semibold text-red-600 mb-1">✗ Demo rechazada — regenerando...</div>
-                   ${conv.demo_notes ? `<div class="text-xs text-red-500 italic">"${escapeHtml(conv.demo_notes)}"</div>` : ''}
-                 </div>
-                 <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
-                   <button class="w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-xl text-sm font-medium transition-colors">🔄 Forzar regeneración</button>
-                 </form>`
-            : conv.demo_status === 'changes_requested'
-              ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold mb-2 transition-colors">✏ Ver / aprobar correcciones</a>
-                 ${conv.demo_notes ? `<div class="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 mb-3 whitespace-pre-line">"${escapeHtml(conv.demo_notes)}"</div>` : ''}`
-            : (conv.demo_status === 'sent' || conv.demo_status === 'approved') && conv.client_stage !== 'won'
-              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-sm font-bold mb-3 transition-colors shadow-md shadow-emerald-200">🏆 Confirmar proyecto ganado</a>`
-            : conv.client_stage === 'won' && conv.report
-              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50 py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Ver / editar proyecto</a>`
-            : conv.report
-              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-slate-700 hover:bg-slate-800 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">📁 Convertir en proyecto</a>`
+              ? `<a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-sm font-bold mb-3 transition-colors shadow-md shadow-orange-200">
+                   <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                   Revisar demos
+                 </a>`
+
+          : /* ── Estado: Rechazada ── */
+            conv.demo_status === 'rejected'
+              ? `<div class="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-3">
+                   <div class="flex items-center gap-2 mb-2">
+                     <span class="text-lg">&#10060;</span>
+                     <span class="text-sm font-bold text-red-700">Demo rechazada</span>
+                   </div>
+                   ${conv.demo_notes ? `<div class="text-xs text-red-600 bg-red-100/50 rounded-lg px-3 py-2 mb-3 whitespace-pre-line italic border border-red-100">"${escapeHtml(conv.demo_notes)}"</div>` : ''}
+                   <div class="space-y-2">
+                     <form method="POST" action="/admin/regenerate/${phoneUrl}" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Regenerando...'">
+                       <button class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">&#128260; Regenerar desde cero</button>
+                     </form>
+                     <a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full border border-red-200 text-red-600 hover:bg-red-50 py-2 rounded-xl text-xs font-medium transition-colors">Volver a revisar con cambios</a>
+                   </div>
+                 </div>`
+
+          : /* ── Estado: Con correcciones ── */
+            conv.demo_status === 'changes_requested'
+              ? `<div class="bg-violet-50 border border-violet-200 rounded-xl p-3 mb-3">
+                   ${conv.demo_notes ? `<div class="text-xs text-violet-700 whitespace-pre-line mb-2">"${escapeHtml(conv.demo_notes)}"</div>` : ''}
+                   <a href="/admin/review/${phoneUrl}" class="flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">&#9998; Ver / aprobar correcciones</a>
+                 </div>`
+
+          : /* ── Estado: Enviado/Aprobado y no ganado ── */
+            (conv.demo_status === 'sent' || conv.demo_status === 'approved') && conv.client_stage !== 'won'
+              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-sm font-bold mb-3 transition-colors shadow-md shadow-emerald-200">&#127942; Confirmar proyecto ganado</a>`
+
+          : /* ── Ganado ── */
+            conv.client_stage === 'won' && conv.report
+              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50 py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">&#128193; Ver / editar proyecto</a>`
+
+          : /* ── Tiene reporte pero no hay demo ── */
+            conv.report
+              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-slate-700 hover:bg-slate-800 text-white py-2.5 rounded-xl text-sm font-semibold mb-3 transition-colors">&#128193; Convertir en proyecto</a>`
+
+          : /* ── Sin reporte, conversación activa ── */
+            (conv.history||[]).length > 0
+              ? `<div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 text-center">
+                   <div class="text-xs text-slate-500">Conversaci&oacute;n en curso</div>
+                   <div class="text-[10px] text-slate-400 mt-0.5">${(conv.history||[]).length} mensajes intercambiados</div>
+                 </div>`
             : ''}
+
           ${!conv.report && (conv.history||[]).length > 3 ? `
           <form method="POST" action="/admin/force-report/${phoneUrl}" class="mb-3" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Generando...'">
-            <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">📋 Generar reporte manualmente</button>
+            <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">&#128203; Generar reporte manualmente</button>
           </form>` : ''}
-          ${conv.report && !['pending_review','rejected'].includes(conv.demo_status) ? `
-          <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3">
-            <button class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-2 rounded-xl text-sm font-medium transition-colors">🔄 Regenerar demos</button>
+          ${conv.report && !['pending_review','rejected','generating'].includes(conv.demo_status) ? `
+          <form method="POST" action="/admin/regenerate/${phoneUrl}" class="mb-3" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Regenerando...'">
+            <button class="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 py-2 rounded-xl text-xs font-medium transition-colors border border-blue-200">&#128260; Regenerar demos</button>
           </form>` : ''}
-          <a href="https://wa.me/${phoneSlug(phone)}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-emerald-200 text-emerald-700 hover:bg-emerald-50 py-2.5 rounded-xl text-sm font-medium mb-2 transition-colors">💬 Abrir en WhatsApp</a>
-          ${demoLinks}
-          ${conv.drive_folder_id ? `<a href="https://drive.google.com/drive/folders/${conv.drive_folder_id}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-slate-200 text-slate-600 hover:bg-slate-50 py-2 rounded-xl text-sm mt-2 transition-colors">📁 Drive</a>` : ''}
+
+          <div class="border-t border-slate-100 pt-3 mt-1 space-y-2">
+            <a href="https://wa.me/${phoneSlug(phone)}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-emerald-200 text-emerald-700 hover:bg-emerald-50 py-2 rounded-xl text-xs font-medium transition-colors">&#128172; Abrir en WhatsApp</a>
+            ${demoLinks}
+            ${conv.drive_folder_id ? `<a href="https://drive.google.com/drive/folders/${conv.drive_folder_id}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-slate-200 text-slate-600 hover:bg-slate-50 py-2 rounded-xl text-xs transition-colors">&#128193; Drive</a>` : ''}
+          </div>
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-3">Etapa</h2>
@@ -1188,18 +1264,6 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
           </form>
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
-          <h2 class="text-sm font-semibold text-slate-700 mb-3">Administrar</h2>
-          <form method="POST" action="/admin/archive/${phoneUrl}" class="mb-2">
-            <button class="w-full border border-slate-200 hover:bg-slate-100 text-slate-600 py-2 rounded-xl text-sm transition-colors">📦 Archivar contacto</button>
-          </form>
-          <form method="POST" action="/admin/reset-conv/${phoneUrl}" class="mb-2" onsubmit="return confirm('Esto borra toda la conversación y reinicia el contacto. ¿Seguro?')">
-            <button class="w-full border border-amber-200 hover:bg-amber-50 text-amber-700 py-2 rounded-xl text-sm transition-colors">🔄 Resetear conversación</button>
-          </form>
-          <form method="POST" action="/admin/delete-conv/${phoneUrl}" onsubmit="return confirm('BORRAR PERMANENTE. No se puede deshacer. ¿Seguro?')">
-            <button class="w-full border border-red-200 hover:bg-red-50 text-red-600 py-2 rounded-xl text-sm transition-colors">🗑️ Eliminar contacto</button>
-          </form>
-        </div>
-        <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-3">Cliente CRM</h2>
           ${matchedClient ? `
             <div class="flex items-center gap-2.5 mb-3">
@@ -1221,10 +1285,6 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
               + Crear cliente desde este lead
             </a>
           `}
-        </div>
-        <div class="bg-white rounded-2xl border border-slate-200 p-5">
-          <h2 class="text-sm font-semibold text-slate-700 mb-2">Historial</h2>
-          <div class="max-h-64 overflow-y-auto">${timeline || '<p class="text-sm text-slate-400">Sin eventos</p>'}</div>
         </div>
       </div>
     </div>`;
@@ -1711,7 +1771,13 @@ router.get('/notifications', requireAuth, async (req, res) => {
     <div class="max-w-2xl mx-auto">
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-xl font-bold text-slate-900">Notificaciones</h1>
-        <span class="text-xs text-slate-400">${notifications.length} total</span>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-slate-400">${notifications.length} total</span>
+          <a href="/admin/notifications" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-medium transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Refrescar
+          </a>
+        </div>
       </div>
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         ${rows}
