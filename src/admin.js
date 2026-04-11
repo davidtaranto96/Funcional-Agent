@@ -1542,16 +1542,20 @@ router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
 
             ${funcionalidades.length > 0 ? `
             <div>
-              <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tareas iniciales (del análisis del lead)</label>
-              <div class="space-y-1.5">
-                ${funcionalidades.map((f, i) => `
-                <label class="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer hover:text-slate-900">
-                  <input type="checkbox" name="include_task_${i}" value="${escapeHtml(f)}" checked
-                    class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
-                  ${escapeHtml(f)}
-                </label>`).join('')}
+              <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Alcance del proyecto (funcionalidades solicitadas)</label>
+              <div class="bg-slate-50 rounded-xl p-3 space-y-1.5">
+                ${funcionalidades.map(f => '<div class="flex items-start gap-2 text-sm text-slate-600"><span class="text-blue-500 mt-0.5">' + String.fromCharCode(9656) + '</span>' + escapeHtml(f) + '</div>').join('')}
               </div>
             </div>` : ''}
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tareas iniciales de gesti&oacute;n</label>
+              <div class="space-y-1.5">
+                ${['Reunión inicial con el cliente', 'Definir alcance detallado y cronograma', 'Diseño UI/UX y wireframes', 'Desarrollo del MVP', 'Testing y revisión con el cliente', 'Ajustes finales y deploy', 'Entrega + soporte 30 días'].map((t, i) => '<label class="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer hover:text-slate-900">' +
+                  '<input type="checkbox" name="mgmt_task_' + i + '" value="' + escapeHtml(t) + '" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">' +
+                  escapeHtml(t) + '</label>').join('')}
+              </div>
+            </div>
 
             <!-- Campos ocultos del lead -->
             <input type="hidden" name="from_lead" value="${phoneUrl}">
@@ -1560,8 +1564,7 @@ router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
             <input type="hidden" name="client_email" value="${escapeHtml(r.cliente?.email || '')}">
             <input type="hidden" name="type" value="${escapeHtml(tipo)}">
             <input type="hidden" name="description" value="${escapeHtml([r.proyecto?.descripcion, r.resumen_ejecutivo].filter(Boolean).join('\n\n'))}">
-            <input type="hidden" name="funcs_count" value="${funcionalidades.length}">
-            ${funcionalidades.map((f, i) => `<input type="hidden" name="func_${i}" value="${escapeHtml(f)}">`).join('')}
+            <input type="hidden" name="scope" value="${escapeHtml(JSON.stringify(funcionalidades))}">
 
           </div>
 
@@ -1599,7 +1602,8 @@ router.get('/client/:phone/to-project', requireAuth, async (req, res) => {
           <ul class="text-xs text-emerald-600 space-y-1">
             <li>✓ Se crea el proyecto con todos los datos</li>
             <li>✓ El lead pasa a estado <strong>Ganado 🏆</strong></li>
-            <li>✓ Las tareas del análisis se pre-cargan</li>
+            <li>✓ Las funcionalidades quedan como alcance del proyecto</li>
+            <li>✓ Se pre-cargan tareas de gestión</li>
             <li>✓ Los demos quedan vinculados</li>
           </ul>
         </div>
@@ -1616,18 +1620,28 @@ router.post('/client/:phone/to-project', requireAuth, async (req, res) => {
 
   const r = conv.report;
   const slug = phoneSlug(phone);
-  const { title, budget, budget_status, status, category, deadline, notes, client_name, client_phone, client_email, type, description, funcs_count } = req.body;
+  const { title, budget, budget_status, status, category, deadline, notes, client_name, client_phone, client_email, type, description } = req.body;
 
-  // Construir tareas: solo las que el usuario marcó
+  // Build management tasks (not functionalities)
   const tasks = [];
-  const count = parseInt(funcs_count || '0', 10);
-  for (let i = 0; i < count; i++) {
-    const checked = req.body[`include_task_${i}`];
-    const funcText = req.body[`func_${i}`];
-    if (checked && funcText) {
-      tasks.push({ text: funcText, done: false, priority: 'medium', assignee: 'david' });
+  const mgmtTasks = [
+    'Reunión inicial con el cliente',
+    'Definir alcance detallado y cronograma',
+    'Diseño UI/UX y wireframes',
+    'Desarrollo del MVP',
+    'Testing y revisión con el cliente',
+    'Ajustes finales y deploy',
+    'Entrega + soporte 30 días'
+  ];
+  for (let i = 0; i < mgmtTasks.length; i++) {
+    if (req.body['mgmt_task_' + i]) {
+      tasks.push({ text: mgmtTasks[i], done: false, priority: i === 0 ? 'high' : 'medium', assignee: 'david' });
     }
   }
+
+  // Store scope (functionalities) from the lead
+  let scope = [];
+  try { scope = JSON.parse(req.body.scope || '[]'); } catch(e) {}
 
   // Agregar nota de demos generados en la descripción
   const demoNote = [];
@@ -1636,7 +1650,8 @@ router.post('/client/:phone/to-project', requireAuth, async (req, res) => {
   if (fs.existsSync(path.join(__dirname, '..', 'data', 'demos', slug, 'propuesta.pdf')))
     demoNote.push(`📄 PDF: ${(process.env.APP_URL || '').replace(/\/$/,'')}/demos/${slug}/propuesta.pdf`);
 
-  const fullDescription = [description, demoNote.length ? '--- Demos ---\n' + demoNote.join('\n') : ''].filter(Boolean).join('\n\n');
+  const scopeText = scope.length > 0 ? '--- Alcance ---\n' + scope.map(f => '\u2022 ' + f).join('\n') : '';
+  const fullDescription = [description, scopeText, demoNote.length ? '--- Demos ---\n' + demoNote.join('\n') : ''].filter(Boolean).join('\n\n');
 
   const project = {
     client_name: client_name || r.cliente?.nombre || '',
@@ -3026,6 +3041,18 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
   if (!project) return res.status(404).send(layout('No encontrado', '<p class="p-4 text-slate-500">Proyecto no encontrado.</p>', { user: req.session?.user }));
 
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+
+  // Find linked WA conversation by phone
+  let linkedConv = null;
+  const waPhone = project.client_phone ? 'whatsapp:+' + project.client_phone.replace(/[^0-9]/g, '') : null;
+  if (waPhone) {
+    linkedConv = await db.getConversation(waPhone);
+  }
+
+  // Parse scope from description
+  const scopeMatch = (project.description || '').match(/--- Alcance ---\n([\s\S]*?)(?=\n---|\n\n|$)/);
+  const scopeItems = scopeMatch ? scopeMatch[1].split('\n').filter(function(l) { return l.trim().startsWith('\u2022'); }).map(function(l) { return l.replace(/^\u2022\s*/, '').trim(); }) : [];
+
   // Load linked client + all their projects for context
   const linkedClient = project.client_id ? await db.getClientRecord(project.client_id) : null;
   const clientOtherProjects = linkedClient ? (await db.getProjectsByClientId(linkedClient.id)).filter(p => p.id !== project.id) : [];
@@ -3036,6 +3063,44 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
   const projectFiles = fs.existsSync(projectFilesDir)
     ? fs.readdirSync(projectFilesDir).map(name => ({ name, size: fs.statSync(path.join(projectFilesDir, name)).size }))
     : [];
+
+  // Demo files for this project
+  const demoSlug = phoneSlug(project.client_phone);
+  const DEMOS_DIR = path.join(__dirname, '..', 'data', 'demos');
+  const demoDir = demoSlug ? path.join(DEMOS_DIR, demoSlug) : null;
+  const demoExists = demoDir && fs.existsSync(demoDir);
+  let demoMainFiles = [];
+  let demoVersionDirs = [];
+  let demoVersionsJson = [];
+  if (demoExists) {
+    const entries = fs.readdirSync(demoDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'versions.json') continue;
+      const fp = path.join(demoDir, entry.name);
+      if (entry.isFile()) {
+        const stat = fs.statSync(fp);
+        demoMainFiles.push({ name: entry.name, size: stat.size, mtime: stat.mtime });
+      } else if (entry.isDirectory() && entry.name.match(/^v\d+$/)) {
+        const vFiles = fs.readdirSync(fp).filter(n => !n.startsWith('.')).map(n => {
+          const s = fs.statSync(path.join(fp, n));
+          return { name: n, size: s.size, mtime: s.mtime };
+        });
+        demoVersionDirs.push({ version: entry.name, files: vFiles });
+      }
+    }
+    demoVersionDirs.sort((a, b) => {
+      const na = parseInt(a.version.replace('v', ''), 10);
+      const nb = parseInt(b.version.replace('v', ''), 10);
+      return nb - na;
+    });
+    try {
+      const vjFile = path.join(demoDir, 'versions.json');
+      if (fs.existsSync(vjFile)) {
+        demoVersionsJson = JSON.parse(fs.readFileSync(vjFile, 'utf-8'));
+      }
+    } catch (e) {}
+  }
+
   const doneTasks = tasks.filter(t => t.done).length;
   const pct = tasks.length > 0 ? Math.round(doneTasks / tasks.length * 100) : 0;
   const updatesLog = project.updates_log || [];
@@ -3172,6 +3237,71 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             </div>` : ''}
         </div>
 
+        ${linkedConv ? `
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-700">Conversación WhatsApp <span id="msg-count">(${(linkedConv.history||[]).length} mensajes)</span></h2>
+            <div class="flex items-center gap-2">
+              <span id="live-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Auto-refresh activo"></span>
+              <span id="live-status" class="text-[10px] text-slate-400">En vivo</span>
+              <button onclick="toggleLive()" id="live-toggle" class="text-xs px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">Pausar</button>
+              <a href="/admin/client/${encodeURIComponent(waPhone)}" class="text-xs text-blue-600 hover:underline">Ver pipeline &#8594;</a>
+            </div>
+          </div>
+          <div id="chat-container" class="max-h-96 overflow-y-auto pr-1">
+            ` + (linkedConv.history||[]).map(function(m) {
+              var isUser = m.role === 'user';
+              return '<div class="flex ' + (isUser ? 'justify-start' : 'justify-end') + ' mb-2">' +
+                '<div class="max-w-[80%] px-3 py-2 rounded-2xl ' + (isUser ? 'bg-slate-100 rounded-tl-sm' : 'bg-blue-100 rounded-tr-sm') + '">' +
+                '<div class="text-[10px] ' + (isUser ? 'text-slate-400' : 'text-blue-400') + ' mb-1 font-medium">' + (isUser ? '\ud83d\udc64 Cliente' : '\ud83e\udd16 Asistente') + '</div>' +
+                '<div class="text-sm whitespace-pre-wrap">' + escapeHtml(m.content) + '</div>' +
+                '</div></div>';
+            }).join('') + `
+          </div>
+        </div>
+        <script>
+        (function(){
+          var phone = ` + JSON.stringify(waPhone) + `;
+          var lastCount = ${(linkedConv.history||[]).length};
+          var liveOn = true;
+          var interval;
+          function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+          function renderMsg(m){
+            var isUser = m.role === 'user';
+            return '<div class="flex '+(isUser?'justify-start':'justify-end')+' mb-2">'+
+              '<div class="max-w-[80%] px-3 py-2 rounded-2xl '+(isUser?'bg-slate-100 rounded-tl-sm':'bg-blue-100 rounded-tr-sm')+'">'+
+              '<div class="text-[10px] '+(isUser?'text-slate-400':'text-blue-400')+' mb-1 font-medium">'+(isUser?'\\u{1F464} Cliente':'\\u{1F916} Asistente')+'</div>'+
+              '<div class="text-sm whitespace-pre-wrap">'+esc(m.content)+'</div>'+
+              '</div></div>';
+          }
+          function refresh(){
+            fetch('/admin/api/conversation/'+encodeURIComponent(phone))
+              .then(function(r){return r.json();})
+              .then(function(data){
+                if(data.messageCount !== lastCount){
+                  lastCount = data.messageCount;
+                  document.getElementById('msg-count').textContent = '('+lastCount+' mensajes)';
+                  var container = document.getElementById('chat-container');
+                  container.innerHTML = data.history.map(renderMsg).join('');
+                  container.scrollTop = container.scrollHeight;
+                }
+              }).catch(function(){});
+          }
+          function startLive(){ interval = setInterval(refresh, 5000); }
+          function stopLive(){ clearInterval(interval); }
+          window.toggleLive = function(){
+            liveOn = !liveOn;
+            if(liveOn){ startLive(); }else{ stopLive(); }
+            document.getElementById('live-dot').className = liveOn ? 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse' : 'w-2 h-2 rounded-full bg-slate-300';
+            document.getElementById('live-status').textContent = liveOn ? 'En vivo' : 'Pausado';
+            document.getElementById('live-toggle').textContent = liveOn ? 'Pausar' : 'Reanudar';
+          };
+          startLive();
+          var c = document.getElementById('chat-container');
+          if(c) c.scrollTop = c.scrollHeight;
+        })();
+        </script>` : ''}
+
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-semibold text-slate-700">Archivos</h2>
@@ -3205,6 +3335,85 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             </label>
           </form>
         </div>
+
+        ${demoExists ? `
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-700">Documentos del demo</h2>
+            <span class="text-xs text-slate-400">${demoMainFiles.length} archivo${demoMainFiles.length !== 1 ? 's' : ''} · ${demoVersionDirs.length} versión${demoVersionDirs.length !== 1 ? 'es' : ''}</span>
+          </div>
+
+          ${demoMainFiles.length > 0 ? `
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Archivos actuales</div>
+            <div class="space-y-1.5 mb-4">
+              ${demoMainFiles.map(f => `
+                <div class="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-slate-50 group">
+                  <span class="text-xl flex-shrink-0">${fileIcon(f.name)}</span>
+                  <div class="flex-1 min-w-0">
+                    <a href="/demos/${demoSlug}/${encodeURIComponent(f.name)}" target="_blank"
+                      class="text-sm text-slate-700 hover:text-blue-600 hover:underline truncate block">${escapeHtml(f.name)}</a>
+                    <span class="text-xs text-slate-400">${formatBytes(f.size)}</span>
+                  </div>
+                  <form method="POST" action="/admin/projects/${project.id}/demo-file-delete" onsubmit="return confirm('¿Eliminar ${escapeHtml(f.name)} del demo?')" class="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <input type="hidden" name="filepath" value="${escapeHtml(f.name)}">
+                    <button class="text-slate-300 hover:text-red-400 text-sm transition-colors p-1">✕</button>
+                  </form>
+                </div>`).join('')}
+            </div>` : `
+            <div class="text-center py-4 mb-3">
+              <p class="text-sm text-slate-400">Sin archivos demo en el directorio principal</p>
+            </div>`}
+
+          ${demoVersionDirs.length > 0 ? `
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 mt-4">Versiones anteriores</div>
+            ${demoVersionDirs.map(vd => `
+              <div class="mb-2 border border-slate-100 rounded-xl overflow-hidden">
+                <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chevron').classList.toggle('rotate-90')" class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 transition-colors">
+                  <span class="chevron text-slate-400 text-xs transition-transform">&#9656;</span>
+                  <span class="text-sm font-medium text-slate-600">${escapeHtml(vd.version)}</span>
+                  <span class="text-xs text-slate-400">${vd.files.length} archivo${vd.files.length !== 1 ? 's' : ''}</span>
+                </button>
+                <div class="hidden px-3 pb-2 space-y-1">
+                  ${vd.files.map(f => `
+                    <div class="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-slate-50 group">
+                      <span class="text-lg flex-shrink-0">${fileIcon(f.name)}</span>
+                      <div class="flex-1 min-w-0">
+                        <a href="/demos/${demoSlug}/${vd.version}/${encodeURIComponent(f.name)}" target="_blank"
+                          class="text-xs text-slate-600 hover:text-blue-600 hover:underline truncate block">${escapeHtml(f.name)}</a>
+                        <span class="text-[10px] text-slate-400">${formatBytes(f.size)}</span>
+                      </div>
+                      <form method="POST" action="/admin/projects/${project.id}/demo-file-delete" onsubmit="return confirm('¿Eliminar ${escapeHtml(vd.version + '/' + f.name)}?')" class="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <input type="hidden" name="filepath" value="${escapeHtml(vd.version + '/' + f.name)}">
+                        <button class="text-slate-300 hover:text-red-400 text-xs transition-colors p-1">✕</button>
+                      </form>
+                    </div>`).join('')}
+                </div>
+              </div>`).join('')}
+          ` : ''}
+
+          ${demoVersionsJson.length > 0 ? `
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 mt-4">Historial de versiones</div>
+            <div class="space-y-1.5">
+              ${demoVersionsJson.map(v => `
+                <div class="flex items-start gap-2 text-xs py-1.5">
+                  <span class="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-mono font-semibold flex-shrink-0">${escapeHtml(v.version || v.tag || '?')}</span>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-slate-600">${escapeHtml(v.note || v.reason || 'Sin nota')}</div>
+                    ${v.date ? `<div class="text-[10px] text-slate-400 mt-0.5">${new Date(v.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
+                  </div>
+                </div>`).join('')}
+            </div>
+          ` : ''}
+
+          <form method="POST" action="/admin/projects/${project.id}/demo-upload" enctype="multipart/form-data" class="mt-4">
+            <label class="flex flex-col items-center gap-2 border-2 border-dashed border-slate-200 rounded-xl p-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+              <span class="text-xl">📎</span>
+              <span class="text-sm text-slate-500 font-medium">Subir archivos al demo</span>
+              <span class="text-xs text-slate-400">Se guardan en data/demos/${demoSlug}/</span>
+              <input type="file" name="demofiles" multiple class="hidden" onchange="this.form.submit()">
+            </label>
+          </form>
+        </div>` : ''}
       </div>
 
       <div class="space-y-5">
@@ -3266,6 +3475,83 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
             <a href="/admin/projects/${project.id}/edit" class="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-900 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">✏️ Editar proyecto</a>
           </div>
         </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-3">Acciones rápidas</h2>
+          <div class="space-y-2">
+
+            ${demoExists
+              ? `<a href="/admin/review/${encodeURIComponent(waPhone || '')}" class="flex items-center gap-2 w-full border border-orange-200 text-orange-700 hover:bg-orange-50 py-2 px-3 rounded-xl text-xs font-medium transition-colors">🎨 Modificar demo</a>`
+              : `<button disabled class="flex items-center gap-2 w-full border border-slate-100 text-slate-300 py-2 px-3 rounded-xl text-xs font-medium cursor-not-allowed">🎨 Modificar demo (sin demo)</button>`}
+
+            <button onclick="document.getElementById('notice-form').classList.toggle('hidden')" class="flex items-center gap-2 w-full border border-emerald-200 text-emerald-700 hover:bg-emerald-50 py-2 px-3 rounded-xl text-xs font-medium transition-colors">💬 Enviar aviso al cliente</button>
+            <form id="notice-form" method="POST" action="/admin/projects/${project.id}/send-notice" class="hidden pl-2 space-y-2 mt-1 mb-1">
+              <textarea name="message" rows="3" placeholder="Escribí el mensaje para el cliente..." required
+                class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea>
+              <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-medium transition-colors">Enviar por WhatsApp</button>
+            </form>
+
+            <button onclick="document.getElementById('meeting-form').classList.toggle('hidden')" class="flex items-center gap-2 w-full border border-blue-200 text-blue-700 hover:bg-blue-50 py-2 px-3 rounded-xl text-xs font-medium transition-colors">📅 Programar reunión</button>
+            <form id="meeting-form" method="POST" action="/admin/schedule-meeting/${encodeURIComponent(waPhone || '')}" class="hidden pl-2 space-y-2 mt-1 mb-1">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Fecha</label>
+                  <input type="date" name="date" value="${(() => { const d = new Date(); d.setDate(d.getDate() + (d.getDay() === 5 ? 3 : d.getDay() === 6 ? 2 : 1)); return d.toISOString().split('T')[0]; })()}"
+                    class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Hora</label>
+                  <input type="time" name="time" value="10:00"
+                    class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+              </div>
+              <div>
+                <label class="text-[10px] text-slate-400 block mb-0.5">Duración</label>
+                <select name="duration" class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="15">15 minutos</option>
+                  <option value="30" selected>30 minutos</option>
+                  <option value="60">1 hora</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[10px] text-slate-400 block mb-0.5">Asunto</label>
+                <input type="text" name="subject" value="${escapeHtml(project.title || project.client_name)}"
+                  class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-medium transition-colors">Crear evento en Calendar</button>
+            </form>
+
+            <button onclick="document.getElementById('scope-form').classList.toggle('hidden')" class="flex items-center gap-2 w-full border border-purple-200 text-purple-700 hover:bg-purple-50 py-2 px-3 rounded-xl text-xs font-medium transition-colors">⚙ Agregar funcionalidades</button>
+            <form id="scope-form" method="POST" action="/admin/projects/${project.id}/add-scope" class="hidden pl-2 space-y-2 mt-1 mb-1">
+              <input type="text" name="feature" placeholder="Ej: Integración con MercadoPago" required
+                class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+              <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-xs font-medium transition-colors">Agregar al alcance</button>
+            </form>
+
+            <button onclick="document.getElementById('version-form').classList.toggle('hidden')" class="flex items-center gap-2 w-full border border-indigo-200 text-indigo-700 hover:bg-indigo-50 py-2 px-3 rounded-xl text-xs font-medium transition-colors">📌 Nueva versión</button>
+            <form id="version-form" method="POST" action="/admin/projects/${project.id}/new-version" class="hidden pl-2 space-y-2 mt-1 mb-1">
+              <textarea name="version_notes" rows="2" placeholder="Notas de esta versión..." required
+                class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+              <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-xs font-medium transition-colors">Crear versión</button>
+            </form>
+
+          </div>
+        </div>
+
+        ${scopeItems.length > 0 ? `
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-3">Alcance del proyecto</h2>
+          <div class="space-y-2">
+            ` + scopeItems.map(function(f) { return '<div class="flex items-start gap-2 text-xs text-slate-600"><span class="text-blue-500 mt-0.5 flex-shrink-0">' + String.fromCharCode(9656) + '</span>' + escapeHtml(f) + '</div>'; }).join('') + `
+          </div>
+          <div class="text-[10px] text-slate-400 mt-3">${scopeItems.length} funcionalidades definidas</div>
+        </div>` : ''}
+        ${linkedConv ? `
+        <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+          <div class="text-xs font-semibold text-blue-700 mb-1">Pipeline del lead</div>
+          <div class="text-[10px] text-blue-600 mb-2">Ver el recorrido completo del cliente desde el primer contacto</div>
+          <a href="/admin/client/${encodeURIComponent(waPhone)}" class="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-medium transition-colors">Ver pipeline del lead &#8594;</a>
+        </div>` : ''}
         ${linkedClient ? (() => {
           const avatarColors = ['bg-blue-500','bg-purple-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-indigo-500'];
           const bg = avatarColors[linkedClient.name.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % avatarColors.length];
@@ -3387,6 +3673,133 @@ router.post('/projects/:id/upload', requireAuth, (req, res, next) => {
 
 router.post('/projects/:id/files/:filename/delete', requireAuth, (req, res) => {
   const filePath = safePath(PROJECT_FILES_DIR, req.params.id, req.params.filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+// ─── Project actions: send notice, add scope, new version, demo upload/delete ──
+
+router.post('/projects/:id/send-notice', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.id);
+  if (!project) return res.redirect('/admin/projects');
+  const message = (req.body.message || '').trim();
+  if (message && project.client_phone) {
+    try {
+      const waPhone = 'whatsapp:+' + project.client_phone.replace(/[^0-9]/g, '');
+      const { sendMessage } = require('./whatsapp');
+      await sendMessage(waPhone, message);
+      await db.addProjectUpdate(req.params.id, `Aviso enviado al cliente por WhatsApp: "${message.slice(0, 80)}${message.length > 80 ? '...' : ''}"`);
+    } catch (err) {
+      console.error('[send-notice] Error:', err.message);
+      await db.addProjectUpdate(req.params.id, `Error al enviar aviso WA: ${err.message}`);
+    }
+  }
+  res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+router.post('/projects/:id/add-scope', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.id);
+  if (!project) return res.redirect('/admin/projects');
+  const feature = (req.body.feature || '').trim();
+  if (feature) {
+    let desc = project.description || '';
+    const scopeMarker = '--- Alcance ---';
+    if (desc.includes(scopeMarker)) {
+      // Find end of scope section and append bullet
+      const scopeIdx = desc.indexOf(scopeMarker) + scopeMarker.length;
+      const afterScope = desc.slice(scopeIdx);
+      const endMatch = afterScope.match(/\n---|\n\n/);
+      const insertPos = endMatch ? scopeIdx + endMatch.index : desc.length;
+      desc = desc.slice(0, insertPos) + '\n\u2022 ' + feature + desc.slice(insertPos);
+    } else {
+      desc += '\n\n--- Alcance ---\n\u2022 ' + feature;
+    }
+    await db.updateProject(req.params.id, { description: desc });
+    await db.addProjectUpdate(req.params.id, `Funcionalidad agregada al alcance: "${feature}"`);
+  }
+  res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+router.post('/projects/:id/new-version', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.id);
+  if (!project) return res.redirect('/admin/projects');
+  const notes = (req.body.version_notes || '').trim();
+  if (!notes) return res.redirect(`/admin/projects/${req.params.id}`);
+
+  // Determine version number
+  const slug = phoneSlug(project.client_phone);
+  const DEMOS_DIR = path.join(__dirname, '..', 'data', 'demos');
+  const demoDir = slug ? path.join(DEMOS_DIR, slug) : null;
+  let versionNum = 1;
+
+  if (demoDir && fs.existsSync(demoDir)) {
+    // Find highest existing version dir
+    const entries = fs.readdirSync(demoDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.match(/^v\d+$/)) {
+        const num = parseInt(entry.name.replace('v', ''), 10);
+        if (num >= versionNum) versionNum = num + 1;
+      }
+    }
+
+    // Copy current files to version subdirectory
+    const versionDir = path.join(demoDir, `v${versionNum}`);
+    fs.mkdirSync(versionDir, { recursive: true });
+    const mainFiles = entries.filter(e => e.isFile() && !e.name.startsWith('.') && e.name !== 'versions.json');
+    for (const f of mainFiles) {
+      fs.copyFileSync(path.join(demoDir, f.name), path.join(versionDir, f.name));
+    }
+
+    // Update versions.json
+    const vjFile = path.join(demoDir, 'versions.json');
+    let versions = [];
+    try { if (fs.existsSync(vjFile)) versions = JSON.parse(fs.readFileSync(vjFile, 'utf-8')); } catch (e) {}
+    versions.push({ version: `v${versionNum}`, note: notes, date: new Date().toISOString() });
+    fs.writeFileSync(vjFile, JSON.stringify(versions, null, 2));
+  }
+
+  await db.addProjectUpdate(req.params.id, `\ud83d\udccc Versión ${versionNum}: ${notes}`);
+  res.redirect(`/admin/projects/${req.params.id}`);
+});
+
+// Demo file upload for project
+const demoUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const DEMOS_DIR = path.join(__dirname, '..', 'data', 'demos');
+    (async () => {
+      try {
+        const project = await db.getProject(req.params.id);
+        const slug = phoneSlug(project?.client_phone);
+        if (!slug) return cb(new Error('No client phone'));
+        const dir = path.join(DEMOS_DIR, slug);
+        fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      } catch (e) { cb(e); }
+    })();
+  },
+  filename: (req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._\-áéíóúÁÉÍÓÚñÑ ]/g, '_');
+    cb(null, safe);
+  },
+});
+const demoUpload = multer({ storage: demoUploadStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+
+router.post('/projects/:id/demo-upload', requireAuth, (req, res, next) => {
+  demoUpload.array('demofiles', 20)(req, res, err => {
+    if (err) console.error('[demo-upload] Error:', err.message);
+    res.redirect(`/admin/projects/${req.params.id}`);
+  });
+});
+
+router.post('/projects/:id/demo-file-delete', requireAuth, async (req, res) => {
+  const project = await db.getProject(req.params.id);
+  if (!project) return res.redirect('/admin/projects');
+  const slug = phoneSlug(project.client_phone);
+  if (!slug) return res.redirect(`/admin/projects/${req.params.id}`);
+  const DEMOS_DIR = path.join(__dirname, '..', 'data', 'demos');
+  const relativePath = (req.body.filepath || '').replace(/\.\./g, '').replace(/^\//, '');
+  if (!relativePath) return res.redirect(`/admin/projects/${req.params.id}`);
+  const filePath = safePath(path.join(DEMOS_DIR, slug), relativePath);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   res.redirect(`/admin/projects/${req.params.id}`);
 });
