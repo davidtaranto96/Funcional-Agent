@@ -1918,6 +1918,26 @@ router.post('/delete-conv/:phone', requireAuth, async (req, res) => {
 router.get('/notifications', requireAuth, (req, res) => res.redirect('/admin/control'));
 
 router.get('/control', requireAuth, async (req, res) => {
+  // Fetch upcoming meetings from Google Calendar
+  let upcomingMeetings = [];
+  try {
+    const calendar = require('./calendar');
+    upcomingMeetings = await calendar.getUpcomingMeetings(5);
+  } catch (e) {
+    console.error('[control] Error fetching meetings:', e.message);
+  }
+
+  // Helper to format meeting dates with fallback
+  const formatDate = (isoStr) => {
+    try {
+      const cal = require('./calendar');
+      if (cal.formatMeetingDate) return cal.formatMeetingDate(isoStr);
+    } catch(e) {}
+    // Fallback
+    const d = new Date(isoStr);
+    return { full: d.toLocaleString('es-AR', { timeZone: 'America/Argentina/Salta', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + 'hs' };
+  };
+
   const [notifications, allClients] = await Promise.all([
     db.getNotifications(100),
     db.listAllClients(),
@@ -2106,6 +2126,29 @@ router.get('/control', requireAuth, async (req, res) => {
       </a>`;
     }).join('');
 
+  // ── Upcoming meetings rows ──
+  const meetingRows = upcomingMeetings.length === 0
+    ? '<div class="px-4 py-6 text-center text-sm text-slate-400">No hay reuniones próximas</div>'
+    : upcomingMeetings.map(m => {
+      const dt = formatDate(m.start);
+      const clientName = (m.summary || '').replace(/Reunión con /i, '').replace(/ — DT Systems/i, '');
+      const meetBtn = m.meetLink
+        ? `<a href="${escapeHtml(m.meetLink)}" target="_blank" class="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-medium">Meet</a>`
+        : '';
+      return `<div class="px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+        <div class="flex items-center justify-between">
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-slate-800">${escapeHtml(clientName)}</div>
+            <div class="text-[11px] text-slate-500 mt-0.5 capitalize">${dt.full}</div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            ${meetBtn}
+            <a href="${escapeHtml(m.htmlLink)}" target="_blank" class="text-[10px] px-2 py-1 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors">Ver</a>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
   const body = `
     <div class="mb-5">
       <h1 class="text-xl font-bold text-slate-900">Centro de Control</h1>
@@ -2170,6 +2213,15 @@ router.get('/control', requireAuth, async (req, res) => {
 
       <!-- Feed de notificaciones -->
       <div class="lg:col-span-2">
+        <!-- Próximas reuniones -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-700">📅 Próximas reuniones</h2>
+            <span class="text-[10px] text-slate-400">${upcomingMeetings.length} agendadas</span>
+          </div>
+          ${meetingRows}
+        </div>
+
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h2 class="text-sm font-semibold text-slate-700">Actividad</h2>

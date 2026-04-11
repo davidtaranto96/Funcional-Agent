@@ -21,6 +21,18 @@ function dateToARDay(date) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(date);
 }
 
+// Convert Date to Argentina local ISO format (without Z suffix)
+function toArgentinaISO(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type) => parts.find(p => p.type === type)?.value || '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 // Busca los próximos 3 slots libres de 45 min en días hábiles (lun-vie, 9-19hs AR)
 async function getAvailableSlots() {
   if (!process.env.GOOGLE_REFRESH_TOKEN) {
@@ -77,8 +89,7 @@ async function getAvailableSlots() {
       }
     }
 
-    d = new Date(d);
-    d.setDate(d.getDate() + 1);
+    d = new Date(d.getTime() + 24 * 60 * 60 * 1000);
     daysChecked++;
   }
 
@@ -117,8 +128,8 @@ async function createMeetingEvent(slot, clientName, clientEmail) {
   const event = {
     summary: `Reunión con ${clientName} — DT Systems`,
     description: `Reunión de seguimiento con cliente ${clientName}.\nCoordinada vía WhatsApp por el asistente DT Systems.`,
-    start: { dateTime: slot.start.toISOString(), timeZone: TZ },
-    end: { dateTime: slot.end.toISOString(), timeZone: TZ },
+    start: { dateTime: toArgentinaISO(slot.start), timeZone: TZ },
+    end: { dateTime: toArgentinaISO(slot.end), timeZone: TZ },
     conferenceData: {
       createRequest: {
         requestId: `dtsy-${Date.now()}`,
@@ -141,4 +152,52 @@ async function createMeetingEvent(slot, clientName, clientEmail) {
   return { eventId: res.data.id, meetLink, htmlLink: res.data.htmlLink };
 }
 
-module.exports = { getAvailableSlots, formatSlotsForWhatsApp, createMeetingEvent };
+async function getUpcomingMeetings(maxResults = 10) {
+  if (!process.env.GOOGLE_REFRESH_TOKEN) return [];
+
+  try {
+    const auth = getOAuth2Client();
+    const cal = google.calendar({ version: 'v3', auth });
+
+    const now = new Date();
+    const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    const res = await cal.events.list({
+      calendarId: 'primary',
+      timeMin: now.toISOString(),
+      timeMax: twoWeeksLater.toISOString(),
+      maxResults,
+      singleEvents: true,
+      orderBy: 'startTime',
+      q: 'DT Systems', // Filter by our meeting title pattern
+    });
+
+    return (res.data.items || []).map(event => ({
+      id: event.id,
+      summary: event.summary || '',
+      start: event.start?.dateTime || event.start?.date || '',
+      end: event.end?.dateTime || event.end?.date || '',
+      meetLink: event.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri || null,
+      htmlLink: event.htmlLink || '',
+      attendees: (event.attendees || []).map(a => ({ email: a.email, name: a.displayName })),
+    }));
+  } catch (err) {
+    console.error('[calendar] Error fetching upcoming meetings:', err.message);
+    return [];
+  }
+}
+
+function formatMeetingDate(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+  const weekday = new Intl.DateTimeFormat('es-AR', { timeZone: TZ, weekday: 'long' }).format(d);
+  const day = parseInt(new Intl.DateTimeFormat('en', { timeZone: TZ, day: 'numeric' }).format(d));
+  const monthIdx = parseInt(new Intl.DateTimeFormat('en', { timeZone: TZ, month: 'numeric' }).format(d)) - 1;
+  const time = new Intl.DateTimeFormat('es-AR', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+
+  return { weekday, day, month: MONTHS[monthIdx], time, full: `${weekday} ${day} de ${MONTHS[monthIdx]}, ${time}hs` };
+}
+
+module.exports = { getAvailableSlots, formatSlotsForWhatsApp, createMeetingEvent, getUpcomingMeetings, formatMeetingDate };
