@@ -1233,11 +1233,50 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
 
           ${/* ── Estado: Generando ── */
             conv.demo_status === 'generating'
-              ? `<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-3 text-center">
-                   <div class="text-2xl mb-2">&#9881;</div>
-                   <div class="text-xs font-semibold text-yellow-700">Generando demos...</div>
-                   <div class="text-[10px] text-yellow-600 mt-1">Esto puede tardar unos segundos</div>
-                 </div>`
+              ? `<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-3">
+                   <div class="flex items-center gap-3 mb-3">
+                     <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                       <svg class="w-5 h-5 text-yellow-600 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                     </div>
+                     <div>
+                       <div class="text-sm font-semibold text-yellow-800">Generando demos...</div>
+                       <div class="text-[10px] text-yellow-600" id="demo-elapsed">Calculando...</div>
+                     </div>
+                   </div>
+                   <div class="space-y-2 mb-3">
+                     <div class="flex items-center gap-2 text-[11px] text-yellow-700"><span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span> Landing HTML personalizada</div>
+                     <div class="flex items-center gap-2 text-[11px] text-yellow-700"><span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span> Mockup de WhatsApp</div>
+                     <div class="flex items-center gap-2 text-[11px] text-yellow-700"><span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span> Propuesta PDF</div>
+                   </div>
+                   <div id="demo-stuck" class="hidden bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                     <div class="text-xs font-medium text-red-700 mb-1">&#9888;&#65039; Posiblemente trabado</div>
+                     <div class="text-[10px] text-red-600">Lleva m&aacute;s de 2 minutos. Pod&eacute;s reintentar.</div>
+                   </div>
+                   <form method="POST" action="/admin/regenerate/${phoneUrl}" onsubmit="this.querySelector('button').disabled=true;">
+                     <button id="retry-btn" class="w-full bg-yellow-100 hover:bg-yellow-200 text-yellow-800 py-2 rounded-lg text-xs font-medium transition-colors border border-yellow-300">&#128260; Reintentar generaci&oacute;n</button>
+                   </form>
+                 </div>
+                 <script>
+                 (function(){
+                   var started = ${JSON.stringify(conv.demo_started_at || '')};
+                   if(!started) return;
+                   var startTime = new Date(started).getTime();
+                   function update(){
+                     var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                     var min = Math.floor(elapsed / 60);
+                     var sec = elapsed % 60;
+                     var el = document.getElementById('demo-elapsed');
+                     if(el) el.textContent = (min > 0 ? min + ' min ' : '') + sec + 's transcurridos';
+                     if(elapsed > 120){
+                       var stuckEl = document.getElementById('demo-stuck');
+                       if(stuckEl) stuckEl.classList.remove('hidden');
+                     }
+                   }
+                   update();
+                   setInterval(update, 1000);
+                   setTimeout(function(){ location.reload(); }, 10000);
+                 })();
+                 </script>`
 
           : /* ── Estado: Pendiente de review ── */
             conv.demo_status === 'pending_review'
@@ -1271,7 +1310,29 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
 
           : /* ── Estado: Enviado/Aprobado y no ganado ── */
             (conv.demo_status === 'sent' || conv.demo_status === 'approved') && conv.client_stage !== 'won'
-              ? `<a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-sm font-bold mb-3 transition-colors shadow-md shadow-emerald-200">&#127942; Confirmar proyecto ganado</a>`
+              ? `<div class="space-y-2 mb-3">
+                   <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-2">
+                     <div class="flex items-center gap-2 mb-1">
+                       <span class="text-sm">&#9992;&#65039;</span>
+                       <span class="text-xs font-semibold text-emerald-800">Demo enviado al cliente</span>
+                     </div>
+                     <div class="text-[10px] text-emerald-600">Esperando respuesta del cliente</div>
+                   </div>
+                   <div class="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-1 mt-3">&iquest;Qu&eacute; respondi&oacute; el cliente?</div>
+                   <a href="/admin/client/${phoneUrl}/to-project" class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-xs font-bold transition-colors shadow-sm">&#10004; Aprob&oacute; &mdash; confirmar proyecto</a>
+                   <form method="POST" action="/admin/resend-demo/${phoneUrl}" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Reenviando...';">
+                     <button class="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-xl text-xs font-medium transition-colors border border-blue-200">&#128233; Reenviar demo al cliente</button>
+                   </form>
+                   <form method="POST" action="/admin/request-client-changes/${phoneUrl}" onsubmit="this.querySelector('button').disabled=true;">
+                     <button class="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 py-2.5 rounded-xl text-xs font-medium transition-colors border border-amber-200">&#9998; Quiere cambios &mdash; modificar demo</button>
+                   </form>
+                   <form method="POST" action="/admin/schedule-meeting/${phoneUrl}" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Enviando horarios...';">
+                     <button class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2.5 rounded-xl text-xs font-medium transition-colors border border-indigo-200">&#128197; Programar reuni&oacute;n</button>
+                   </form>
+                   <form method="POST" action="/admin/mark-lost/${phoneUrl}" onsubmit="return confirm('&iquest;Marcar como perdido?');">
+                     <button class="w-full bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 py-2 rounded-xl text-[10px] font-medium transition-colors border border-slate-200">No le interes&oacute; &mdash; marcar como perdido</button>
+                   </form>
+                 </div>`
 
           : /* ── Ganado ── */
             conv.client_stage === 'won' && conv.report
@@ -1735,6 +1796,66 @@ router.post('/regenerate/:phone', requireAuth, async (req, res) => {
   const phone = req.params.phone;
   const conv = await db.getConversation(phone);
   if (conv?.report) orchestrator.processNewReport(phone, conv.report).catch(err => console.error('Error regenerando:', err));
+  res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+});
+
+// Reenviar demo al cliente (mismo demo, no regenera)
+router.post('/resend-demo/:phone', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  try {
+    await orchestrator.sendApprovedDemoToClient(phone);
+    await db.appendTimelineEvent(phone, { event: 'demo_resent', note: 'Demo reenviado desde el panel' });
+  } catch (err) {
+    console.error('Error reenviando demo:', err);
+  }
+  res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+});
+
+// Cliente quiere cambios → volver a generating
+router.post('/request-client-changes/:phone', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  await db.updateDemoStatus(phone, 'changes_requested');
+  await db.updateClientStage(phone, 'qualified');
+  await db.appendTimelineEvent(phone, { event: 'client_wants_changes', note: 'El cliente pidió modificaciones después de ver el demo' });
+  res.redirect(`/admin/review/${encodeURIComponent(phone)}`);
+});
+
+// Programar reunión → enviar slots por WhatsApp
+router.post('/schedule-meeting/:phone', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  try {
+    const calendar = require('./calendar');
+    const calSlots = await calendar.getAvailableSlots();
+    if (calSlots.length > 0) {
+      const conv = await db.getConversation(phone);
+      const slotsData = calSlots.map(s => ({ start: s.start.toISOString(), end: s.end.toISOString() }));
+      await db.upsertConversation(phone, {
+        stage: 'awaiting_slot',
+        context: { ...(conv?.context || {}), pendingSlots: slotsData }
+      });
+      const slotsText = calendar.formatSlotsForWhatsApp(calSlots);
+      const { sendMessage } = require('./whatsapp');
+      const nombre = conv?.report?.cliente?.nombre || 'Hola';
+      await sendMessage(phone, `${nombre}, ¡genial! Te paso 3 opciones para que coordinemos una llamada corta:\n\n${slotsText}\n\n¿Cuál te viene mejor?`);
+      await db.updateClientStage(phone, 'negotiating');
+      await db.appendTimelineEvent(phone, { event: 'meeting_slots_sent', note: 'Horarios enviados al cliente desde el panel' });
+    } else {
+      const { sendMessage } = require('./whatsapp');
+      await sendMessage(phone, 'Hola! David te va a escribir en un rato para coordinar un horario para charlar. ¡Quedate atento!');
+      await db.appendTimelineEvent(phone, { event: 'meeting_manual', note: 'No había slots disponibles, se avisó al cliente' });
+    }
+  } catch (err) {
+    console.error('Error programando reunión:', err);
+    await db.appendTimelineEvent(phone, { event: 'meeting_error', note: err.message });
+  }
+  res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
+});
+
+// Marcar como perdido
+router.post('/mark-lost/:phone', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  await db.updateClientStage(phone, 'lost');
+  await db.appendTimelineEvent(phone, { event: 'marked_lost', note: 'Marcado como perdido desde el panel' });
   res.redirect(`/admin/client/${encodeURIComponent(phone)}`);
 });
 

@@ -116,6 +116,7 @@ async function init() {
     `ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''`,
     `ALTER TABLE conversations ADD COLUMN demo_notes TEXT DEFAULT ''`,
     `ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0`,
+    `ALTER TABLE conversations ADD COLUMN demo_started_at TEXT DEFAULT ''`,
   ];
   for (const sql of migrations) {
     try { await db.execute(sql); } catch (e) { /* columna ya existe */ }
@@ -170,6 +171,7 @@ function parseConv(row) {
     notes: String(row.notes || ''),
     demo_notes: String(row.demo_notes || ''),
     archived: Number(row.archived || 0),
+    demo_started_at: String(row.demo_started_at || ''),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -313,6 +315,11 @@ async function setNotes(phone, notes) {
 async function setDemoNotes(phone, notes) {
   const db = getDb();
   await db.execute({ sql: `UPDATE conversations SET demo_notes = ?, updated_at = datetime('now') WHERE phone = ?`, args: [notes, phone] });
+}
+
+async function setDemoStartedAt(phone, isoDate) {
+  const db = getDb();
+  await db.execute({ sql: `UPDATE conversations SET demo_started_at = ?, updated_at = datetime('now') WHERE phone = ?`, args: [isoDate || '', phone] });
 }
 
 async function appendTimelineEvent(phone, event) {
@@ -566,7 +573,7 @@ async function resetConversation(phone) {
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
-  updateDemoStatus, updateClientStage, setDriveFolderId, setNotes, setDemoNotes,
+  updateDemoStatus, updateClientStage, setDriveFolderId, setNotes, setDemoNotes, setDemoStartedAt,
   appendTimelineEvent, listAllClients, getClientsByStage,
   listProjects, getProject, createProject, updateProject, deleteProject, addProjectUpdate,
   listClientRecords, getClientRecord, createClientRecord, updateClientRecord, deleteClientRecord, getProjectsByClientId,

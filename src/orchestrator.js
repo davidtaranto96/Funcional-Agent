@@ -28,6 +28,7 @@ async function processNewReport(phone, report) {
   console.log(`[orchestrator] Procesando nuevo reporte de ${phone}`);
   try {
     await db.updateDemoStatus(phone, 'generating');
+    await db.setDemoStartedAt(phone, new Date().toISOString());
     await db.updateClientStage(phone, 'qualified');
     await db.appendTimelineEvent(phone, { event: 'report_generated', note: 'Reporte extraído de la conversación' });
 
@@ -41,6 +42,7 @@ async function processNewReport(phone, report) {
     if (pdfBuffer)    fs.writeFileSync(path.join(localDir, 'propuesta.pdf'), pdfBuffer);
 
     await db.updateDemoStatus(phone, 'pending_review');
+    await db.setDemoStartedAt(phone, ''); // Clear the timer
     await db.appendTimelineEvent(phone, { event: 'demos_ready', note: 'Demos generados y listos para revisar' });
 
     // 3. Notificar a David con el link de revisión
@@ -96,6 +98,7 @@ async function processNewReport(phone, report) {
   } catch (err) {
     console.error('[orchestrator] Error general:', err);
     await db.updateDemoStatus(phone, 'error').catch(() => {});
+    await db.setDemoStartedAt(phone, '').catch(() => {});
     await db.appendTimelineEvent(phone, { event: 'demo_error', note: err.message }).catch(() => {});
     try {
       await db.addNotification({ type: 'warning', title: 'Error generando demos', body: `${phone}: ${err.message}`, phone });
