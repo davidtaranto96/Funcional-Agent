@@ -1091,6 +1091,31 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
   ].filter(Boolean) : [];
   const demoLinks = demoFileLinks.length ? `<div class="space-y-2 mb-4 pt-3 border-t border-slate-100">${demoFileLinks.join('')}</div>` : '';
 
+  // Version history for client detail page
+  let clientVersionsHtml = '';
+  try {
+    const vFile = path.join(demosDir, 'versions.json');
+    if (fs.existsSync(vFile)) {
+      const versions = JSON.parse(fs.readFileSync(vFile, 'utf-8'));
+      if (versions.length > 0) {
+        const vRows = versions.map(function(v) {
+          const d = new Date(v.date);
+          const ds = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          const links = ['landing.html', 'whatsapp.html', 'propuesta.pdf'].filter(function(f) {
+            return fs.existsSync(path.join(demosDir, 'v' + v.version, f));
+          }).map(function(f) {
+            const label = f.includes('landing') ? 'Landing' : f.includes('whatsapp') ? 'WA' : 'PDF';
+            return '<a href="/demos/' + slug + '/v' + v.version + '/' + f + '" target="_blank" class="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200">' + label + '</a>';
+          }).join(' ');
+          return '<div class="flex items-center justify-between py-1.5">' +
+            '<div class="flex items-center gap-1.5"><span class="text-[10px] font-bold text-slate-400">v' + v.version + '</span><span class="text-[10px] text-slate-400">' + ds + '</span></div>' +
+            '<div class="flex gap-1">' + links + '</div></div>';
+        }).join('');
+        clientVersionsHtml = '<div class="border-t border-slate-100 pt-2 mt-2"><div class="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Versiones anteriores</div>' + vRows + '</div>';
+      }
+    }
+  } catch(e) {}
+
   const infoRows = [
     ['Tipo', proyecto.tipo], ['Plataforma', proyecto.plataforma],
     ['Estado actual', proyecto.estado_actual], ['Stack', requisitos.stack_sugerido],
@@ -1364,6 +1389,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
             ${demoLinks}
             ${conv.drive_folder_id ? `<a href="https://drive.google.com/drive/folders/${escapeHtml(conv.drive_folder_id)}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-slate-200 text-slate-600 hover:bg-slate-50 py-2 rounded-xl text-xs transition-colors">&#128193; Drive</a>` : ''}
           </div>
+          ${clientVersionsHtml}
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-3">Etapa</h2>
