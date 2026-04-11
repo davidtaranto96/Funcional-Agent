@@ -1657,6 +1657,15 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
   const hasWA      = fs.existsSync(path.join(localDir, 'whatsapp.html'));
   const hasPDF     = fs.existsSync(path.join(localDir, 'propuesta.pdf'));
 
+  // Load version history
+  const versionsFile = path.join(localDir, 'versions.json');
+  let versions = [];
+  try {
+    if (fs.existsSync(versionsFile)) {
+      versions = JSON.parse(fs.readFileSync(versionsFile, 'utf-8'));
+    }
+  } catch(e) {}
+
   const demoItems = [
     hasLanding && ['🌐 Landing HTML',         `/demos/${slug}/landing.html`,  'iframe'],
     hasWA      && ['💬 Mockup WhatsApp',       `/demos/${slug}/whatsapp.html`, 'iframe'],
@@ -1690,6 +1699,35 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
       </div>
     </div>
     ${prevNote}
+    ${versions.length > 0 ? `
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 mb-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-700">Versiones anteriores</h2>
+        <span class="text-[10px] text-slate-400">${versions.length} ${versions.length === 1 ? 'version anterior' : 'versiones anteriores'}</span>
+      </div>
+      <div class="space-y-2">
+        ${versions.map(function(v) {
+          var d = new Date(v.date);
+          var dateStr = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          var vFiles = [];
+          if (fs.existsSync(path.join(localDir, 'v' + v.version, 'landing.html'))) vFiles.push(['Landing', '/demos/' + slug + '/v' + v.version + '/landing.html']);
+          if (fs.existsSync(path.join(localDir, 'v' + v.version, 'whatsapp.html'))) vFiles.push(['WhatsApp', '/demos/' + slug + '/v' + v.version + '/whatsapp.html']);
+          if (fs.existsSync(path.join(localDir, 'v' + v.version, 'propuesta.pdf'))) vFiles.push(['PDF', '/demos/' + slug + '/v' + v.version + '/propuesta.pdf']);
+          return '<div class="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg">' +
+            '<div class="flex items-center gap-2">' +
+              '<span class="text-xs font-bold text-slate-500">v' + v.version + '</span>' +
+              '<span class="text-[10px] text-slate-400">' + dateStr + '</span>' +
+              (v.notes ? '<span class="text-[10px] text-violet-500 italic truncate max-w-[200px]">' + escapeHtml(v.notes) + '</span>' : '') +
+            '</div>' +
+            '<div class="flex gap-2">' +
+              vFiles.map(function(f) {
+                return '<a href="' + f[1] + '" target="_blank" class="text-[10px] px-2 py-1 bg-white border border-slate-200 text-slate-600 rounded hover:bg-slate-100 transition-colors">' + f[0] + '</a>';
+              }).join('') +
+            '</div>' +
+          '</div>';
+        }).join('')}
+      </div>
+    </div>` : ''}
     ${demoItems.length === 0
       ? `<div class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-amber-700 text-sm mb-5">⚠ No hay archivos de demo generados todavía para este cliente.</div>`
       : `<div class="grid grid-cols-1 ${demoItems.length > 1 ? 'lg:grid-cols-' + Math.min(demoItems.length, 3) : ''} gap-5 mb-8">${demoPreviews}</div>`}
@@ -1708,6 +1746,13 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
           <div class="px-4 pb-4 pt-2 bg-violet-50">
             <p class="text-xs text-violet-600 mb-2">Describí qué querés que cambie. El estado quedará como "Con correcciones" y vas a poder regenerar desde la ficha del cliente.</p>
             <form method="POST" action="/admin/request-changes/${phoneUrl}">
+              <div class="flex items-center gap-2 mb-2">
+                <button type="button" onclick="startRecording(this)" class="mic-btn flex items-center gap-1.5 px-3 py-1.5 bg-white border border-violet-300 text-violet-600 rounded-lg text-xs font-medium hover:bg-violet-50 transition-colors">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-14 0m7 7v4m-4 0h8M12 1a3 3 0 00-3 3v7a3 3 0 006 0V4a3 3 0 00-3-3z"/></svg>
+                  Dictar por voz
+                </button>
+                <span class="mic-status text-[10px] text-slate-400 hidden"></span>
+              </div>
               <textarea name="notes" rows="3" placeholder="Ej: Cambiar los colores a azul y blanco. El título principal debería decir 'Bienvenido a...'."
                 class="w-full border border-violet-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-400 mb-3 bg-white"></textarea>
               <button class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">Guardar correcciones</button>
@@ -1726,6 +1771,13 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
           <div class="px-4 pb-4 pt-2 bg-red-50">
             <p class="text-xs text-red-600 mb-2">La demo no quedó bien. Agregá una nota de qué está mal y el sistema regenera automáticamente.</p>
             <form method="POST" action="/admin/reject/${phoneUrl}">
+              <div class="flex items-center gap-2 mb-2">
+                <button type="button" onclick="startRecording(this)" class="mic-btn flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50 transition-colors">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-14 0m7 7v4m-4 0h8M12 1a3 3 0 00-3 3v7a3 3 0 006 0V4a3 3 0 00-3-3z"/></svg>
+                  Dictar por voz
+                </button>
+                <span class="mic-status text-[10px] text-slate-400 hidden"></span>
+              </div>
               <textarea name="notes" rows="2" placeholder="Ej: Los colores no van con el rubro, cambiar el título principal..."
                 class="w-full border border-red-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 mb-3 bg-white"></textarea>
               <button class="w-full bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">🔄 Rechazar y regenerar ahora</button>
@@ -1740,7 +1792,71 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
           </button>
         </form>
       </div>
-    </div>`;
+    </div>
+
+    <script>
+    var mediaRecorder = null;
+    var audioChunks = [];
+
+    function startRecording(btn) {
+      var container = btn.closest('.group') || btn.closest('details');
+      var textarea = container.querySelector('textarea');
+      var status = btn.nextElementSibling;
+
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-14 0m7 7v4m-4 0h8M12 1a3 3 0 00-3 3v7a3 3 0 006 0V4a3 3 0 00-3-3z"/></svg> Dictar por voz';
+        btn.classList.remove('bg-red-500', 'text-white', 'border-red-500');
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function(stream) {
+          audioChunks = [];
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+          mediaRecorder.ondataavailable = function(e) {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = function() {
+            stream.getTracks().forEach(function(t) { t.stop(); });
+            status.textContent = 'Transcribiendo...';
+            status.classList.remove('hidden');
+
+            var blob = new Blob(audioChunks, { type: 'audio/webm' });
+            var formData = new FormData();
+            formData.append('audio', blob, 'recording.webm');
+
+            fetch('/admin/api/transcribe', { method: 'POST', body: formData })
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                if (data.text) {
+                  textarea.value = textarea.value ? textarea.value + ' ' + data.text : data.text;
+                  textarea.focus();
+                }
+                status.textContent = data.text ? 'Listo' : 'No se pudo transcribir';
+                setTimeout(function() { status.classList.add('hidden'); }, 2000);
+              })
+              .catch(function(err) {
+                status.textContent = 'Error al transcribir';
+                setTimeout(function() { status.classList.add('hidden'); }, 2000);
+              });
+          };
+
+          mediaRecorder.start();
+          btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-white animate-pulse inline-block"></span> Grabando... (click para parar)';
+          btn.classList.add('bg-red-500', 'text-white', 'border-red-500');
+          status.textContent = 'Grabando...';
+          status.classList.remove('hidden');
+        })
+        .catch(function(err) {
+          status.textContent = 'No se pudo acceder al microfono';
+          status.classList.remove('hidden');
+          setTimeout(function() { status.classList.add('hidden'); }, 3000);
+        });
+    }
+    </script>`;
 
   res.send(layout('Revisar demos', body, { pendingCount, activePage: 'clients', user: req.session?.user }));
 });
@@ -2304,6 +2420,37 @@ router.get('/api/conversation/:phone', requireAuth, async (req, res) => {
     messageCount: (conv.history || []).length,
     updated_at: conv.updated_at,
   });
+});
+
+// API: transcribe audio for corrections (voice input)
+const uploadAudio = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB max
+
+router.post('/api/transcribe', requireAuth, uploadAudio.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) return res.json({ error: 'No audio file', text: '' });
+
+    const Groq = require('groq-sdk');
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return res.json({ error: 'GROQ_API_KEY not set', text: '' });
+
+    const client = new Groq({ apiKey });
+    const tmpPath = path.join(require('os').tmpdir(), `admin_audio_${Date.now()}.webm`);
+    fs.writeFileSync(tmpPath, req.file.buffer);
+
+    try {
+      const result = await client.audio.transcriptions.create({
+        file: fs.createReadStream(tmpPath),
+        model: 'whisper-large-v3',
+        language: 'es',
+      });
+      res.json({ text: (result.text || '').trim() });
+    } finally {
+      fs.unlink(tmpPath, () => {});
+    }
+  } catch (err) {
+    console.error('[transcribe-api] Error:', err.message);
+    res.json({ error: err.message, text: '' });
+  }
 });
 
 // ─── All tasks ───────────────────────────────────────────────────────────────

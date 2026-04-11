@@ -28,6 +28,7 @@ async function processNewReport(phone, report) {
   console.log(`[orchestrator] Procesando nuevo reporte de ${phone}`);
   try {
     await db.updateDemoStatus(phone, 'generating');
+    const conv = await db.getConversation(phone);
     await db.setDemoStartedAt(phone, new Date().toISOString());
     await db.updateClientStage(phone, 'qualified');
     await db.appendTimelineEvent(phone, { event: 'report_generated', note: 'Reporte extraído de la conversación' });
@@ -37,6 +38,41 @@ async function processNewReport(phone, report) {
 
     // 2. Guardar copias locales (para servir por HTTP al cliente)
     const localDir = localDemoDir(phone);
+
+    // Backup previous version before overwriting
+    const versionsFile = path.join(localDir, 'versions.json');
+    let versions = [];
+    try {
+      if (fs.existsSync(versionsFile)) {
+        versions = JSON.parse(fs.readFileSync(versionsFile, 'utf-8'));
+      }
+    } catch(e) { versions = []; }
+
+    const hasExisting = fs.existsSync(path.join(localDir, 'landing.html')) ||
+                        fs.existsSync(path.join(localDir, 'whatsapp.html')) ||
+                        fs.existsSync(path.join(localDir, 'propuesta.pdf'));
+
+    if (hasExisting) {
+      const vNum = versions.length + 1;
+      const vDir = path.join(localDir, `v${vNum}`);
+      fs.mkdirSync(vDir, { recursive: true });
+
+      // Copy current files to version directory
+      for (const f of ['landing.html', 'whatsapp.html', 'propuesta.pdf']) {
+        const src = path.join(localDir, f);
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, path.join(vDir, f));
+        }
+      }
+
+      versions.push({
+        version: vNum,
+        date: new Date().toISOString(),
+        notes: conv?.demo_notes || '',
+      });
+      fs.writeFileSync(versionsFile, JSON.stringify(versions, null, 2));
+    }
+
     if (landingHTML) fs.writeFileSync(path.join(localDir, 'landing.html'), landingHTML, 'utf-8');
     if (whatsappPng)  fs.writeFileSync(path.join(localDir, 'whatsapp.html'), whatsappPng);
     if (pdfBuffer)    fs.writeFileSync(path.join(localDir, 'propuesta.pdf'), pdfBuffer);
