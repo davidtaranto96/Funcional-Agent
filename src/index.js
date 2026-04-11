@@ -75,7 +75,7 @@ app.get('/health', (req, res) => {
 app.get('/webhook/debug', (req, res) => {
   const check = (v) => process.env[v] ? '✅' : '❌ FALTA';
   res.json({
-    version: '2.0.0',
+    version: '2.1.0',
     env: {
       TWILIO_ACCOUNT_SID: check('TWILIO_ACCOUNT_SID'),
       TWILIO_AUTH_TOKEN: check('TWILIO_AUTH_TOKEN'),
@@ -86,6 +86,27 @@ app.get('/webhook/debug', (req, res) => {
       GOOGLE_REFRESH_TOKEN: check('GOOGLE_REFRESH_TOKEN'),
     },
   });
+});
+
+// Diagnóstico: muestra exactamente qué manda Twilio (para debug de audio)
+const lastWebhooks = [];
+app.get('/webhook/last', (req, res) => {
+  res.json(lastWebhooks);
+});
+
+// Test de Groq: verifica que la API key funcione
+app.get('/webhook/test-groq', async (req, res) => {
+  try {
+    const Groq = require('groq-sdk');
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return res.json({ error: 'GROQ_API_KEY no configurada' });
+    const client = new Groq({ apiKey });
+    const models = await client.models.list();
+    const whisper = models.data?.find(m => m.id?.includes('whisper'));
+    res.json({ ok: true, groq_connected: true, whisper_available: !!whisper, whisper_model: whisper?.id || 'no encontrado' });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
 });
 
 // ── Helper TwiML: responde inline a Twilio ──────────────────────────────────
@@ -106,7 +127,15 @@ app.post('/webhook', async (req, res) => {
     const MediaUrl0 = req.body?.MediaUrl0;
     const MediaType0 = req.body?.MediaContentType0 || '';
 
-    console.log(`[webhook] From=${From} Body="${(Body || '').substring(0, 80)}" NumMedia=${NumMedia}`);
+    console.log(`[webhook] From=${From} Body="${(Body || '').substring(0, 80)}" NumMedia=${NumMedia} MediaType=${MediaType0} MediaUrl=${(MediaUrl0||'').substring(0,80)}`);
+
+    // Guardar últimos webhooks para diagnóstico en /webhook/last
+    lastWebhooks.unshift({
+      time: new Date().toISOString(),
+      From, Body: (Body||'').substring(0,100),
+      NumMedia, MediaType0, MediaUrl0: (MediaUrl0||'').substring(0,120),
+    });
+    if (lastWebhooks.length > 10) lastWebhooks.length = 10;
 
     if (!From) return twimlReply(res);
 
