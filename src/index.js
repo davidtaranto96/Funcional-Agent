@@ -115,13 +115,23 @@ app.post('/webhook', async (req, res) => {
 
     // Audio → transcribir con Whisper
     if (NumMedia > 0 && MediaUrl0 && MediaType0.startsWith('audio/')) {
-      console.log(`[webhook] Audio recibido, transcribiendo...`);
-      text = (await transcribe(MediaUrl0)) || '';
-      console.log(`[webhook] Transcripción: "${text}"`);
+      console.log(`[webhook] Audio recibido (type=${MediaType0}), transcribiendo...`);
+      try {
+        text = (await transcribe(MediaUrl0)) || '';
+      } catch (err) {
+        console.error(`[webhook] Error en transcripción:`, err.message);
+        text = '';
+      }
+      console.log(`[webhook] Transcripción: "${(text || '').substring(0, 100)}"`);
+    }
+
+    // Imágenes, videos, stickers u otros media sin texto
+    if (!text.trim() && NumMedia > 0 && !MediaType0.startsWith('audio/')) {
+      return twimlReply(res, 'Por ahora solo puedo leer texto y audios. Si me querés mandar algo, escribilo o grabá un audio.');
     }
 
     if (!text.trim()) {
-      return twimlReply(res, 'Por ahora solo puedo leer texto y audios. ¿Me lo podés escribir?');
+      return twimlReply(res, 'No pude entender el audio. ¿Podrías escribirlo o grabar otro?');
     }
 
     console.log(`[webhook] Procesando mensaje de ${fromKey}: "${text.substring(0, 100)}"`);
