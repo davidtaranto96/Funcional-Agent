@@ -118,6 +118,7 @@ async function sendApprovedDemoToClient(phone) {
 
   const hasLanding = fs.existsSync(path.join(localDir, 'landing.html'));
   const hasWAMockup = fs.existsSync(path.join(localDir, 'whatsapp.html'));
+  let messagesSent = 0;
 
   // Transición al agente: ahora espera feedback del cliente sobre el demo
   await db.upsertConversation(phone, { stage: 'awaiting_feedback' });
@@ -125,17 +126,20 @@ async function sendApprovedDemoToClient(phone) {
   try {
     await sendMessage(phone,
       `${nombre}, estuve armando algo para vos basado en lo que charlamos. Te paso una propuesta visual así te hacés una idea concreta 👇`);
+    messagesSent++;
   } catch (err) { console.error('Error WA intro:', err.message); }
 
   if (hasLanding) {
     try {
       await sendMessage(phone, `🌐 *Propuesta visual:*\n${landingUrl}`);
+      messagesSent++;
     } catch (err) { console.error('Error WA landing:', err.message); }
   }
 
   if (hasWAMockup) {
     try {
       await sendMessage(phone, `📱 *Así se vería el asistente en tu negocio:*\n${mockupUrl}`);
+      messagesSent++;
     } catch (err) { console.error('Error WA mockup:', err.message); }
   }
 
@@ -150,7 +154,7 @@ async function sendApprovedDemoToClient(phone) {
         html: `<p>Hola ${nombre},</p>
           <p>Como quedamos, te paso la propuesta formal en PDF adjunta. Cualquier cosa me respondés por WhatsApp.</p>
           <p>Saludos,<br>David</p>`,
-        attachments: [{ filename: 'propuesta.pdf', content: pdfBuffer.toString('base64') }],
+        attachments: [{ filename: 'propuesta.pdf', content: pdfBuffer }],
       });
     } catch (err) { console.error('Error email PDF:', err.message); }
   }
@@ -158,7 +162,15 @@ async function sendApprovedDemoToClient(phone) {
   try {
     await sendMessage(phone,
       '¿Qué te parece? Si te copa podemos hacer una llamada corta esta semana para cerrar detalles y arrancar. Avisame nomás 💬');
+    messagesSent++;
   } catch (err) { console.error('Error WA cierre:', err.message); }
+
+  if (messagesSent === 0) {
+    console.error('[orchestrator] No se pudo enviar ningún mensaje a', phone);
+    await db.updateDemoStatus(phone, 'error');
+    await db.appendTimelineEvent(phone, { event: 'demo_send_failed', note: 'Todos los intentos de envío fallaron' });
+    return;
+  }
 
   await db.updateDemoStatus(phone, 'sent');
   await db.updateClientStage(phone, 'demo_sent');

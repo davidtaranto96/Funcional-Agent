@@ -134,7 +134,12 @@ MUY IMPORTANTE: el resumen tiene que sonar como lo escribió una persona, no un 
 // Ventana deslizante: primeros 2 mensajes + últimos N para controlar costos
 function trimHistory(history, keepLast = 20) {
   if (history.length <= keepLast + 2) return history;
-  return [...history.slice(0, 2), ...history.slice(-keepLast)];
+  const tail = history.slice(-keepLast);
+  // Ensure the tail starts with a 'user' message to maintain alternating roles
+  if (tail.length > 0 && tail[0].role !== 'user') {
+    tail.shift();
+  }
+  return [...history.slice(0, 2), ...tail];
 }
 
 async function handleMessage(phone, userText) {
@@ -181,8 +186,12 @@ async function handleMessage(phone, userText) {
       newStage = 'confirming';
 
       // Generar resumen casual para el cliente
-      const summary = await generateClientSummary([...history, { role: 'assistant', content: reply }]);
-      reply = reply ? `${reply}\n\n${summary}` : summary;
+      try {
+        const summary = await generateClientSummary([...history, { role: 'assistant', content: reply }]);
+        reply = reply ? `${reply}\n\n${summary}` : summary;
+      } catch (err) {
+        console.error('[agent] Error generating summary:', err.message);
+      }
     }
 
     if (reply.includes('[CONFIRMADO]')) {

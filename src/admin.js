@@ -18,7 +18,7 @@ fs.mkdirSync(PROJECT_FILES_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(PROJECT_FILES_DIR, req.params.id);
+    const dir = safePath(PROJECT_FILES_DIR, req.params.id);
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -39,7 +39,7 @@ fs.mkdirSync(DOCUMENTS_DIR, { recursive: true });
 
 const docStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(DOCUMENTS_DIR, req.params.folderId || 'general');
+    const dir = safePath(DOCUMENTS_DIR, req.params.folderId || 'general');
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -58,6 +58,12 @@ function escapeHtml(s) {
   return String(s || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function safePath(base, ...parts) {
+  const resolved = path.resolve(path.join(base, ...parts));
+  if (!resolved.startsWith(path.resolve(base))) throw new Error('Path traversal blocked');
+  return resolved;
 }
 
 function phoneSlug(phone) { return (phone || '').replace(/[^0-9]/g, ''); }
@@ -464,7 +470,10 @@ router.get('/auth/google/callback',
 );
 
 router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/admin/login'));
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid');
+    res.redirect('/admin/login');
+  });
 });
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -1234,7 +1243,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
           <div class="border-t border-slate-100 pt-3 mt-1 space-y-2">
             <a href="https://wa.me/${phoneSlug(phone)}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-emerald-200 text-emerald-700 hover:bg-emerald-50 py-2 rounded-xl text-xs font-medium transition-colors">&#128172; Abrir en WhatsApp</a>
             ${demoLinks}
-            ${conv.drive_folder_id ? `<a href="https://drive.google.com/drive/folders/${conv.drive_folder_id}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-slate-200 text-slate-600 hover:bg-slate-50 py-2 rounded-xl text-xs transition-colors">&#128193; Drive</a>` : ''}
+            ${conv.drive_folder_id ? `<a href="https://drive.google.com/drive/folders/${escapeHtml(conv.drive_folder_id)}" target="_blank" class="flex items-center justify-center gap-2 w-full border border-slate-200 text-slate-600 hover:bg-slate-50 py-2 rounded-xl text-xs transition-colors">&#128193; Drive</a>` : ''}
           </div>
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
@@ -1758,10 +1767,10 @@ router.get('/notifications', requireAuth, async (req, res) => {
             <span class="text-lg mt-0.5">${icon}</span>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <span class="font-medium text-sm text-slate-900">${n.title}</span>
+                <span class="font-medium text-sm text-slate-900">${escapeHtml(n.title)}</span>
                 <span class="text-xs text-slate-400 ml-2 shrink-0">${timeAgo(n.created_at)}</span>
               </div>
-              ${n.body ? `<p class="text-xs text-slate-500 mt-0.5 truncate">${n.body.replace(/</g,'&lt;')}</p>` : ''}
+              ${n.body ? `<p class="text-xs text-slate-500 mt-0.5 truncate">${escapeHtml(n.body)}</p>` : ''}
             </div>
           </div>
         </a>`;
@@ -2301,7 +2310,8 @@ router.get('/projects/new', requireAuth, async (req, res) => {
 router.post('/projects', requireAuth, async (req, res) => {
   let tasks = [];
   try { tasks = JSON.parse(req.body.tasks || '[]'); } catch (e) {}
-  const id = await db.createProject({ ...req.body, tasks, is_personal: req.body.category === 'personal', deadline: req.body.deadline || null, client_id: req.body.client_id || '' });
+  const { title, description, status, category, priority, budget, budget_status, client_id, client_name, client_phone, client_email, type, notes, deadline } = req.body;
+  const id = await db.createProject({ title, description, status, category, priority, budget, budget_status, client_id: client_id || '', client_name, client_phone, client_email, type, notes, tasks, is_personal: category === 'personal', deadline: deadline || null });
   res.redirect(`/admin/projects/${id}`);
 });
 
@@ -2652,7 +2662,8 @@ router.get('/projects/:id/edit', requireAuth, async (req, res) => {
 router.post('/projects/:id/update', requireAuth, async (req, res) => {
   let tasks = [];
   try { tasks = JSON.parse(req.body.tasks || '[]'); } catch (e) {}
-  await db.updateProject(req.params.id, { ...req.body, tasks, is_personal: req.body.category === 'personal', deadline: req.body.deadline || null, client_id: req.body.client_id || '' });
+  const { title, description, status, category, priority, budget, budget_status, client_id, client_name, client_phone, client_email, type, notes, deadline } = req.body;
+  await db.updateProject(req.params.id, { title, description, status, category, priority, budget, budget_status, client_id: client_id || '', client_name, client_phone, client_email, type, notes, tasks, is_personal: category === 'personal', deadline: deadline || null });
   res.redirect(`/admin/projects/${req.params.id}`);
 });
 
@@ -2698,7 +2709,7 @@ router.post('/projects/:id/upload', requireAuth, (req, res, next) => {
 });
 
 router.post('/projects/:id/files/:filename/delete', requireAuth, (req, res) => {
-  const filePath = path.join(PROJECT_FILES_DIR, req.params.id, req.params.filename);
+  const filePath = safePath(PROJECT_FILES_DIR, req.params.id, req.params.filename);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   res.redirect(`/admin/projects/${req.params.id}`);
 });
@@ -2874,7 +2885,8 @@ router.get('/clientes/new', requireAuth, async (req, res) => {
 });
 
 router.post('/clientes', requireAuth, async (req, res) => {
-  const id = await db.createClientRecord(req.body);
+  const { name, company, category, phone, email, notes } = req.body;
+  const id = await db.createClientRecord({ name, company, category, phone, email, notes });
   res.redirect(`/admin/clientes/${id}`);
 });
 
@@ -3109,7 +3121,8 @@ router.get('/clientes/:id/edit', requireAuth, async (req, res) => {
 });
 
 router.post('/clientes/:id/update', requireAuth, async (req, res) => {
-  await db.updateClientRecord(req.params.id, req.body);
+  const { name, company, category, phone, email, notes } = req.body;
+  await db.updateClientRecord(req.params.id, { name, company, category, phone, email, notes });
   res.redirect(`/admin/clientes/${req.params.id}`);
 });
 
@@ -3510,27 +3523,27 @@ router.post('/documentos/folder/new', requireAuth, async (req, res) => {
 
 // Download routes
 router.get('/documentos/folder/:folderId/file/:filename/download', requireAuth, (req, res) => {
-  const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
+  const filePath = safePath(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
   res.download(filePath, req.params.filename);
 });
 
 router.get('/documentos/project/:projectId/file/:filename/download', requireAuth, (req, res) => {
-  const filePath = path.join(PROJECT_FILES_DIR, req.params.projectId, req.params.filename);
+  const filePath = safePath(PROJECT_FILES_DIR, req.params.projectId, req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
   res.download(filePath, req.params.filename);
 });
 
 router.get('/documentos/demo/:slug/file/:filename/download', requireAuth, (req, res) => {
   const DEMOS_BASE = path.join(__dirname, '..', 'data', 'demos');
-  const filePath = path.join(DEMOS_BASE, req.params.slug, req.params.filename);
+  const filePath = safePath(DEMOS_BASE, req.params.slug, req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
   res.download(filePath, req.params.filename);
 });
 
 // View (not download) for custom folder files
 router.get('/documentos/folder/:folderId/file/:filename', requireAuth, (req, res) => {
-  const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
+  const filePath = safePath(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Archivo no encontrado');
   res.sendFile(filePath);
 });
@@ -3545,14 +3558,14 @@ router.post('/documentos/folder/:folderId/upload', requireAuth, (req, res) => {
 
 // Delete file from custom folder
 router.post('/documentos/folder/:folderId/file/:filename/delete', requireAuth, (req, res) => {
-  const filePath = path.join(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
+  const filePath = safePath(DOCUMENTS_DIR, req.params.folderId, req.params.filename);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   res.redirect(`/admin/documentos?type=custom&folder=${req.params.folderId}`);
 });
 
 // Delete entire custom folder
 router.post('/documentos/folder/:folderId/delete', requireAuth, async (req, res) => {
-  const dir = path.join(DOCUMENTS_DIR, req.params.folderId);
+  const dir = safePath(DOCUMENTS_DIR, req.params.folderId);
   if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   await db.deleteDocumentFolder(req.params.folderId);
   res.redirect('/admin/documentos');
@@ -3562,9 +3575,9 @@ router.post('/documentos/folder/:folderId/delete', requireAuth, async (req, res)
 router.post('/documentos/file/move', requireAuth, (req, res) => {
   const { filename, fromFolder, toFolder } = req.body;
   if (!filename || !fromFolder || !toFolder) return res.redirect('/admin/documentos');
-  const src = path.join(DOCUMENTS_DIR, fromFolder, filename);
-  const destDir = path.join(DOCUMENTS_DIR, toFolder);
-  const dest = path.join(destDir, filename);
+  const src = safePath(DOCUMENTS_DIR, fromFolder, filename);
+  const destDir = safePath(DOCUMENTS_DIR, toFolder);
+  const dest = safePath(destDir, filename);
   if (fs.existsSync(src)) {
     fs.mkdirSync(destDir, { recursive: true });
     fs.renameSync(src, dest);

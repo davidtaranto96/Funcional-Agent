@@ -115,7 +115,7 @@ app.post('/webhook', async (req, res) => {
     // Audio → transcribir con Whisper
     if (NumMedia > 0 && MediaUrl0 && MediaType0.startsWith('audio/')) {
       console.log(`[webhook] Audio recibido, transcribiendo...`);
-      text = await transcribe(MediaUrl0);
+      text = (await transcribe(MediaUrl0)) || '';
       console.log(`[webhook] Transcripción: "${text}"`);
     }
 

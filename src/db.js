@@ -38,6 +38,7 @@ async function init() {
       timeline TEXT DEFAULT '[]',
       notes TEXT DEFAULT '',
       demo_notes TEXT DEFAULT '',
+      archived INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -131,23 +132,41 @@ async function init() {
   for (const sql of projectMigrations) {
     try { await db.execute(sql); } catch (e) { /* already exists */ }
   }
+
+  // Indexes for common query patterns
+  const indexes = [
+    `CREATE INDEX IF NOT EXISTS idx_conv_client_stage ON conversations(client_stage)`,
+    `CREATE INDEX IF NOT EXISTS idx_conv_archived ON conversations(archived)`,
+    `CREATE INDEX IF NOT EXISTS idx_conv_updated_at ON conversations(updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_notif_is_read ON notifications(is_read)`,
+    `CREATE INDEX IF NOT EXISTS idx_notif_created_at ON notifications(created_at)`,
+  ];
+  for (const sql of indexes) {
+    try { await db.execute(sql); } catch (e) { /* index already exists */ }
+  }
 }
 
 // ─── Helpers de parsing ───────────────────────────────────────────────────────
+
+function safeParseJSON(str, fallback) {
+  try { return JSON.parse(String(str)); } catch { return fallback; }
+}
 
 function parseConv(row) {
   if (!row) return null;
   return {
     phone: row.phone,
-    history: JSON.parse(String(row.history || '[]')),
+    history: row.history != null ? safeParseJSON(row.history, []) : [],
     stage: String(row.stage || 'greeting'),
-    context: JSON.parse(String(row.context || '{}')),
-    report: row.report ? JSON.parse(String(row.report)) : null,
+    context: row.context != null ? safeParseJSON(row.context, {}) : {},
+    report: row.report ? safeParseJSON(row.report, null) : null,
     followup_sent: Number(row.followup_sent || 0),
     drive_folder_id: row.drive_folder_id || null,
     demo_status: String(row.demo_status || 'none'),
     client_stage: String(row.client_stage || 'lead'),
-    timeline: row.timeline ? JSON.parse(String(row.timeline)) : [],
+    timeline: row.timeline ? safeParseJSON(row.timeline, []) : [],
     notes: String(row.notes || ''),
     demo_notes: String(row.demo_notes || ''),
     archived: Number(row.archived || 0),
@@ -309,9 +328,10 @@ async function appendTimelineEvent(phone, event) {
 
 async function listAllClients(includeArchived = false) {
   const db = getDb();
+  const cols = 'phone, stage, client_stage, demo_status, report, timeline, updated_at, created_at, followup_sent, archived, notes, demo_notes, drive_folder_id';
   const sql = includeArchived
-    ? 'SELECT * FROM conversations ORDER BY updated_at DESC'
-    : 'SELECT * FROM conversations WHERE archived = 0 OR archived IS NULL ORDER BY updated_at DESC';
+    ? `SELECT ${cols} FROM conversations ORDER BY updated_at DESC`
+    : `SELECT ${cols} FROM conversations WHERE archived = 0 OR archived IS NULL ORDER BY updated_at DESC`;
   const result = await db.execute(sql);
   return result.rows.map(parseConv);
 }
@@ -337,7 +357,7 @@ async function getProject(id) {
 }
 
 async function createProject(data) {
-  const id = `proj_${Date.now()}`;
+  const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
   const db = getDb();
   await db.execute({
     sql: `INSERT INTO projects (id, client_name, client_phone, client_email, title, type, description, status, budget, budget_status, tasks, notes, is_personal, deadline, category, client_id, created_by)
@@ -411,7 +431,7 @@ async function getClientRecord(id) {
 }
 
 async function createClientRecord(data) {
-  const id = `cl_${Date.now()}`;
+  const id = `cl_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
   const db = getDb();
   await db.execute({
     sql: `INSERT INTO client_records (id, name, phone, email, company, category, notes)
@@ -449,7 +469,7 @@ async function listDocumentFolders() {
   return result.rows.map(r => ({ id: r.id, name: String(r.name||''), color: String(r.color||'#3b82f6'), description: String(r.description||''), created_at: r.created_at }));
 }
 async function createDocumentFolder(data) {
-  const id = `df_${Date.now()}`;
+  const id = `df_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
   const db = getDb();
   await db.execute({ sql: `INSERT INTO document_folders (id, name, color, description) VALUES (?,?,?,?)`, args: [id, data.name||'', data.color||'#3b82f6', data.description||''] });
   return id;
