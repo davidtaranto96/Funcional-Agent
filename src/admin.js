@@ -1141,9 +1141,67 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
           ${funcList ? `<div class="mt-4 pt-4 border-t border-slate-100"><div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Funcionalidades</div><ul class="space-y-1.5">${funcList}</ul></div>` : ''}
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
-          <h2 class="text-sm font-semibold text-slate-700 mb-4">Conversación (${(conv.history||[]).length} mensajes)</h2>
-          <div class="max-h-80 overflow-y-auto pr-1">${history || '<p class="text-sm text-slate-400">Sin mensajes</p>'}</div>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-700">Conversacion <span id="msg-count">(${(conv.history||[]).length} mensajes)</span></h2>
+            <div class="flex items-center gap-2">
+              <span id="live-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Auto-refresh activo"></span>
+              <span id="live-status" class="text-[10px] text-slate-400">En vivo</span>
+              <button onclick="toggleLive()" id="live-toggle" class="text-xs px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">Pausar</button>
+            </div>
+          </div>
+          <div id="chat-container" class="max-h-96 overflow-y-auto pr-1">${history || '<p class="text-sm text-slate-400">Sin mensajes</p>'}</div>
         </div>
+        <script>
+(function(){
+  var phone = ${JSON.stringify(phone)};
+  var lastCount = ${(conv.history||[]).length};
+  var liveOn = true;
+  var interval;
+
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  function renderMsg(m){
+    var isUser = m.role === 'user';
+    return '<div class="flex '+(isUser?'justify-start':'justify-end')+' mb-2">'+
+      '<div class="max-w-[80%] px-3 py-2 rounded-2xl '+(isUser?'bg-slate-100 rounded-tl-sm':'bg-blue-100 rounded-tr-sm')+'">'+
+      '<div class="text-[10px] '+(isUser?'text-slate-400':'text-blue-400')+' mb-1 font-medium">'+(isUser?'\\u{1F464} Cliente':'\\u{1F916} Asistente')+'</div>'+
+      '<div class="text-sm whitespace-pre-wrap">'+esc(m.content)+'</div>'+
+      '</div></div>';
+  }
+
+  function refresh(){
+    fetch('/admin/api/conversation/'+encodeURIComponent(phone))
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data.messageCount !== lastCount){
+          lastCount = data.messageCount;
+          document.getElementById('msg-count').textContent = '('+lastCount+' mensajes)';
+          var container = document.getElementById('chat-container');
+          container.innerHTML = data.history.map(renderMsg).join('');
+          container.scrollTop = container.scrollHeight;
+          container.style.borderColor = '#3b82f6';
+          setTimeout(function(){ container.style.borderColor = ''; }, 1000);
+        }
+      })
+      .catch(function(e){console.error('refresh error',e);});
+  }
+
+  function startLive(){ interval = setInterval(refresh, 5000); }
+  function stopLive(){ clearInterval(interval); }
+
+  window.toggleLive = function(){
+    liveOn = !liveOn;
+    if(liveOn){ startLive(); }else{ stopLive(); }
+    document.getElementById('live-dot').className = liveOn ? 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse' : 'w-2 h-2 rounded-full bg-slate-300';
+    document.getElementById('live-status').textContent = liveOn ? 'En vivo' : 'Pausado';
+    document.getElementById('live-toggle').textContent = liveOn ? 'Pausar' : 'Reanudar';
+  };
+
+  startLive();
+  var c = document.getElementById('chat-container');
+  if(c) c.scrollTop = c.scrollHeight;
+})();
+        </script>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <h2 class="text-sm font-semibold text-slate-700 mb-2">Historial de eventos</h2>
           <div class="max-h-72 overflow-y-auto">${timeline || '<p class="text-sm text-slate-400">Sin eventos registrados</p>'}</div>
@@ -1886,6 +1944,47 @@ router.get('/control', requireAuth, async (req, res) => {
       <div><div class="text-lg font-bold text-slate-800">${value}</div><div class="text-[10px] text-slate-400 uppercase tracking-wide">${label}</div></div>
     </div>`;
 
+  // ── Active conversations ──
+  const activeConvos = activeClients
+    .filter(c => ['greeting','gathering','confirming','done','awaiting_feedback','awaiting_slot'].includes(c.stage))
+    .sort((a,b) => new Date(b.updated_at+'Z') - new Date(a.updated_at+'Z'))
+    .slice(0, 10);
+
+  // Load full history only for active convos (max 10)
+  const activeConvosWithHistory = await Promise.all(
+    activeConvos.map(async c => {
+      const full = await db.getConversation(c.phone);
+      return { ...c, history: full?.history || [] };
+    })
+  );
+
+  const stageLabel = { greeting: 'Saludando', gathering: 'Conversando', confirming: 'Confirmando', done: 'Procesando', awaiting_feedback: 'Esperando feedback', awaiting_slot: 'Eligiendo horario' };
+  const stageColor = { greeting: 'slate', gathering: 'blue', confirming: 'amber', done: 'indigo', awaiting_feedback: 'purple', awaiting_slot: 'green' };
+
+  const activeConvoRows = activeConvosWithHistory.length === 0
+    ? '<div class="text-center text-slate-400 py-6 text-sm">No hay conversaciones activas</div>'
+    : activeConvosWithHistory.map(c => {
+      const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+      const ph = encodeURIComponent(c.phone);
+      const st = stageLabel[c.stage] || c.stage;
+      const sc = stageColor[c.stage] || 'slate';
+      const lastMsg = c.history?.length ? c.history[c.history.length-1] : null;
+      const preview = lastMsg ? escapeHtml((lastMsg.content||'').substring(0,60)) + (lastMsg.content?.length > 60 ? '...' : '') : '';
+      const msgRole = lastMsg?.role === 'user' ? '\u{1F464}' : '\u{1F916}';
+      return `
+      <a href="/admin/client/${ph}" class="flex items-center gap-3 px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-slate-800">${escapeHtml(nombre)}</span>
+            <span class="px-1.5 py-0.5 bg-${sc}-100 text-${sc}-600 text-[10px] font-medium rounded-full">${st}</span>
+            <span class="text-[10px] text-slate-300">${_timeAgo(c.updated_at)}</span>
+          </div>
+          ${preview ? `<div class="text-[11px] text-slate-400 mt-0.5 truncate">${msgRole} ${preview}</div>` : ''}
+        </div>
+        <svg class="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </a>`;
+    }).join('');
+
   const body = `
     <div class="mb-5">
       <h1 class="text-xl font-bold text-slate-900">Centro de Control</h1>
@@ -1910,6 +2009,15 @@ router.get('/control', requireAuth, async (req, res) => {
             ${actionItems.length > 0 ? `<span class="px-2 py-0.5 bg-orange-100 text-orange-600 text-[10px] font-bold rounded-full">${actionItems.length}</span>` : ''}
           </div>
           ${actionRows}
+        </div>
+
+        <!-- Conversaciones activas -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mt-5">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-700">Conversaciones activas</h2>
+            <span class="text-[10px] text-slate-400">${stats.gathering} activas</span>
+          </div>
+          ${activeConvoRows}
         </div>
 
         <!-- Pipeline rapido -->
@@ -1965,8 +2073,26 @@ router.get('/control', requireAuth, async (req, res) => {
             ${notifRows}
           </div>
         </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mt-5">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-700">Sistema</h2>
+          </div>
+          <div class="px-4 py-3 space-y-2 text-xs">
+            <div class="flex justify-between"><span class="text-slate-400">Total contactos</span><span class="font-medium text-slate-700">${stats.total}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Generando demos</span><span class="font-medium text-amber-600">${stats.generating}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Perdidos</span><span class="font-medium text-red-500">${stats.lost}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Archivados</span><span class="font-medium text-slate-500">${allClients.filter(c=>c.archived).length}</span></div>
+            <div class="border-t border-slate-100 pt-2 mt-2">
+              <div class="flex justify-between"><span class="text-slate-400">Tasa de conversion</span><span class="font-bold text-emerald-600">${stats.total > 0 ? Math.round(stats.won / stats.total * 100) : 0}%</span></div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>`;
+    </div>
+    <script>
+      setTimeout(function(){ location.reload(); }, 30000);
+    </script>`;
 
   res.send(layout('Centro de Control', body, { pendingCount, activePage: 'control', user: req.session?.user }));
 });
@@ -1991,6 +2117,20 @@ router.post('/control/clear-all', requireAuth, async (req, res) => {
 router.get('/api/notif-count', requireAuth, async (req, res) => {
   const count = await db.getUnreadNotificationCount();
   res.json({ count });
+});
+
+// API: conversation data for live refresh
+router.get('/api/conversation/:phone', requireAuth, async (req, res) => {
+  const conv = await db.getConversation(req.params.phone);
+  if (!conv) return res.json({ history: [], stage: '', messageCount: 0 });
+  res.json({
+    history: conv.history || [],
+    stage: conv.stage,
+    client_stage: conv.client_stage,
+    demo_status: conv.demo_status,
+    messageCount: (conv.history || []).length,
+    updated_at: conv.updated_at,
+  });
 });
 
 // ─── All tasks ───────────────────────────────────────────────────────────────
