@@ -80,11 +80,16 @@ async function processNewReport(phone, report) {
       console.error('[orchestrator] Error mandando email de review:', err.message);
     }
 
+    // Notificación in-app (sin spam a WhatsApp)
     try {
-      await sendMessage(process.env.DAVID_PHONE,
-        `🎨 *Demos listos para revisar*\n\n${report.cliente?.nombre || phone}\n\n${reviewUrl}`);
+      await db.addNotification({
+        type: 'demo',
+        title: `Demos listos: ${report.cliente?.nombre || phone}`,
+        body: `${report.proyecto?.tipo || 'Proyecto'} — listos para revisar y aprobar`,
+        phone,
+      });
     } catch (err) {
-      console.error('[orchestrator] Error mandando WA de review:', err.message);
+      console.error('[orchestrator] Error creando notificación:', err.message);
     }
 
     console.log(`[orchestrator] Flujo completo para ${phone}`);
@@ -93,8 +98,7 @@ async function processNewReport(phone, report) {
     await db.updateDemoStatus(phone, 'error').catch(() => {});
     await db.appendTimelineEvent(phone, { event: 'demo_error', note: err.message }).catch(() => {});
     try {
-      await sendMessage(process.env.DAVID_PHONE,
-        `⚠️ *Error generando demos*\nCliente: ${phone}\nError: ${err.message}`);
+      await db.addNotification({ type: 'warning', title: 'Error generando demos', body: `${phone}: ${err.message}`, phone });
     } catch (e) {}
   }
 }
@@ -161,7 +165,7 @@ async function sendApprovedDemoToClient(phone) {
   await db.appendTimelineEvent(phone, { event: 'demo_sent_to_client', note: 'Demo enviado al cliente' });
 
   try {
-    await sendMessage(process.env.DAVID_PHONE, `✅ *Demo enviado a ${nombre}*\n📱 ${phone}`);
+    await db.addNotification({ type: 'demo', title: `Demo enviado a ${nombre}`, body: `Se mandó la propuesta visual al cliente`, phone });
   } catch (err) {}
 
   console.log(`[orchestrator] Demo enviado a ${phone}`);

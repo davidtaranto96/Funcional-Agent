@@ -198,13 +198,16 @@ function timelineIcon(ev) {
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
-function layout(title, body, { pendingCount = 0, activePage = '', user = null } = {}) {
+function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = '', user = null } = {}) {
   const navItem = (href, icon, label, page) => {
     const active = activePage === page;
+    let badge = '';
+    if (page === 'clients' && pendingCount > 0) badge = `<span class="bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>`;
+    if (page === 'notifications' && notifCount > 0) badge = `<span class="bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
     return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${active ? 'bg-blue-600/90 text-white shadow-sm' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}">
       <span class="text-[15px] leading-none flex-shrink-0 ${active ? 'opacity-100' : 'opacity-60'}">${icon}</span>
       <span class="flex-1">${label}</span>
-      ${page === 'clients' && pendingCount > 0 ? `<span class="bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>` : ''}
+      ${badge}
     </a>`;
   };
 
@@ -281,6 +284,7 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
         <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Clientes</div>
         <div class="space-y-0.5">
           ${navItem('/admin/clients', '💬', 'Pipeline', 'clients')}
+          ${navItem('/admin/notifications', '🔔', 'Notificaciones', 'notifications')}
           ${navItem('/admin/clientes', '👥', 'Clientes', 'clientes')}
         </div>
       </div>
@@ -342,6 +346,16 @@ function layout(title, body, { pendingCount = 0, activePage = '', user = null } 
   }
   // Cerrar con tecla Escape
   document.addEventListener('keydown',function(e){if(e.key==='Escape')closeSidebar();});
+  // Auto-fetch notif badge
+  fetch('/admin/api/notif-count').then(r=>r.json()).then(d=>{
+    if(d.count>0){
+      document.querySelectorAll('a[href="/admin/notifications"] .flex-1').forEach(el=>{
+        let badge=el.parentElement.querySelector('.notif-badge');
+        if(!badge){badge=document.createElement('span');badge.className='notif-badge bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center';el.parentElement.appendChild(badge);}
+        badge.textContent=d.count;
+      });
+    }
+  }).catch(()=>{});
   </script>
 </body>
 </html>`;
@@ -695,15 +709,30 @@ router.get('/clients', requireAuth, async (req, res) => {
   const filter = req.query.stage || 'all';
   const search = (req.query.q || '').toLowerCase();
   const view = req.query.view || 'list'; // 'list' or 'kanban'
-  let clients = await db.listAllClients();
+  const showArchived = req.query.archived === '1';
+  const sortBy = req.query.sort || 'recent'; // recent | oldest | name | stage
+  let clients = await db.listAllClients(showArchived);
+  if (showArchived) clients = clients.filter(c => c.archived);
   const allClients = clients;
-  const pendingReview = allClients.filter(c => c.demo_status === 'pending_review');
+  const pendingReview = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review');
 
   if (search) clients = clients.filter(c => {
     const n = (c.report?.cliente?.nombre || c.context?.nombre || '').toLowerCase();
     return n.includes(search) || c.phone.includes(search) || (c.report?.proyecto?.tipo || '').toLowerCase().includes(search);
   });
   if (filter !== 'all') clients = clients.filter(c => c.client_stage === filter);
+
+  // Ordenamiento
+  if (sortBy === 'oldest') clients.reverse();
+  if (sortBy === 'name') clients.sort((a, b) => {
+    const na = (a.report?.cliente?.nombre || a.context?.nombre || 'zzz').toLowerCase();
+    const nb = (b.report?.cliente?.nombre || b.context?.nombre || 'zzz').toLowerCase();
+    return na.localeCompare(nb);
+  });
+  if (sortBy === 'stage') clients.sort((a, b) => {
+    const order = { lead: 0, qualified: 1, demo_sent: 2, negotiating: 3, won: 4, lost: 5, dormant: 6 };
+    return (order[a.client_stage] ?? 99) - (order[b.client_stage] ?? 99);
+  });
 
   const tabs = [{ key: 'all', label: 'Todos', count: allClients.length, dot: null },
     ...STAGES.map(s => ({ key: s.key, label: s.label, count: allClients.filter(c => c.client_stage === s.key).length, dot: s.dot }))
@@ -863,6 +892,15 @@ router.get('/clients', requireAuth, async (req, res) => {
             Kanban
           </a>
         </div>
+        <select onchange="location.href='/admin/clients?stage=${escapeHtml(filter)}&view=${view}&sort='+this.value${search ? `+'&q=${encodeURIComponent(search)}'` : ''}" class="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 bg-white">
+          <option value="recent" ${sortBy==='recent'?'selected':''}>Más recientes</option>
+          <option value="oldest" ${sortBy==='oldest'?'selected':''}>Más antiguos</option>
+          <option value="name" ${sortBy==='name'?'selected':''}>Nombre A-Z</option>
+          <option value="stage" ${sortBy==='stage'?'selected':''}>Por etapa</option>
+        </select>
+        <a href="/admin/clients?archived=${showArchived?'0':'1'}" class="flex items-center gap-1 text-xs border ${showArchived ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-400 hover:text-slate-600'} px-3 py-1.5 rounded-lg transition-colors">
+          📦 ${showArchived ? 'Archivados' : 'Ver archivados'}
+        </a>
         <div class="relative group">
           <button class="flex items-center gap-1 text-xs border border-dashed border-slate-300 text-slate-400 hover:border-blue-300 hover:text-blue-500 px-3 py-1.5 rounded-lg transition-colors">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1147,6 +1185,18 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
             <textarea name="notes" rows="4" placeholder="Notas sobre este cliente..."
               class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500">${escapeHtml(conv.notes || '')}</textarea>
             <button class="mt-2 w-full border border-slate-200 hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-sm transition-colors">Guardar notas</button>
+          </form>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <h2 class="text-sm font-semibold text-slate-700 mb-3">Administrar</h2>
+          <form method="POST" action="/admin/archive/${phoneUrl}" class="mb-2">
+            <button class="w-full border border-slate-200 hover:bg-slate-100 text-slate-600 py-2 rounded-xl text-sm transition-colors">📦 Archivar contacto</button>
+          </form>
+          <form method="POST" action="/admin/reset-conv/${phoneUrl}" class="mb-2" onsubmit="return confirm('Esto borra toda la conversación y reinicia el contacto. ¿Seguro?')">
+            <button class="w-full border border-amber-200 hover:bg-amber-50 text-amber-700 py-2 rounded-xl text-sm transition-colors">🔄 Resetear conversación</button>
+          </form>
+          <form method="POST" action="/admin/delete-conv/${phoneUrl}" onsubmit="return confirm('BORRAR PERMANENTE. No se puede deshacer. ¿Seguro?')">
+            <button class="w-full border border-red-200 hover:bg-red-50 text-red-600 py-2 rounded-xl text-sm transition-colors">🗑️ Eliminar contacto</button>
           </form>
         </div>
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
@@ -1589,6 +1639,92 @@ router.post('/force-report/:phone', requireAuth, async (req, res) => {
 router.post('/notes/:phone', requireAuth, async (req, res) => {
   await db.setNotes(req.params.phone, req.body.notes || '');
   res.redirect(`/admin/client/${encodeURIComponent(req.params.phone)}`);
+});
+
+// ─── Archive / Reset / Delete conversations ──────────────────────────────────
+
+router.post('/archive/:phone', requireAuth, async (req, res) => {
+  await db.archiveConversation(req.params.phone);
+  await db.appendTimelineEvent(req.params.phone, { event: 'archived', note: 'Archivado desde el panel' });
+  res.redirect('/admin/clients');
+});
+
+router.post('/unarchive/:phone', requireAuth, async (req, res) => {
+  await db.unarchiveConversation(req.params.phone);
+  res.redirect('/admin/clients?archived=1');
+});
+
+router.post('/reset-conv/:phone', requireAuth, async (req, res) => {
+  await db.resetConversation(req.params.phone);
+  res.redirect(`/admin/client/${encodeURIComponent(req.params.phone)}`);
+});
+
+router.post('/delete-conv/:phone', requireAuth, async (req, res) => {
+  await db.deleteConversation(req.params.phone);
+  res.redirect('/admin/clients');
+});
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+router.get('/notifications', requireAuth, async (req, res) => {
+  const notifications = await db.getNotifications(100);
+  await db.markAllNotificationsRead();
+  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
+
+  const typeIcon = { lead: '💬', demo: '🎨', meeting: '📅', warning: '⚠️', info: '📝' };
+  const typeColor = { lead: 'blue', demo: 'purple', meeting: 'green', warning: 'amber', info: 'slate' };
+
+  const timeAgo = (d) => {
+    const diff = Date.now() - new Date(d + 'Z').getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'recién';
+    if (mins < 60) return `hace ${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `hace ${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    return `hace ${days}d`;
+  };
+
+  const rows = notifications.length === 0
+    ? '<div class="text-center text-slate-400 py-16">Sin notificaciones</div>'
+    : notifications.map(n => {
+      const icon = typeIcon[n.type] || '📌';
+      const color = typeColor[n.type] || 'slate';
+      const unread = n.is_read ? '' : 'bg-blue-50 border-l-4 border-l-blue-400';
+      const link = n.phone ? `/admin/client/${encodeURIComponent(n.phone)}` : '#';
+      return `
+        <a href="${link}" class="block px-5 py-4 hover:bg-slate-50 transition-colors ${unread} border-b border-slate-100">
+          <div class="flex items-start gap-3">
+            <span class="text-lg mt-0.5">${icon}</span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-sm text-slate-900">${n.title}</span>
+                <span class="text-xs text-slate-400 ml-2 shrink-0">${timeAgo(n.created_at)}</span>
+              </div>
+              ${n.body ? `<p class="text-xs text-slate-500 mt-0.5 truncate">${n.body.replace(/</g,'&lt;')}</p>` : ''}
+            </div>
+          </div>
+        </a>`;
+    }).join('');
+
+  const body = `
+    <div class="max-w-2xl mx-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-xl font-bold text-slate-900">Notificaciones</h1>
+        <span class="text-xs text-slate-400">${notifications.length} total</span>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        ${rows}
+      </div>
+    </div>`;
+
+  res.send(layout('Notificaciones', body, { pendingCount, activePage: 'notifications', user: req.session?.user }));
+});
+
+// API: contador de notificaciones sin leer (para el badge)
+router.get('/api/notif-count', requireAuth, async (req, res) => {
+  const count = await db.getUnreadNotificationCount();
+  res.json({ count });
 });
 
 // ─── All tasks ───────────────────────────────────────────────────────────────

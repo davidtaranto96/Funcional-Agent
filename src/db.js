@@ -92,6 +92,19 @@ async function init() {
     )
   `);
 
+  // Tabla de notificaciones in-app (reemplaza spam de WhatsApp a David)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      type TEXT DEFAULT 'info',
+      title TEXT NOT NULL DEFAULT '',
+      body TEXT DEFAULT '',
+      phone TEXT DEFAULT '',
+      is_read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Migraciones idempotentes
   const migrations = [
     `ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0`,
@@ -101,6 +114,7 @@ async function init() {
     `ALTER TABLE conversations ADD COLUMN timeline TEXT DEFAULT '[]'`,
     `ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''`,
     `ALTER TABLE conversations ADD COLUMN demo_notes TEXT DEFAULT ''`,
+    `ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { await db.execute(sql); } catch (e) { /* columna ya existe */ }
@@ -136,6 +150,7 @@ function parseConv(row) {
     timeline: row.timeline ? JSON.parse(String(row.timeline)) : [],
     notes: String(row.notes || ''),
     demo_notes: String(row.demo_notes || ''),
+    archived: Number(row.archived || 0),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -292,9 +307,12 @@ async function appendTimelineEvent(phone, event) {
   });
 }
 
-async function listAllClients() {
+async function listAllClients(includeArchived = false) {
   const db = getDb();
-  const result = await db.execute('SELECT * FROM conversations ORDER BY updated_at DESC');
+  const sql = includeArchived
+    ? 'SELECT * FROM conversations ORDER BY updated_at DESC'
+    : 'SELECT * FROM conversations WHERE archived = 0 OR archived IS NULL ORDER BY updated_at DESC';
+  const result = await db.execute(sql);
   return result.rows.map(parseConv);
 }
 
@@ -441,6 +459,75 @@ async function deleteDocumentFolder(id) {
   await db.execute({ sql: 'DELETE FROM document_folders WHERE id = ?', args: [id] });
 }
 
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+async function addNotification({ type, title, body, phone }) {
+  const id = `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT INTO notifications (id, type, title, body, phone) VALUES (?,?,?,?,?)`,
+    args: [id, type || 'info', title || '', body || '', phone || ''],
+  });
+  return id;
+}
+
+async function getNotifications(limit = 50, offset = 0) {
+  const db = getDb();
+  const result = await db.execute({
+    sql: 'SELECT * FROM notifications ORDER BY created_at DESC LIMIT ? OFFSET ?',
+    args: [limit, offset],
+  });
+  return result.rows.map(r => ({
+    id: r.id, type: String(r.type || 'info'), title: String(r.title || ''),
+    body: String(r.body || ''), phone: String(r.phone || ''),
+    is_read: Number(r.is_read || 0), created_at: r.created_at,
+  }));
+}
+
+async function getUnreadNotificationCount() {
+  const db = getDb();
+  const result = await db.execute('SELECT COUNT(*) as cnt FROM notifications WHERE is_read = 0');
+  return Number(result.rows[0]?.cnt || 0);
+}
+
+async function markNotificationRead(id) {
+  const db = getDb();
+  await db.execute({ sql: 'UPDATE notifications SET is_read = 1 WHERE id = ?', args: [id] });
+}
+
+async function markAllNotificationsRead() {
+  const db = getDb();
+  await db.execute('UPDATE notifications SET is_read = 1 WHERE is_read = 0');
+}
+
+// ─── Archive / Reset / Delete conversations ─────────────────────────────────
+
+async function archiveConversation(phone) {
+  const db = getDb();
+  await db.execute({ sql: 'UPDATE conversations SET archived = 1, updated_at = datetime(\'now\') WHERE phone = ?', args: [phone] });
+}
+
+async function unarchiveConversation(phone) {
+  const db = getDb();
+  await db.execute({ sql: 'UPDATE conversations SET archived = 0, updated_at = datetime(\'now\') WHERE phone = ?', args: [phone] });
+}
+
+async function deleteConversation(phone) {
+  const db = getDb();
+  await db.execute({ sql: 'DELETE FROM conversations WHERE phone = ?', args: [phone] });
+}
+
+async function resetConversation(phone) {
+  const db = getDb();
+  await db.execute({
+    sql: `UPDATE conversations SET history = '[]', stage = 'greeting', context = '{}',
+          report = NULL, demo_status = 'none', client_stage = 'lead', timeline = '[]',
+          notes = '', demo_notes = '', followup_sent = 0, archived = 0,
+          updated_at = datetime('now') WHERE phone = ?`,
+    args: [phone],
+  });
+}
+
 module.exports = {
   init, getConversation, upsertConversation, setContext,
   getStaleConversations, getAbandonedConversations, markFollowupSent, markAbandoned,
@@ -449,4 +536,6 @@ module.exports = {
   listProjects, getProject, createProject, updateProject, deleteProject, addProjectUpdate,
   listClientRecords, getClientRecord, createClientRecord, updateClientRecord, deleteClientRecord, getProjectsByClientId,
   listDocumentFolders, createDocumentFolder, deleteDocumentFolder,
+  addNotification, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead,
+  archiveConversation, unarchiveConversation, deleteConversation, resetConversation,
 };

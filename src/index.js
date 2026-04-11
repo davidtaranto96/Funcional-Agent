@@ -270,8 +270,8 @@ app.post('/webhook', async (req, res) => {
           result.reply += `\n\n📅 Agendado para el ${slotLabel}${meetPart}\n\nDavid te confirma por acá también.`;
           await db.updateClientStage(fromKey, 'negotiating');
           await db.appendTimelineEvent(fromKey, { event: 'meeting_scheduled', note: `${slotLabel}${meetLink ? ' — ' + meetLink : ''}` });
-          // Notificar a David (background, puede fallar)
-          sendMessage(process.env.DAVID_PHONE, `📅 *Reunión agendada con ${clientName}*\n📱 ${fromKey}\n⏰ ${slotLabel}${meetLink ? `\n🔗 ${meetLink}` : ''}`).catch(e => console.error('[calendar] Notify David:', e.message));
+          // Notificar a David in-app
+          db.addNotification({ type: 'meeting', title: `Reunión agendada con ${clientName}`, body: `${slotLabel}${meetLink ? ' — ' + meetLink : ''}`, phone: fromKey }).catch(e => console.error('[calendar] Notif:', e.message));
         }
       } catch (err) {
         console.error('[calendar] Error creando evento:', err.message);
@@ -294,19 +294,25 @@ app.post('/webhook', async (req, res) => {
           const report = await generateReport(conv.history, fromKey);
           console.log(`[bg] Reporte generado: ${report?.cliente?.nombre}`);
           await db.upsertConversation(fromKey, { report });
+          const nombre = report?.cliente?.nombre || fromKey;
 
-          try { await sendMessage(process.env.DAVID_PHONE, formatReportWhatsApp(report)); } catch (e) { console.error('[bg] WA reporte:', e.message); }
+          // Notificación in-app (no WhatsApp)
+          await db.addNotification({ type: 'lead', title: `Nuevo reporte: ${nombre}`, body: `${report?.proyecto?.tipo || 'Proyecto'} — listo para generar demos`, phone: fromKey });
+
+          // Email sí se manda (no es spam, es útil)
           try { const html = formatReportEmail(report); await sendEmailReport(report, html); } catch (e) { console.error('[bg] Email:', e.message); }
+
+          // Confirmar al cliente via REST API (mensaje adicional post-TwiML)
           try { await sendMessage(fromKey, '🎨 ¡Perfecto! Ya le pasé todo a David. En unos minutos te mando una propuesta visual por acá mismo.'); } catch (e) { console.error('[bg] Confirm client:', e.message); }
 
           console.log(`[bg] Lanzando orchestrator para ${fromKey}...`);
           orchestrator.processNewReport(fromKey, report).catch(err => {
             console.error('[bg] orchestrator error:', err);
-            sendMessage(process.env.DAVID_PHONE, `⚠️ Error demos ${fromKey}: ${err.message}`).catch(() => {});
+            db.addNotification({ type: 'warning', title: `Error generando demos`, body: err.message, phone: fromKey }).catch(() => {});
           });
         } catch (err) {
           console.error('[bg] Error generando reporte:', err);
-          sendMessage(process.env.DAVID_PHONE, `⚠️ Error reporte ${fromKey}: ${err.message}`).catch(() => {});
+          db.addNotification({ type: 'warning', title: 'Error generando reporte', body: err.message, phone: fromKey }).catch(() => {});
         }
       })();
     }
@@ -316,8 +322,7 @@ app.post('/webhook', async (req, res) => {
         try {
           const conv = await db.getConversation(fromKey);
           const nombre = conv?.report?.cliente?.nombre || fromKey;
-          const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-          await sendMessage(process.env.DAVID_PHONE, `📝 *Cambio pedido por ${nombre}*\n📱 ${fromKey}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(fromKey)}`);
+          await db.addNotification({ type: 'info', title: `${nombre} pidió un cambio`, body: text.slice(0, 200), phone: fromKey });
           await db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: text.slice(0, 200) });
         } catch (e) { console.error('[bg] Notify mod:', e.message); }
       })();
@@ -328,8 +333,7 @@ app.post('/webhook', async (req, res) => {
         try {
           const conv = await db.getConversation(fromKey);
           const nombre = conv?.report?.cliente?.nombre || fromKey;
-          const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-          await sendMessage(process.env.DAVID_PHONE, `✏️ *${nombre} quiere ajustes en la propuesta*\n📱 ${fromKey}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(fromKey)}`);
+          await db.addNotification({ type: 'demo', title: `${nombre} quiere ajustes en la propuesta`, body: text.slice(0, 200), phone: fromKey });
           await db.appendTimelineEvent(fromKey, { event: 'client_wants_changes', note: text.slice(0, 200) });
         } catch (e) { console.error('[bg] Notify changes:', e.message); }
       })();
