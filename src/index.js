@@ -142,16 +142,109 @@ app.post('/webhook', async (req, res) => {
     const fromKey = From.startsWith('whatsapp:') ? From : `whatsapp:${From}`;
     let text = Body.trim();
 
-    // Audio → transcribir con Whisper
+    // Audio → procesar en background (Twilio solo da ~15s para TwiML, transcripción puede tardar más)
     if (NumMedia > 0 && MediaUrl0 && MediaType0.startsWith('audio/')) {
-      console.log(`[webhook] Audio recibido (type=${MediaType0}), transcribiendo...`);
-      try {
-        text = (await transcribe(MediaUrl0)) || '';
-      } catch (err) {
-        console.error(`[webhook] Error en transcripción:`, err.message);
-        text = '';
-      }
-      console.log(`[webhook] Transcripción: "${(text || '').substring(0, 100)}"`);
+      console.log(`[webhook] Audio recibido (type=${MediaType0}), procesando en background...`);
+      // Responder inmediatamente para no perder el timeout de Twilio
+      twimlReply(res, '🎙️ Recibí tu audio, dame unos segundos que lo proceso...');
+      // Procesar en background: transcribir + enviar al agente + responder via REST API
+      (async () => {
+        try {
+          let audioText = '';
+          try {
+            audioText = (await transcribe(MediaUrl0)) || '';
+          } catch (err) {
+            console.error(`[webhook] Error en transcripción:`, err.message);
+          }
+          console.log(`[webhook] Transcripción: "${(audioText || '').substring(0, 100)}"`);
+          if (!audioText.trim()) {
+            await sendMessage(fromKey, 'No pude entender el audio. ¿Podrías escribirlo o grabar otro?');
+            return;
+          }
+          // Procesar con el agente como si fuera texto normal
+          const result = await handleMessage(fromKey, audioText);
+          // Manejar calendario si aplica
+          if (result.needsCalendarSlots) {
+            try {
+              const calSlots = await calendar.getAvailableSlots();
+              if (calSlots.length > 0) {
+                const conv = await db.getConversation(fromKey);
+                const slotsData = calSlots.map(s => ({ start: s.start.toISOString(), end: s.end.toISOString() }));
+                await db.upsertConversation(fromKey, { context: { ...(conv?.context || {}), pendingSlots: slotsData } });
+                const slotsText = calendar.formatSlotsForWhatsApp(calSlots);
+                result.reply += `\n\nTe dejo 3 opciones para que elijas la que más te queda:\n\n${slotsText}\n\n¿Cuál te viene mejor?`;
+                await db.appendTimelineEvent(fromKey, { event: 'calendar_slots_shown', note: '3 horarios mostrados' });
+              } else {
+                result.reply += '\n\n(Esta semana David anda un poco justo de horarios, te va a escribir directamente para coordinar)';
+              }
+            } catch (err) { console.error('[calendar] Error buscando horarios:', err.message); }
+          }
+          if (result.selectedSlotIndex !== null) {
+            try {
+              const conv = await db.getConversation(fromKey);
+              const slotsData = conv?.context?.pendingSlots || [];
+              if (slotsData.length > result.selectedSlotIndex) {
+                const sd = slotsData[result.selectedSlotIndex];
+                const slot = { start: new Date(sd.start), end: new Date(sd.end) };
+                const clientName = conv?.report?.cliente?.nombre || 'Cliente';
+                const clientEmail = conv?.report?.cliente?.email || null;
+                const { meetLink } = await calendar.createMeetingEvent(slot, clientName, clientEmail);
+                const slotLabel = calendar.formatSlotsForWhatsApp([slot]).replace(/^\*\d+\.\* /, '');
+                const meetPart = meetLink ? `\n\nLink de la videollamada: ${meetLink}` : '';
+                result.reply += `\n\n📅 Agendado para el ${slotLabel}${meetPart}\n\nDavid te confirma por acá también.`;
+                await db.updateClientStage(fromKey, 'negotiating');
+                await db.appendTimelineEvent(fromKey, { event: 'meeting_scheduled', note: `${slotLabel}${meetLink ? ' — ' + meetLink : ''}` });
+                db.addNotification({ type: 'meeting', title: `Reunión agendada con ${clientName}`, body: `${slotLabel}${meetLink ? ' — ' + meetLink : ''}`, phone: fromKey }).catch(e => console.error('[calendar] Notif:', e.message));
+              }
+            } catch (err) {
+              console.error('[calendar] Error creando evento:', err.message);
+              result.reply += '\n\n(Voy a coordinar el horario con David, en un rato te confirman)';
+            }
+          }
+          // Enviar respuesta del agente via REST API
+          console.log(`[webhook-bg] Respondiendo audio: "${result.reply.substring(0, 120)}..."`);
+          await sendMessage(fromKey, result.reply);
+          // Background work (reportes, notificaciones) — igual que el flujo normal
+          if (result.stage === 'done' && result.previousStage === 'confirming') {
+            try {
+              const conv = await db.getConversation(fromKey);
+              const report = await generateReport(conv.history, fromKey);
+              await db.upsertConversation(fromKey, { report });
+              const nombre = report?.cliente?.nombre || fromKey;
+              await db.addNotification({ type: 'lead', title: `Nuevo reporte: ${nombre}`, body: `${report?.proyecto?.tipo || 'Proyecto'} — listo para generar demos`, phone: fromKey });
+              try { const html = formatReportEmail(report); await sendEmailReport(report, html); } catch (e) { console.error('[bg] Email:', e.message); }
+              try { await sendMessage(fromKey, '🎨 ¡Perfecto! Ya le pasé todo a David. En unos minutos te mando una propuesta visual por acá mismo.'); } catch (e) { console.error('[bg] Confirm client:', e.message); }
+              orchestrator.processNewReport(fromKey, report).catch(err => {
+                console.error('[bg] orchestrator error:', err);
+                db.addNotification({ type: 'warning', title: `Error generando demos`, body: err.message, phone: fromKey }).catch(() => {});
+              });
+            } catch (err) {
+              console.error('[bg] Error generando reporte:', err);
+              db.addNotification({ type: 'warning', title: 'Error generando reporte', body: err.message, phone: fromKey }).catch(() => {});
+            }
+          }
+          if (result.stage === 'done' && result.previousStage === 'done' && audioText) {
+            try {
+              const conv = await db.getConversation(fromKey);
+              const nombre = conv?.report?.cliente?.nombre || fromKey;
+              await db.addNotification({ type: 'info', title: `${nombre} pidió un cambio`, body: audioText.slice(0, 200), phone: fromKey });
+              await db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: audioText.slice(0, 200) });
+            } catch (e) { console.error('[bg] Notify mod:', e.message); }
+          }
+          if (result.wantsChanges) {
+            try {
+              const conv = await db.getConversation(fromKey);
+              const nombre = conv?.report?.cliente?.nombre || fromKey;
+              await db.addNotification({ type: 'demo', title: `${nombre} quiere ajustes en la propuesta`, body: audioText.slice(0, 200), phone: fromKey });
+              await db.appendTimelineEvent(fromKey, { event: 'client_wants_changes', note: audioText.slice(0, 200) });
+            } catch (e) { console.error('[bg] Notify changes:', e.message); }
+          }
+        } catch (err) {
+          console.error('[webhook-bg] Error procesando audio:', err);
+          try { await sendMessage(fromKey, 'Perdón, tuve un error procesando el audio. ¿Podés escribirlo o grabar otro?'); } catch(e) {}
+        }
+      })();
+      return; // Ya respondimos con TwiML, el resto es background
     }
 
     // Imágenes, videos, stickers u otros media sin texto
