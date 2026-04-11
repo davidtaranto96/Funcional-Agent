@@ -520,6 +520,21 @@ async function markAllNotificationsRead() {
   await db.execute('UPDATE notifications SET is_read = 1 WHERE is_read = 0');
 }
 
+async function deleteNotification(id) {
+  const db = getDb();
+  await db.execute({ sql: 'DELETE FROM notifications WHERE id = ?', args: [id] });
+}
+
+async function deleteReadNotifications() {
+  const db = getDb();
+  await db.execute('DELETE FROM notifications WHERE is_read = 1');
+}
+
+async function deleteAllNotifications() {
+  const db = getDb();
+  await db.execute('DELETE FROM notifications');
+}
+
 // ─── Archive / Reset / Delete conversations ─────────────────────────────────
 
 async function archiveConversation(phone) {
@@ -556,6 +571,6 @@ module.exports = {
   listProjects, getProject, createProject, updateProject, deleteProject, addProjectUpdate,
   listClientRecords, getClientRecord, createClientRecord, updateClientRecord, deleteClientRecord, getProjectsByClientId,
   listDocumentFolders, createDocumentFolder, deleteDocumentFolder,
-  addNotification, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead,
+  addNotification, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, deleteNotification, deleteReadNotifications, deleteAllNotifications,
   archiveConversation, unarchiveConversation, deleteConversation, resetConversation,
 };

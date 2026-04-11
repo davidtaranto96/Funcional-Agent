@@ -209,7 +209,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     const active = activePage === page;
     let badge = '';
     if (page === 'clients' && pendingCount > 0) badge = `<span class="bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>`;
-    if (page === 'notifications' && notifCount > 0) badge = `<span class="bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
+    if (page === 'control' && notifCount > 0) badge = `<span class="bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
     return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${active ? 'bg-blue-600/90 text-white shadow-sm' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}">
       <span class="text-[15px] leading-none flex-shrink-0 ${active ? 'opacity-100' : 'opacity-60'}">${icon}</span>
       <span class="flex-1">${label}</span>
@@ -290,7 +290,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Clientes</div>
         <div class="space-y-0.5">
           ${navItem('/admin/clients', '💬', 'Pipeline', 'clients')}
-          ${navItem('/admin/notifications', '🔔', 'Notificaciones', 'notifications')}
+          ${navItem('/admin/control', '🎛️', 'Centro de Control', 'control')}
           ${navItem('/admin/clientes', '👥', 'Clientes', 'clientes')}
         </div>
       </div>
@@ -1735,65 +1735,240 @@ router.post('/delete-conv/:phone', requireAuth, async (req, res) => {
 
 // ─── Notifications ───────────────────────────────────────────────────────────
 
-router.get('/notifications', requireAuth, async (req, res) => {
-  const notifications = await db.getNotifications(100);
+// Redirect old notifications URL
+router.get('/notifications', requireAuth, (req, res) => res.redirect('/admin/control'));
+
+router.get('/control', requireAuth, async (req, res) => {
+  const [notifications, allClients] = await Promise.all([
+    db.getNotifications(100),
+    db.listAllClients(),
+  ]);
   await db.markAllNotificationsRead();
-  const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
 
+  const pendingCount = allClients.filter(c => c.demo_status === 'pending_review').length;
+  const activeClients = allClients.filter(c => !c.archived);
+
+  // ── Status counters ──
+  const stats = {
+    total: activeClients.length,
+    gathering: activeClients.filter(c => ['greeting','gathering','confirming'].includes(c.stage)).length,
+    done: activeClients.filter(c => c.stage === 'done').length,
+    pendingReview: allClients.filter(c => c.demo_status === 'pending_review').length,
+    generating: allClients.filter(c => c.demo_status === 'generating').length,
+    awaitingFeedback: activeClients.filter(c => c.stage === 'awaiting_feedback').length,
+    awaitingSlot: activeClients.filter(c => c.stage === 'awaiting_slot').length,
+    meetings: activeClients.filter(c => c.stage === 'meeting_scheduled').length,
+    won: activeClients.filter(c => c.client_stage === 'won').length,
+    lost: activeClients.filter(c => c.client_stage === 'lost').length,
+  };
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  // ── Actionable items: things that need David's attention ──
+  const pendingDemos = allClients.filter(c => c.demo_status === 'pending_review');
+  const changesRequested = allClients.filter(c => c.demo_status === 'changes_requested');
+  const clientsFeedback = activeClients.filter(c => c.stage === 'awaiting_feedback');
+  const reportsReady = activeClients.filter(c => c.stage === 'done' && c.report && (!c.demo_status || c.demo_status === 'none'));
+
+  const actionItems = [];
+  pendingDemos.forEach(c => {
+    const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    actionItems.push({
+      priority: 1, icon: '👁', color: 'orange',
+      title: `Revisar demo de ${escapeHtml(nombre)}`,
+      subtitle: c.report?.proyecto?.tipo || '',
+      actions: `<a href="/admin/review/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors">Revisar</a>
+        <form method="POST" action="/admin/approve/${encodeURIComponent(c.phone)}" class="inline"><button class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-colors">Aprobar</button></form>`,
+      time: c.updated_at,
+    });
+  });
+  changesRequested.forEach(c => {
+    const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    actionItems.push({
+      priority: 2, icon: '✏', color: 'violet',
+      title: `Correcciones: ${escapeHtml(nombre)}`,
+      subtitle: c.demo_notes ? `"${escapeHtml(c.demo_notes).slice(0, 80)}"` : '',
+      actions: `<a href="/admin/review/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold transition-colors">Ver cambios</a>`,
+      time: c.updated_at,
+    });
+  });
+  reportsReady.forEach(c => {
+    const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    actionItems.push({
+      priority: 3, icon: '📋', color: 'indigo',
+      title: `Reporte listo: ${escapeHtml(nombre)}`,
+      subtitle: 'Reporte generado, demo no iniciado',
+      actions: `<form method="POST" action="/admin/regenerate/${encodeURIComponent(c.phone)}" class="inline"><button class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors">Generar demo</button></form>
+        <a href="/admin/client/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-medium transition-colors">Ver detalle</a>`,
+      time: c.updated_at,
+    });
+  });
+  clientsFeedback.forEach(c => {
+    const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    actionItems.push({
+      priority: 4, icon: '💬', color: 'blue',
+      title: `Esperando respuesta: ${escapeHtml(nombre)}`,
+      subtitle: 'Demo enviado, esperando feedback del cliente',
+      actions: `<a href="/admin/client/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium transition-colors">Ver</a>
+        <a href="https://wa.me/${phoneSlug(c.phone)}" target="_blank" class="px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg text-xs font-medium transition-colors">WhatsApp</a>`,
+      time: c.updated_at,
+    });
+  });
+  actionItems.sort((a, b) => a.priority - b.priority);
+
+  const actionRows = actionItems.length === 0
+    ? '<div class="text-center text-slate-400 py-8 text-sm">Todo al dia, no hay acciones pendientes</div>'
+    : actionItems.map(a => `
+      <div class="flex items-center gap-3 px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+        <span class="text-lg flex-shrink-0">${a.icon}</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-slate-800">${a.title}</div>
+          ${a.subtitle ? `<div class="text-xs text-slate-400 mt-0.5 truncate">${a.subtitle}</div>` : ''}
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">${a.actions}</div>
+      </div>`).join('');
+
+  // ── Notification feed ──
   const typeIcon = { lead: '💬', demo: '🎨', meeting: '📅', warning: '⚠️', info: '📝' };
-  const typeColor = { lead: 'blue', demo: 'purple', meeting: 'green', warning: 'amber', info: 'slate' };
-
-  const timeAgo = (d) => {
-    const diff = Date.now() - new Date(d + 'Z').getTime();
+  const _timeAgo = (d) => {
+    if (!d) return '';
+    const diff = Date.now() - new Date(d + (String(d).endsWith('Z') ? '' : 'Z')).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'recién';
-    if (mins < 60) return `hace ${mins}m`;
+    if (mins < 1) return 'recien';
+    if (mins < 60) return `${mins}m`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `hace ${hrs}h`;
-    const days = Math.floor(hrs / 24);
-    return `hace ${days}d`;
+    if (hrs < 24) return `${hrs}h`;
+    return `${Math.floor(hrs / 24)}d`;
   };
 
-  const rows = notifications.length === 0
-    ? '<div class="text-center text-slate-400 py-16">Sin notificaciones</div>'
+  const notifRows = notifications.length === 0
+    ? '<div class="text-center text-slate-400 py-8 text-sm">Sin notificaciones</div>'
     : notifications.map(n => {
       const icon = typeIcon[n.type] || '📌';
-      const color = typeColor[n.type] || 'slate';
-      const unread = n.is_read ? '' : 'bg-blue-50 border-l-4 border-l-blue-400';
       const link = n.phone ? `/admin/client/${encodeURIComponent(n.phone)}` : '#';
       return `
-        <a href="${link}" class="block px-5 py-4 hover:bg-slate-50 transition-colors ${unread} border-b border-slate-100">
-          <div class="flex items-start gap-3">
-            <span class="text-lg mt-0.5">${icon}</span>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between">
-                <span class="font-medium text-sm text-slate-900">${escapeHtml(n.title)}</span>
-                <span class="text-xs text-slate-400 ml-2 shrink-0">${timeAgo(n.created_at)}</span>
-              </div>
-              ${n.body ? `<p class="text-xs text-slate-500 mt-0.5 truncate">${escapeHtml(n.body)}</p>` : ''}
+        <div class="flex items-start gap-3 px-4 py-3 border-b border-slate-100 last:border-0 group hover:bg-slate-50/50">
+          <span class="text-sm mt-0.5">${icon}</span>
+          <a href="${link}" class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-slate-700">${escapeHtml(n.title)}</span>
+              <span class="text-[10px] text-slate-300">${_timeAgo(n.created_at)}</span>
             </div>
-          </div>
-        </a>`;
+            ${n.body ? `<div class="text-[11px] text-slate-400 mt-0.5 truncate">${escapeHtml(n.body)}</div>` : ''}
+          </a>
+          <form method="POST" action="/admin/control/delete-notif/${encodeURIComponent(n.id)}" class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <button class="text-slate-300 hover:text-red-400 transition-colors p-1" title="Eliminar">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </form>
+        </div>`;
     }).join('');
 
+  // ── Status bar cards ──
+  const statCard = (label, value, color, icon) =>
+    `<div class="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-${color}-50 flex items-center justify-center text-base flex-shrink-0">${icon}</div>
+      <div><div class="text-lg font-bold text-slate-800">${value}</div><div class="text-[10px] text-slate-400 uppercase tracking-wide">${label}</div></div>
+    </div>`;
+
   const body = `
-    <div class="max-w-2xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-xl font-bold text-slate-900">Notificaciones</h1>
-        <div class="flex items-center gap-3">
-          <span class="text-xs text-slate-400">${notifications.length} total</span>
-          <a href="/admin/notifications" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-medium transition-colors">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            Refrescar
-          </a>
+    <div class="mb-5">
+      <h1 class="text-xl font-bold text-slate-900">Centro de Control</h1>
+      <p class="text-xs text-slate-400 mt-1">Estado del agente y acciones pendientes</p>
+    </div>
+
+    <!-- Status bar -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+      ${statCard('En conversacion', stats.gathering, 'blue', '💬')}
+      ${statCard('Demos pendientes', stats.pendingReview, 'orange', '👁')}
+      ${statCard('Esperando cliente', stats.awaitingFeedback, 'purple', '⏳')}
+      ${statCard('Reuniones', stats.meetings, 'green', '📅')}
+      ${statCard('Ganados', stats.won, 'emerald', '🏆')}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+      <!-- Acciones pendientes -->
+      <div class="lg:col-span-3">
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-700">Acciones pendientes</h2>
+            ${actionItems.length > 0 ? `<span class="px-2 py-0.5 bg-orange-100 text-orange-600 text-[10px] font-bold rounded-full">${actionItems.length}</span>` : ''}
+          </div>
+          ${actionRows}
+        </div>
+
+        <!-- Pipeline rapido -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mt-5">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-700">Pipeline rapido</h2>
+            <a href="/admin/clients" class="text-xs text-blue-500 hover:underline">Ver todo</a>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100">
+            <div class="px-4 py-3 text-center">
+              <div class="text-2xl font-bold text-blue-600">${stats.gathering}</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Conversando</div>
+            </div>
+            <div class="px-4 py-3 text-center">
+              <div class="text-2xl font-bold text-amber-500">${stats.done + stats.generating}</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Procesando</div>
+            </div>
+            <div class="px-4 py-3 text-center">
+              <div class="text-2xl font-bold text-purple-600">${stats.awaitingFeedback + stats.awaitingSlot}</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Negociando</div>
+            </div>
+            <div class="px-4 py-3 text-center">
+              <div class="text-2xl font-bold text-emerald-600">${stats.won}</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Cerrados</div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        ${rows}
+
+      <!-- Feed de notificaciones -->
+      <div class="lg:col-span-2">
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-700">Actividad</h2>
+            <div class="flex items-center gap-2">
+              <a href="/admin/control" class="text-slate-400 hover:text-slate-600 transition-colors p-1" title="Refrescar">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </a>
+              ${notifications.length > 0 ? `
+              <form method="POST" action="/admin/control/clear-read" class="inline">
+                <button class="text-slate-400 hover:text-slate-600 transition-colors p-1" title="Limpiar leidas">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                </button>
+              </form>
+              <form method="POST" action="/admin/control/clear-all" class="inline" onsubmit="return confirm('Borrar todas las notificaciones?')">
+                <button class="text-slate-400 hover:text-red-400 transition-colors p-1" title="Borrar todas">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+              </form>` : ''}
+            </div>
+          </div>
+          <div class="max-h-[500px] overflow-y-auto">
+            ${notifRows}
+          </div>
+        </div>
       </div>
     </div>`;
 
-  res.send(layout('Notificaciones', body, { pendingCount, activePage: 'notifications', user: req.session?.user }));
+  res.send(layout('Centro de Control', body, { pendingCount, activePage: 'control', user: req.session?.user }));
+});
+
+// ── Control center actions ──
+router.post('/control/delete-notif/:id', requireAuth, async (req, res) => {
+  await db.deleteNotification(req.params.id);
+  res.redirect('/admin/control');
+});
+
+router.post('/control/clear-read', requireAuth, async (req, res) => {
+  await db.deleteReadNotifications();
+  res.redirect('/admin/control');
+});
+
+router.post('/control/clear-all', requireAuth, async (req, res) => {
+  await db.deleteAllNotifications();
+  res.redirect('/admin/control');
 });
 
 // API: contador de notificaciones sin leer (para el badge)
