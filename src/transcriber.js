@@ -9,29 +9,28 @@ function getClient() {
   return groqClient;
 }
 
-// Meta Cloud API: recibe un media_id, resuelve la URL de descarga y transcribe con Groq Whisper (gratis)
-async function transcribe(mediaId) {
+// Twilio: recibe la URL directa del audio (con auth básica Account SID + Auth Token)
+// y transcribe con Groq Whisper (gratis)
+async function transcribe(mediaUrl) {
   try {
-    const token = process.env.META_ACCESS_TOKEN;
-    if (!token) throw new Error('META_ACCESS_TOKEN no configurado');
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-    // Paso 1: obtener la URL de descarga del audio
-    const metaRes = await fetch(
-      `https://graph.facebook.com/v19.0/${mediaId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!metaRes.ok) throw new Error(`Meta media error ${metaRes.status}: ${await metaRes.text()}`);
-    const { url: downloadUrl } = await metaRes.json();
-    if (!downloadUrl) throw new Error('Meta no devolvió URL de descarga');
+    if (!accountSid || !authToken) throw new Error('TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN no configurados');
 
-    // Paso 2: descargar el archivo de audio con el Bearer token
-    const audioRes = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
-    if (!audioRes.ok) throw new Error(`Audio download failed: ${audioRes.status}`);
+    // Descargar el audio con Basic Auth de Twilio
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+    const audioRes = await fetch(mediaUrl, {
+      headers: { Authorization: `Basic ${credentials}` },
+    });
+
+    if (!audioRes.ok) throw new Error(`Error descargando audio de Twilio: ${audioRes.status}`);
     const buffer = Buffer.from(await audioRes.arrayBuffer());
 
-    // Paso 3: transcribir con Groq Whisper large-v3 (gratis)
+    // Guardar temporalmente y transcribir
     const tmpFile = path.join(os.tmpdir(), `wa_audio_${Date.now()}.ogg`);
     fs.writeFileSync(tmpFile, buffer);
+
     try {
       const result = await getClient().audio.transcriptions.create({
         file: fs.createReadStream(tmpFile),

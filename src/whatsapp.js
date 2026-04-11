@@ -1,21 +1,27 @@
-// Meta Cloud API — reemplaza Twilio para envío de mensajes WhatsApp
+// Twilio — envío de mensajes WhatsApp Business
 
-function getConfig() {
-  return {
-    phoneNumberId: process.env.META_PHONE_NUMBER_ID,
-    token: process.env.META_ACCESS_TOKEN,
-  };
+const twilio = require('twilio');
+
+function getClient() {
+  return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 }
 
-// Normaliza el número para Meta Cloud API
-// Meta Cloud API usa el número exactamente como lo envía en el webhook (E.164 sin "+")
-// NO convertir formato — la lista de autorizados usa el mismo formato que el webhook
+function getTwilioNumber() {
+  // Debe estar en formato "whatsapp:+14155238886"
+  const n = process.env.TWILIO_WHATSAPP_NUMBER || '';
+  return n.startsWith('whatsapp:') ? n : `whatsapp:${n}`;
+}
+
+// Normaliza cualquier formato de teléfono a "whatsapp:+XXXXXXXX"
 function normalizePhone(phone) {
-  return phone.replace('whatsapp:', '').replace(/[^0-9]/g, '');
+  if (phone.startsWith('whatsapp:+')) return phone;
+  if (phone.startsWith('whatsapp:')) return phone.replace('whatsapp:', 'whatsapp:+');
+  const digits = phone.replace(/[^0-9]/g, '');
+  return `whatsapp:+${digits}`;
 }
 
-// Manda un mensaje de texto (con split automático si supera 4096 chars)
-function splitMessage(text, maxLen = 4096) {
+// Split automático si supera 1600 chars (límite de WhatsApp via Twilio)
+function splitMessage(text, maxLen = 1600) {
   if (text.length <= maxLen) return [text];
   const chunks = [];
   let remaining = text;
@@ -32,33 +38,17 @@ function splitMessage(text, maxLen = 4096) {
 }
 
 async function sendMessage(to, body) {
-  const { phoneNumberId, token } = getConfig();
+  const client = getClient();
   const toPhone = normalizePhone(to);
+  const from = getTwilioNumber();
   const chunks = splitMessage(body);
 
   for (let i = 0; i < chunks.length; i++) {
-    const res = await fetch(
-      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: toPhone,
-          type: 'text',
-          text: { body: chunks[i], preview_url: false },
-        }),
-      }
-    );
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error(`[whatsapp] Error enviando a ${to}:`, err);
-      throw new Error(`Meta API error ${res.status}: ${err}`);
-    }
+    await client.messages.create({
+      from,
+      to: toPhone,
+      body: chunks[i],
+    });
 
     if (i < chunks.length - 1) {
       await new Promise(r => setTimeout(r, 300));
@@ -66,46 +56,20 @@ async function sendMessage(to, body) {
   }
 }
 
-// Manda un mensaje con media (imagen, PDF, etc.) via URL pública
+// Manda mensaje con media (imagen, PDF, etc.) via URL pública
 async function sendMediaMessage(to, body, mediaUrl) {
-  const { phoneNumberId, token } = getConfig();
+  const client = getClient();
   const toPhone = normalizePhone(to);
+  const from = getTwilioNumber();
 
-  // Detectar tipo de medio por extensión
   const url = Array.isArray(mediaUrl) ? mediaUrl[0] : mediaUrl;
-  const ext = url.split('.').pop().toLowerCase().split('?')[0];
-  const typeMap = {
-    jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image',
-    pdf: 'document', doc: 'document', docx: 'document',
-    mp4: 'video', mp3: 'audio', ogg: 'audio',
-  };
-  const mediaType = typeMap[ext] || 'document';
 
-  const payload = {
-    messaging_product: 'whatsapp',
+  await client.messages.create({
+    from,
     to: toPhone,
-    type: mediaType,
-    [mediaType]: { link: url },
-  };
-  if (body) payload[mediaType].caption = body;
-
-  const res = await fetch(
-    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error(`[whatsapp] Error enviando media a ${to}:`, err);
-    throw new Error(`Meta API error ${res.status}: ${err}`);
-  }
+    body: body || '',
+    mediaUrl: [url],
+  });
 }
 
 module.exports = { sendMessage, sendMediaMessage };

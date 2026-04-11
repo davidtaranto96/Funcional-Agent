@@ -80,7 +80,31 @@ El cliente ya confirmó y David recibió toda la info. Se está preparando la pr
 - Si preguntan cuándo los contacta David → "en breve, y también te va a llegar una propuesta visual por WhatsApp en unos minutos"
 - Si quieren agregar o cambiar algo → anotalo amablemente, poné al final: [MODIFICACION]
 - Si preguntan qué sigue → "te mando una propuesta visual acá por WhatsApp, y después David te contacta para afinar los detalles y arrancar"
-- Si solo agradecen o se van → respondé breve y amable`
+- Si solo agradecen o se van → respondé breve y amable`,
+
+    awaiting_feedback: `FASE: ESPERANDO FEEDBACK DEL CLIENTE SOBRE SU PROPUESTA
+El cliente acaba de recibir su propuesta visual personalizada (una landing, un mockup y un PDF).
+Tu objetivo: entender si quiere arrancar o si tiene dudas.
+- Respondé de forma natural y entusiasta, como alguien que acaba de mostrar algo que armó con cuidado
+- Si el cliente muestra interés, dice que le copa, que sí, que quiere arrancar, que cuándo empezamos → poné al final: [AGENDAR_REUNION]
+- Si el cliente dice que quiere cambiar algo, que no le convence alguna parte, que tiene dudas sobre el precio o el alcance → poné al final: [QUIERE_CAMBIAR] y anotá qué quiere cambiar
+- Si hace preguntas sobre la propuesta → respondelas con entusiasmo y esperá su decisión
+- El siguiente paso natural es una llamada corta de 45 minutos con David para afinar detalles y arrancar`,
+
+    awaiting_slot: `FASE: ELIGIENDO HORARIO DE REUNIÓN
+Le mostraste al cliente 3 opciones de horario para una videollamada con David. Está eligiendo cuál le queda bien.
+- Si dice "el primero", "el 1", "el de más temprano", "el de la mañana", "lunes" o similar → confirmá amable y poné: [SLOT_1]
+- Si dice "el segundo", "el 2", "el del medio", "la tarde" o hace referencia a la segunda opción → confirmá y poné: [SLOT_2]
+- Si dice "el tercero", "el 3", "el último", "el más tarde" → confirmá y poné: [SLOT_3]
+- Si ninguno le viene → preguntale qué día/hora les quedaría mejor y deciles que David les va a confirmar un horario
+- Respondé brevemente ("¡Perfecto!" / "¡Dale, el segundo entonces!") y poné el marcador del slot elegido`,
+
+    meeting_scheduled: `FASE: REUNIÓN AGENDADA
+Ya hay una reunión agendada con David. El cliente está a un paso de arrancar.
+- Si preguntan sobre la reunión → confirmá que está agendada y que el link de videollamada ya les debería haber llegado
+- Si quieren saber qué sigue → "en la reunión David te cuenta el plan completo y arrancamos"
+- Si quieren cambiar el horario → deciles que le avisen directamente a David
+- Mantené el tono entusiasmado, esto está por arrancar`,
   };
 
   return `${persona}${contextInfo}\n\n${phases[stage]}`;
@@ -146,6 +170,11 @@ async function handleMessage(phone, userText) {
     let newStage = conv.stage;
     let report = conv.report;
 
+    // Flags para index.js
+    let needsCalendarSlots = false;
+    let selectedSlotIndex = null;
+    let wantsChanges = false;
+
     // Detectar marcas de transición de fase
     if (reply.includes('[RESUMEN_LISTO]')) {
       reply = reply.replace(/\s*\[RESUMEN_LISTO\]\s*/g, '').trim();
@@ -166,6 +195,34 @@ async function handleMessage(phone, userText) {
       // Se queda en done, pero marca que hay modificación
     }
 
+    // ── Marcadores del flujo de reunión ──────────────────────────────────────
+    if (reply.includes('[AGENDAR_REUNION]')) {
+      reply = reply.replace(/\s*\[AGENDAR_REUNION\]\s*/g, '').trim();
+      newStage = 'awaiting_slot';
+      needsCalendarSlots = true;
+    }
+
+    if (reply.includes('[QUIERE_CAMBIAR]')) {
+      reply = reply.replace(/\s*\[QUIERE_CAMBIAR\]\s*/g, '').trim();
+      // Se queda en awaiting_feedback
+      wantsChanges = true;
+    }
+
+    if (reply.includes('[SLOT_1]')) {
+      reply = reply.replace(/\s*\[SLOT_1\]\s*/g, '').trim();
+      newStage = 'meeting_scheduled';
+      selectedSlotIndex = 0;
+    } else if (reply.includes('[SLOT_2]')) {
+      reply = reply.replace(/\s*\[SLOT_2\]\s*/g, '').trim();
+      newStage = 'meeting_scheduled';
+      selectedSlotIndex = 1;
+    } else if (reply.includes('[SLOT_3]')) {
+      reply = reply.replace(/\s*\[SLOT_3\]\s*/g, '').trim();
+      newStage = 'meeting_scheduled';
+      selectedSlotIndex = 2;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     history.push({ role: 'assistant', content: reply });
 
     // Después del greeting, pasar a gathering automáticamente
@@ -185,6 +242,9 @@ async function handleMessage(phone, userText) {
       stage: newStage,
       previousStage: conv.stage,
       report,
+      needsCalendarSlots,
+      selectedSlotIndex,
+      wantsChanges,
     };
   } finally {
     locks.delete(phone);

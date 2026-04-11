@@ -22,6 +22,7 @@ const { sendReport: sendEmailReport } = require('./mailer');
 const { generateReport, formatReportWhatsApp, formatReportEmail } = require('./reports');
 const db = require('./db');
 const orchestrator = require('./orchestrator');
+const calendar = require('./calendar');
 const adminRouter = require('./admin');
 
 const passport = require('passport');
@@ -70,68 +71,64 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ── Webhook de verificación de Meta (GET) ────────────────────────────────
-app.get('/webhook', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
-    console.log('Webhook de Meta verificado OK');
-    return res.status(200).send(challenge);
-  }
-  res.sendStatus(403);
+// Diagnóstico de config (sin revelar valores)
+app.get('/webhook/debug', (req, res) => {
+  const check = (v) => process.env[v] ? '✅' : '❌ FALTA';
+  res.json({
+    version: '2.0.0',
+    env: {
+      TWILIO_ACCOUNT_SID: check('TWILIO_ACCOUNT_SID'),
+      TWILIO_AUTH_TOKEN: check('TWILIO_AUTH_TOKEN'),
+      TWILIO_WHATSAPP_NUMBER: check('TWILIO_WHATSAPP_NUMBER'),
+      ANTHROPIC_API_KEY: check('ANTHROPIC_API_KEY'),
+      DAVID_PHONE: check('DAVID_PHONE'),
+      GOOGLE_REFRESH_TOKEN: check('GOOGLE_REFRESH_TOKEN'),
+    },
+  });
 });
 
-// ── Webhook principal de Meta (POST) ─────────────────────────────────────
+// ── Helper TwiML: responde inline a Twilio ──────────────────────────────────
+function twimlReply(res, text) {
+  if (res.headersSent) return;
+  res.set('Content-Type', 'text/xml');
+  if (!text) return res.send('<Response/>');
+  const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  res.send(`<Response><Message>${safe}</Message></Response>`);
+}
+
+// ── Webhook de Twilio (POST) ──────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
-  // Meta requiere 200 inmediato
-  res.sendStatus(200);
-
   try {
-    const entry = req.body?.entry?.[0];
-    const change = entry?.changes?.[0]?.value;
+    const From = req.body?.From || '';
+    const Body = req.body?.Body || '';
+    const NumMedia = parseInt(req.body?.NumMedia || '0');
+    const MediaUrl0 = req.body?.MediaUrl0;
+    const MediaType0 = req.body?.MediaContentType0 || '';
 
-    // Ignorar notificaciones de estado (delivered, read, etc.)
-    if (!change?.messages?.length) return;
+    console.log(`[webhook] From=${From} Body="${(Body || '').substring(0, 80)}" NumMedia=${NumMedia}`);
 
-    const msg = change.messages[0];
-    const From = msg.from; // número sin "whatsapp:", ej: "5493877599185"
-    const fromKey = `whatsapp:+${From}`; // formato interno consistente
+    if (!From) return twimlReply(res);
 
-    let text = '';
-
-    // Texto normal
-    if (msg.type === 'text') {
-      text = msg.text?.body || '';
-    }
+    const fromKey = From.startsWith('whatsapp:') ? From : `whatsapp:${From}`;
+    let text = Body.trim();
 
     // Audio → transcribir con Whisper
-    if (msg.type === 'audio') {
-      const mediaId = msg.audio?.id;
-      if (mediaId) {
-        console.log(`Audio recibido de ${From}, transcribiendo...`);
-        text = await transcribe(mediaId);
-        console.log(`Transcripción: "${text}"`);
-      }
+    if (NumMedia > 0 && MediaUrl0 && MediaType0.startsWith('audio/')) {
+      console.log(`[webhook] Audio recibido, transcribiendo...`);
+      text = await transcribe(MediaUrl0);
+      console.log(`[webhook] Transcripción: "${text}"`);
     }
 
-    // Ignorar stickers, imágenes sin texto, etc.
     if (!text.trim()) {
-      await sendMessage(fromKey, 'Por ahora solo puedo leer texto y audios. ¿Me lo podés escribir?');
-      return;
+      return twimlReply(res, 'Por ahora solo puedo leer texto y audios. ¿Me lo podés escribir?');
     }
 
-    console.log(`Mensaje de ${fromKey}: "${text.substring(0, 100)}"`);
+    console.log(`[webhook] Procesando mensaje de ${fromKey}: "${text.substring(0, 100)}"`);
 
     // ── Comandos de admin desde el WhatsApp de David ──────────────────────
-    // Argentina puede llegar como 5493878599185 (con 9) o 54387815599185 (con 15)
-    // Normalizamos ambos: sacamos el 9 después de 54 y el 15 del celular
     const normalizeAR = (num) => {
       let n = num.replace(/\D/g, '');
-      // 54 9 AREA LOCAL → 54AREALOCAL
       if (n.startsWith('549') && n.length === 13) n = '54' + n.slice(3);
-      // 54 AREA 15 LOCAL → 54AREALOCAL
       n = n.replace(/^(54\d{3,4})15(\d{6,7})$/, '$1$2');
       return n;
     };
@@ -143,15 +140,13 @@ app.post('/webhook', async (req, res) => {
       if (cmd === 'PENDIENTES') {
         const pendientes = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review');
         if (pendientes.length === 0) {
-          await sendMessage(fromKey, '✅ No hay demos pendientes de revisión.');
-        } else {
-          const lista = pendientes.map(c => {
-            const nombre = c.report?.cliente?.nombre || c.phone;
-            return `• *${nombre}*\n  ${appUrl}/admin/review/${encodeURIComponent(c.phone)}`;
-          }).join('\n\n');
-          await sendMessage(fromKey, `📋 *Demos pendientes (${pendientes.length}):*\n\n${lista}`);
+          return twimlReply(res, '✅ No hay demos pendientes de revisión.');
         }
-        return;
+        const lista = pendientes.map(c => {
+          const nombre = c.report?.cliente?.nombre || c.phone;
+          return `• ${nombre}\n  ${appUrl}/admin/review/${encodeURIComponent(c.phone)}`;
+        }).join('\n\n');
+        return twimlReply(res, `📋 Demos pendientes (${pendientes.length}):\n\n${lista}`);
       }
 
       if (cmd.startsWith('APROBAR')) {
@@ -162,10 +157,7 @@ app.post('/webhook', async (req, res) => {
           if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
         } else {
           const pendientes = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review');
-          if (pendientes.length === 0) {
-            await sendMessage(fromKey, '⚠️ No hay demos pendientes para aprobar.');
-            return;
-          }
+          if (pendientes.length === 0) return twimlReply(res, '⚠️ No hay demos pendientes para aprobar.');
           targetPhone = pendientes[0].phone;
         }
         const conv = await db.getConversation(targetPhone);
@@ -173,8 +165,7 @@ app.post('/webhook', async (req, res) => {
         await db.updateDemoStatus(targetPhone, 'approved');
         await db.appendTimelineEvent(targetPhone, { event: 'demo_approved', note: 'Aprobado desde WhatsApp' });
         orchestrator.sendApprovedDemoToClient(targetPhone).catch(console.error);
-        await sendMessage(fromKey, `✅ *Aprobado.* Mandando demo a ${nombre}...`);
-        return;
+        return twimlReply(res, `✅ Aprobado. Mandando demo a ${nombre}...`);
       }
 
       if (cmd.startsWith('RECHAZAR')) {
@@ -185,19 +176,14 @@ app.post('/webhook', async (req, res) => {
           if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
         } else {
           const pendientes = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review');
-          if (pendientes.length === 0) {
-            await sendMessage(fromKey, '⚠️ No hay demos pendientes.');
-            return;
-          }
+          if (pendientes.length === 0) return twimlReply(res, '⚠️ No hay demos pendientes.');
           targetPhone = pendientes[0].phone;
         }
         await db.updateDemoStatus(targetPhone, 'rejected');
         await db.appendTimelineEvent(targetPhone, { event: 'demo_rejected', note: 'Rechazado desde WhatsApp' });
-        await sendMessage(fromKey, `❌ Demo rechazado.`);
-        return;
+        return twimlReply(res, '❌ Demo rechazado.');
       }
 
-      // STATUS +549... — ver estado completo de un cliente
       if (cmd.startsWith('STATUS')) {
         const parts = text.trim().split(/\s+/);
         let targetPhone = parts.length > 1 ? parts.slice(1).join('').trim() : null;
@@ -206,119 +192,154 @@ app.post('/webhook', async (req, res) => {
         if (!targetPhone) {
           const resumen = all.slice(-5).map(c => {
             const nombre = c.report?.cliente?.nombre || c.phone;
-            return `• *${nombre}* — etapa: ${c.stage} | demo: ${c.demo_status}`;
+            return `• ${nombre} — etapa: ${c.stage} | demo: ${c.demo_status}`;
           }).join('\n');
-          await sendMessage(fromKey, `📊 *Últimos 5 clientes:*\n\n${resumen || 'Sin clientes aún.'}`);
-        } else {
-          const conv = await db.getConversation(targetPhone);
-          if (!conv) { await sendMessage(fromKey, `❌ No encontré al cliente ${targetPhone}`); return; }
-          const nombre = conv.report?.cliente?.nombre || targetPhone;
-          const timeline = (conv.timeline || []).slice(-3).map(e => `• ${e.event}: ${e.note||''}`).join('\n');
-          await sendMessage(fromKey,
-            `📋 *${nombre}*\nEtapa: ${conv.stage}\nDemo: ${conv.demo_status}\nDrive: ${conv.drive_folder_id || 'sin carpeta'}\n\n*Últimos eventos:*\n${timeline || '(vacío)'}`);
+          return twimlReply(res, `📊 Últimos 5 clientes:\n\n${resumen || 'Sin clientes aún.'}`);
         }
-        return;
+        const conv = await db.getConversation(targetPhone);
+        if (!conv) return twimlReply(res, `❌ No encontré al cliente ${targetPhone}`);
+        const nombre = conv.report?.cliente?.nombre || targetPhone;
+        const timeline = (conv.timeline || []).slice(-3).map(e => `• ${e.event}: ${e.note||''}`).join('\n');
+        return twimlReply(res, `📋 ${nombre}\nEtapa: ${conv.stage}\nDemo: ${conv.demo_status}\n\nÚltimos eventos:\n${timeline || '(vacío)'}`);
       }
 
-      // REPORTE +549... — disparar flujo de demos manualmente para un cliente
       if (cmd.startsWith('REPORTE')) {
         const parts = text.trim().split(/\s+/);
         let targetPhone = parts.length > 1 ? parts.slice(1).join('').trim() : null;
-        if (!targetPhone) { await sendMessage(fromKey, '⚠️ Usá: REPORTE +5493878599185'); return; }
+        if (!targetPhone) return twimlReply(res, '⚠️ Usá: REPORTE +5493878599185');
         if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:+${targetPhone.replace(/[^0-9]/g,'')}`;
         const conv = await db.getConversation(targetPhone);
-        if (!conv?.report) { await sendMessage(fromKey, `❌ ${targetPhone} no tiene reporte todavía.`); return; }
-        await sendMessage(fromKey, `🔄 Regenerando demos para ${conv.report?.cliente?.nombre || targetPhone}...`);
+        if (!conv?.report) return twimlReply(res, `❌ ${targetPhone} no tiene reporte todavía.`);
+        twimlReply(res, `🔄 Regenerando demos para ${conv.report?.cliente?.nombre || targetPhone}...`);
         orchestrator.processNewReport(targetPhone, conv.report).catch(console.error);
         return;
       }
 
       if (cmd === 'AYUDA' || cmd === 'HELP') {
-        await sendMessage(fromKey,
-          `*Comandos disponibles:*\n\n` +
-          `• *PENDIENTES* — demos esperando aprobación\n` +
-          `• *APROBAR* — aprobar demo más reciente\n` +
-          `• *APROBAR +549...* — aprobar demo de número específico\n` +
-          `• *RECHAZAR* — rechazar demo más reciente\n` +
-          `• *STATUS* — últimos 5 clientes\n` +
-          `• *STATUS +549...* — estado detallado de un cliente\n` +
-          `• *REPORTE +549...* — regenerar demos manualmente\n\n` +
+        return twimlReply(res,
+          `Comandos disponibles:\n\n` +
+          `• PENDIENTES — demos esperando aprobación\n` +
+          `• APROBAR — aprobar demo más reciente\n` +
+          `• APROBAR +549... — aprobar de número específico\n` +
+          `• RECHAZAR — rechazar demo más reciente\n` +
+          `• STATUS — últimos 5 clientes\n` +
+          `• STATUS +549... — estado de un cliente\n` +
+          `• REPORTE +549... — regenerar demos\n\n` +
           `Panel web: ${appUrl}/admin`
         );
-        return;
       }
+
+      // Si David manda algo que no es comando, cae al flujo normal ↓
     }
     // ─────────────────────────────────────────────────────────────────────
 
+    // ── Flujo normal: procesar con el agente de Claude ────────────────────
     const result = await handleMessage(fromKey, text);
 
-    // Si se acaba de confirmar el proyecto, generar y enviar reporte
-    if (result.stage === 'done' && result.previousStage === 'confirming') {
-      console.log(`[index] 🎯 Transición confirming→done para ${fromKey} — generando reporte...`);
+    // ── Flujo de reunión (modifica result.reply antes de enviar) ──────────
+    if (result.needsCalendarSlots) {
       try {
-        const conv = await db.getConversation(fromKey);
-        const report = await generateReport(conv.history, fromKey);
-        console.log(`[index] Reporte generado: ${report?.cliente?.nombre}`);
-
-        await db.upsertConversation(fromKey, { report });
-
-        // Notificar a David por WhatsApp
-        const waReport = formatReportWhatsApp(report);
-        try {
-          await sendMessage(process.env.DAVID_PHONE, waReport);
-          console.log(`[index] WhatsApp de reporte enviado a David`);
-        } catch (e) { console.error('[index] Error WA reporte:', e.message); }
-
-        // Notificar a David por email
-        try {
-          const htmlReport = formatReportEmail(report);
-          await sendEmailReport(report, htmlReport);
-          console.log(`[index] Email de reporte enviado`);
-        } catch (e) { console.error('[index] Error email reporte:', e.message); }
-
-        // Confirmar al cliente (puede fallar en sandbox con números no registrados — no es crítico)
-        try {
-          await sendMessage(fromKey,
-            '🎨 ¡Perfecto! Ya le pasé todo a David. En los próximos minutos te mando una propuesta visual personalizada con lo que charlamos. ¡Fijate el WhatsApp!');
-        } catch (e) {
-          console.error('[index] No pude confirmar al cliente (sandbox?):', e.message);
+        const calSlots = await calendar.getAvailableSlots();
+        if (calSlots.length > 0) {
+          const conv = await db.getConversation(fromKey);
+          const slotsData = calSlots.map(s => ({ start: s.start.toISOString(), end: s.end.toISOString() }));
+          await db.upsertConversation(fromKey, { context: { ...(conv?.context || {}), pendingSlots: slotsData } });
+          const slotsText = calendar.formatSlotsForWhatsApp(calSlots);
+          result.reply += `\n\nTe dejo 3 opciones para que elijas la que más te queda:\n\n${slotsText}\n\n¿Cuál te viene mejor?`;
+          await db.appendTimelineEvent(fromKey, { event: 'calendar_slots_shown', note: '3 horarios mostrados' });
+        } else {
+          result.reply += '\n\n(Esta semana David anda un poco justo de horarios, te va a escribir directamente para coordinar)';
         }
-
-        // Arrancar generación de demos en background (siempre, independiente de errores anteriores)
-        console.log(`[index] Lanzando orchestrator para ${fromKey}...`);
-        orchestrator.processNewReport(fromKey, report).catch(err => {
-          console.error('Error en orchestrator.processNewReport:', err);
-          sendMessage(process.env.DAVID_PHONE,
-            `⚠️ Error generando demos para ${fromKey}: ${err.message}`).catch(()=>{});
-        });
-
       } catch (err) {
-        console.error('Error generando/enviando reporte:', err);
-        try {
-          await sendMessage(process.env.DAVID_PHONE,
-            `⚠️ Error generando reporte para ${fromKey}: ${err.message}`);
-        } catch(e){}
+        console.error('[calendar] Error buscando horarios:', err.message);
       }
     }
 
-    // Si hay una modificación post-reporte, notificar a David
-    if (result.stage === 'done' && result.previousStage === 'done' && text) {
-      const conv = await db.getConversation(fromKey);
-      const nombre = conv?.report?.cliente?.nombre || fromKey;
-      const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-      await sendMessage(process.env.DAVID_PHONE,
-        `📝 *Cambio pedido por ${nombre}*\n📱 ${fromKey}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(fromKey)}`);
-      await db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: text.slice(0, 200) });
+    if (result.selectedSlotIndex !== null) {
+      try {
+        const conv = await db.getConversation(fromKey);
+        const slotsData = conv?.context?.pendingSlots || [];
+        if (slotsData.length > result.selectedSlotIndex) {
+          const sd = slotsData[result.selectedSlotIndex];
+          const slot = { start: new Date(sd.start), end: new Date(sd.end) };
+          const clientName = conv?.report?.cliente?.nombre || 'Cliente';
+          const clientEmail = conv?.report?.cliente?.email || null;
+          const { meetLink } = await calendar.createMeetingEvent(slot, clientName, clientEmail);
+          const slotLabel = calendar.formatSlotsForWhatsApp([slot]).replace(/^\*\d+\.\* /, '');
+          const meetPart = meetLink ? `\n\nLink de la videollamada: ${meetLink}` : '';
+          result.reply += `\n\n📅 Agendado para el ${slotLabel}${meetPart}\n\nDavid te confirma por acá también.`;
+          await db.updateClientStage(fromKey, 'negotiating');
+          await db.appendTimelineEvent(fromKey, { event: 'meeting_scheduled', note: `${slotLabel}${meetLink ? ' — ' + meetLink : ''}` });
+          // Notificar a David (background, puede fallar)
+          sendMessage(process.env.DAVID_PHONE, `📅 *Reunión agendada con ${clientName}*\n📱 ${fromKey}\n⏰ ${slotLabel}${meetLink ? `\n🔗 ${meetLink}` : ''}`).catch(e => console.error('[calendar] Notify David:', e.message));
+        }
+      } catch (err) {
+        console.error('[calendar] Error creando evento:', err.message);
+        result.reply += '\n\n(Voy a coordinar el horario con David, en un rato te confirman)';
+      }
     }
 
-    try {
-      await sendMessage(fromKey, result.reply);
-    } catch (e) {
-      console.error('[index] Error enviando respuesta al cliente:', e.message);
+    // ── Enviar respuesta al cliente via TwiML (confiable, sin REST API) ──
+    console.log(`[webhook] Respondiendo: "${result.reply.substring(0, 120)}..."`);
+    twimlReply(res, result.reply);
+
+    // ── Trabajo pesado en background (notificaciones, reportes, demos) ───
+    // Esto corre DESPUÉS de enviar el TwiML, no bloquea al cliente
+
+    if (result.stage === 'done' && result.previousStage === 'confirming') {
+      (async () => {
+        try {
+          console.log(`[bg] Transición confirming→done para ${fromKey} — generando reporte...`);
+          const conv = await db.getConversation(fromKey);
+          const report = await generateReport(conv.history, fromKey);
+          console.log(`[bg] Reporte generado: ${report?.cliente?.nombre}`);
+          await db.upsertConversation(fromKey, { report });
+
+          try { await sendMessage(process.env.DAVID_PHONE, formatReportWhatsApp(report)); } catch (e) { console.error('[bg] WA reporte:', e.message); }
+          try { const html = formatReportEmail(report); await sendEmailReport(report, html); } catch (e) { console.error('[bg] Email:', e.message); }
+          try { await sendMessage(fromKey, '🎨 ¡Perfecto! Ya le pasé todo a David. En unos minutos te mando una propuesta visual por acá mismo.'); } catch (e) { console.error('[bg] Confirm client:', e.message); }
+
+          console.log(`[bg] Lanzando orchestrator para ${fromKey}...`);
+          orchestrator.processNewReport(fromKey, report).catch(err => {
+            console.error('[bg] orchestrator error:', err);
+            sendMessage(process.env.DAVID_PHONE, `⚠️ Error demos ${fromKey}: ${err.message}`).catch(() => {});
+          });
+        } catch (err) {
+          console.error('[bg] Error generando reporte:', err);
+          sendMessage(process.env.DAVID_PHONE, `⚠️ Error reporte ${fromKey}: ${err.message}`).catch(() => {});
+        }
+      })();
+    }
+
+    if (result.stage === 'done' && result.previousStage === 'done' && text) {
+      (async () => {
+        try {
+          const conv = await db.getConversation(fromKey);
+          const nombre = conv?.report?.cliente?.nombre || fromKey;
+          const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+          await sendMessage(process.env.DAVID_PHONE, `📝 *Cambio pedido por ${nombre}*\n📱 ${fromKey}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(fromKey)}`);
+          await db.appendTimelineEvent(fromKey, { event: 'client_requested_change', note: text.slice(0, 200) });
+        } catch (e) { console.error('[bg] Notify mod:', e.message); }
+      })();
+    }
+
+    if (result.wantsChanges) {
+      (async () => {
+        try {
+          const conv = await db.getConversation(fromKey);
+          const nombre = conv?.report?.cliente?.nombre || fromKey;
+          const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+          await sendMessage(process.env.DAVID_PHONE, `✏️ *${nombre} quiere ajustes en la propuesta*\n📱 ${fromKey}\n\n"${text}"\n\n👉 ${appUrl}/admin/client/${encodeURIComponent(fromKey)}`);
+          await db.appendTimelineEvent(fromKey, { event: 'client_wants_changes', note: text.slice(0, 200) });
+        } catch (e) { console.error('[bg] Notify changes:', e.message); }
+      })();
     }
 
   } catch (err) {
-    console.error('Error en webhook:', err);
+    console.error('[webhook] Error fatal:', err);
+    if (!res.headersSent) {
+      twimlReply(res, 'Perdón, tuve un error. ¿Podés intentar de nuevo?');
+    }
   }
 });
 

@@ -7,7 +7,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '1.9.8'; // Actualizar con cada deploy relevante
+const APP_VERSION = '2.0.0'; // Actualizar con cada deploy relevante
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 

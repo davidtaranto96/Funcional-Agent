@@ -115,6 +115,9 @@ async function sendApprovedDemoToClient(phone) {
   const hasLanding = fs.existsSync(path.join(localDir, 'landing.html'));
   const hasWAMockup = fs.existsSync(path.join(localDir, 'whatsapp.html'));
 
+  // Transición al agente: ahora espera feedback del cliente sobre el demo
+  await db.upsertConversation(phone, { stage: 'awaiting_feedback' });
+
   try {
     await sendMessage(phone,
       `${nombre}, estuve armando algo para vos basado en lo que charlamos. Te paso una propuesta visual así te hacés una idea concreta 👇`);
@@ -150,7 +153,7 @@ async function sendApprovedDemoToClient(phone) {
 
   try {
     await sendMessage(phone,
-      '¿Qué te parece? Si te copa, arreglamos una llamada rápida esta semana para cerrar detalles 💬');
+      '¿Qué te parece? Si te copa podemos hacer una llamada corta esta semana para cerrar detalles y arrancar. Avisame nomás 💬');
   } catch (err) { console.error('Error WA cierre:', err.message); }
 
   await db.updateDemoStatus(phone, 'sent');
