@@ -81,6 +81,7 @@ app.get('/webhook/debug', (req, res) => {
       TWILIO_AUTH_TOKEN: check('TWILIO_AUTH_TOKEN'),
       TWILIO_WHATSAPP_NUMBER: check('TWILIO_WHATSAPP_NUMBER'),
       ANTHROPIC_API_KEY: check('ANTHROPIC_API_KEY'),
+      GROQ_API_KEY: check('GROQ_API_KEY'),
       DAVID_PHONE: check('DAVID_PHONE'),
       GOOGLE_REFRESH_TOKEN: check('GOOGLE_REFRESH_TOKEN'),
     },

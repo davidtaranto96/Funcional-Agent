@@ -1770,46 +1770,62 @@ router.get('/control', requireAuth, async (req, res) => {
   const reportsReady = activeClients.filter(c => c.stage === 'done' && c.report && (!c.demo_status || c.demo_status === 'none'));
 
   const actionItems = [];
+  const actionBtn = (href, label, style) => `<a href="${href}" class="px-2.5 py-1 ${style} rounded-lg text-xs font-medium transition-colors">${label}</a>`;
+  const actionForm = (action, label, style, confirm) =>
+    `<form method="POST" action="${action}" class="inline"${confirm ? ` onsubmit="return confirm('${confirm}')"` : ''}>
+      <button class="px-2.5 py-1 ${style} rounded-lg text-xs font-medium transition-colors">${label}</button>
+    </form>`;
+
   pendingDemos.forEach(c => {
     const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    const ph = encodeURIComponent(c.phone);
     actionItems.push({
       priority: 1, icon: '👁', color: 'orange',
       title: `Revisar demo de ${escapeHtml(nombre)}`,
       subtitle: c.report?.proyecto?.tipo || '',
-      actions: `<a href="/admin/review/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors">Revisar</a>
-        <form method="POST" action="/admin/approve/${encodeURIComponent(c.phone)}" class="inline"><button class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-colors">Aprobar</button></form>`,
+      actions: `${actionBtn(`/admin/review/${ph}`, 'Revisar', 'bg-orange-500 hover:bg-orange-600 text-white font-semibold')}
+        ${actionForm(`/admin/approve/${ph}`, 'Aprobar', 'bg-emerald-500 hover:bg-emerald-600 text-white')}
+        ${actionForm(`/admin/reject/${ph}`, 'Rechazar', 'bg-red-100 hover:bg-red-200 text-red-600 border border-red-200')}
+        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
       time: c.updated_at,
     });
   });
   changesRequested.forEach(c => {
     const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    const ph = encodeURIComponent(c.phone);
     actionItems.push({
       priority: 2, icon: '✏', color: 'violet',
       title: `Correcciones: ${escapeHtml(nombre)}`,
       subtitle: c.demo_notes ? `"${escapeHtml(c.demo_notes).slice(0, 80)}"` : '',
-      actions: `<a href="/admin/review/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold transition-colors">Ver cambios</a>`,
+      actions: `${actionBtn(`/admin/review/${ph}`, 'Ver cambios', 'bg-violet-600 hover:bg-violet-700 text-white font-semibold')}
+        ${actionForm(`/admin/regenerate/${ph}`, 'Regenerar', 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-200')}
+        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
       time: c.updated_at,
     });
   });
   reportsReady.forEach(c => {
     const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    const ph = encodeURIComponent(c.phone);
     actionItems.push({
       priority: 3, icon: '📋', color: 'indigo',
       title: `Reporte listo: ${escapeHtml(nombre)}`,
       subtitle: 'Reporte generado, demo no iniciado',
-      actions: `<form method="POST" action="/admin/regenerate/${encodeURIComponent(c.phone)}" class="inline"><button class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors">Generar demo</button></form>
-        <a href="/admin/client/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-medium transition-colors">Ver detalle</a>`,
+      actions: `${actionForm(`/admin/regenerate/${ph}`, 'Generar demo', 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold')}
+        ${actionBtn(`/admin/client/${ph}`, 'Ver', 'border border-slate-200 text-slate-600 hover:bg-slate-50')}
+        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
       time: c.updated_at,
     });
   });
   clientsFeedback.forEach(c => {
     const nombre = c.report?.cliente?.nombre || phoneSlug(c.phone);
+    const ph = encodeURIComponent(c.phone);
     actionItems.push({
       priority: 4, icon: '💬', color: 'blue',
       title: `Esperando respuesta: ${escapeHtml(nombre)}`,
       subtitle: 'Demo enviado, esperando feedback del cliente',
-      actions: `<a href="/admin/client/${encodeURIComponent(c.phone)}" class="px-3 py-1.5 border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium transition-colors">Ver</a>
-        <a href="https://wa.me/${phoneSlug(c.phone)}" target="_blank" class="px-3 py-1.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-lg text-xs font-medium transition-colors">WhatsApp</a>`,
+      actions: `${actionBtn(`/admin/client/${ph}`, 'Ver', 'border border-blue-200 text-blue-600 hover:bg-blue-50')}
+        ${actionBtn(`https://wa.me/${phoneSlug(c.phone)}`, 'WhatsApp', 'border border-emerald-200 text-emerald-600 hover:bg-emerald-50')}
+        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
       time: c.updated_at,
     });
   });
