@@ -3050,8 +3050,8 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
   }
 
   // Parse scope from description
-  const scopeMatch = (project.description || '').match(/--- Alcance ---\n([\s\S]*?)(?=\n---|\n\n|$)/);
-  const scopeItems = scopeMatch ? scopeMatch[1].split('\n').filter(function(l) { return l.trim().startsWith('\u2022'); }).map(function(l) { return l.replace(/^\u2022\s*/, '').trim(); }) : [];
+  const scopeMatch = (project.description || '').match(/--- Alcance ---\r?\n([\s\S]*?)(?=\r?\n---|$)/);
+  const scopeItems = scopeMatch ? scopeMatch[1].split(/\r?\n/).filter(function(l) { return l.trim().startsWith('\u2022'); }).map(function(l) { return l.replace(/^\u2022\s*/, '').trim(); }) : [];
 
   // Load linked client + all their projects for context
   const linkedClient = project.client_id ? await db.getClientRecord(project.client_id) : null;
@@ -3172,11 +3172,14 @@ router.get('/projects/:id', requireAuth, async (req, res) => {
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <div class="lg:col-span-2 space-y-5">
 
-        ${project.description ? `
+        ${project.description ? (() => {
+          const cleanDesc = project.description.replace(/\r?\n?--- Alcance ---\r?\n[\s\S]*?(?=\r?\n---|$)/, '').replace(/\r?\n?--- Demos ---\r?\n[\s\S]*?(?=\r?\n---|$)/, '').trim();
+          return cleanDesc ? `
           <div class="bg-white rounded-2xl border border-slate-200 p-5">
             <h2 class="text-sm font-semibold text-slate-700 mb-3">Descripción</h2>
-            <p class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(project.description)}</p>
-          </div>` : ''}
+            <p class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(cleanDesc)}</p>
+          </div>` : '';
+        })() : ''}
 
         <div class="bg-white rounded-2xl border border-slate-200 p-5">
           <div class="flex items-center justify-between mb-4">
@@ -3708,7 +3711,7 @@ router.post('/projects/:id/add-scope', requireAuth, async (req, res) => {
       // Find end of scope section and append bullet
       const scopeIdx = desc.indexOf(scopeMarker) + scopeMarker.length;
       const afterScope = desc.slice(scopeIdx);
-      const endMatch = afterScope.match(/\n---|\n\n/);
+      const endMatch = afterScope.match(/\r?\n---|\r?\n\r?\n/);
       const insertPos = endMatch ? scopeIdx + endMatch.index : desc.length;
       desc = desc.slice(0, insertPos) + '\n\u2022 ' + feature + desc.slice(insertPos);
     } else {
