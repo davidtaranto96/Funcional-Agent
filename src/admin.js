@@ -484,25 +484,38 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       #sidebar{transition:width .22s cubic-bezier(.4,0,.2,1),box-shadow .22s ease}
       body.sidebar-collapsed #sidebar{width:64px!important;overflow:visible}
       body.sidebar-collapsed #main-wrapper{margin-left:64px!important;transition:margin-left .22s cubic-bezier(.4,0,.2,1)}
-      /* Hidden when collapsed and NOT hovered */
+      /* ─ Labels: collapse width in-place so height (and icon Y position) never changes ─ */
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-label,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-label,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search,
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-user-info,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text,
-      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle{display:none!important}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text{
+        overflow:hidden;max-width:0;opacity:0;flex-shrink:1;min-width:0;white-space:nowrap;
+        transition:max-width .22s,opacity .15s
+      }
+      /* ─ Section labels: invisible but KEEP height so icon Y positions stay fixed ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-label{
+        opacity:0;pointer-events:none;user-select:none
+      }
+      /* ─ Search bar: show icon-only (keeps height → no vertical shift) ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search{padding:8px}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button{justify-content:center;padding:6px 0}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button>span,
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button kbd{display:none}
+      /* ─ Dark toggle + badges: hide (inline in flex rows, no vertical impact) ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle{display:none}
+      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-orange-500,
+      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-red-500{display:none}
+      /* ─ Nav items: center icon horizontally ─ */
       body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;padding:8px 0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:14px 0;display:flex;justify-content:center;align-items:center}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand > div{justify-content:center;gap:0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand .w-8{width:32px;height:32px}
+      /* ─ Brand: center DT logo ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:16px 0;display:flex;justify-content:center;align-items:center}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand>div{justify-content:center;gap:0}
+      /* ─ Bottom: center profile photo + logout icon ─ */
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom{padding:8px 4px}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3{margin:0;padding:6px 0;display:flex;justify-content:center;align-items:center;background:transparent!important;border:none!important;border-radius:0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3 > div{justify-content:center;gap:0}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3>div{justify-content:center;gap:0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button{justify-content:center;padding:8px 0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button span:last-child{display:none}
-      body.sidebar-collapsed #sidebar:not(:hover) nav{padding:12px 8px}
-      body.sidebar-collapsed #sidebar:not(:hover) nav>div{margin-bottom:4px}
-      /* Hover expand as overlay */
+      /* ─ Hover expand as overlay ─ */
       body.sidebar-collapsed #sidebar:hover{width:240px!important;box-shadow:6px 0 32px rgba(0,0,0,0.3);z-index:30}
     }
   </style>
