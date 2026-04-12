@@ -481,42 +481,38 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .fab-menu a span.fab-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
     /* ── Sidebar collapse (desktop) ── */
     @media(min-width:768px){
-      #sidebar{transition:width .22s cubic-bezier(.4,0,.2,1),box-shadow .22s ease}
-      body.sidebar-collapsed #sidebar{width:64px!important;overflow:visible}
-      body.sidebar-collapsed #main-wrapper{margin-left:64px!important;transition:margin-left .22s cubic-bezier(.4,0,.2,1)}
-      /* ─ Labels: collapse width in-place so height (and icon Y position) never changes ─ */
+      #sidebar{transition:width .2s cubic-bezier(.25,.46,.45,.94),box-shadow .2s ease}
+      body.sidebar-collapsed #sidebar{width:72px!important;overflow:visible}
+      body.sidebar-collapsed #main-wrapper{margin-left:72px!important;transition:margin-left .2s cubic-bezier(.25,.46,.45,.94)}
+      /* ─ Hide text/labels in collapsed non-hovered (display:none keeps layout compact) ─ */
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-label,
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-label,
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-user-info,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text{
-        overflow:hidden;max-width:0;opacity:0;flex-shrink:1;min-width:0;white-space:nowrap;
-        transition:max-width .22s,opacity .15s
-      }
-      /* ─ Section labels: invisible but KEEP height so icon Y positions stay fixed ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-label{
-        opacity:0;pointer-events:none;user-select:none
-      }
-      /* ─ Search bar: show icon-only (keeps height → no vertical shift) ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search{padding:8px}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button{justify-content:center;padding:6px 0}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text,
+      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle,
+      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-orange-500,
+      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-red-500{display:none!important}
+      /* ─ Nav items: icon centered, no gap (gap-3 would offset icon left) ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;gap:0;padding:10px 0}
+      /* ─ Compact nav spacing ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) nav{padding:8px 6px}
+      body.sidebar-collapsed #sidebar:not(:hover) nav>div{margin-top:0!important}
+      /* ─ Search: icon-only (keeps height, no vertical shift vs expanded) ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search{padding:6px 8px}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button{justify-content:center;padding:7px 0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button>span,
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button kbd{display:none}
-      /* ─ Dark toggle + badges: hide (inline in flex rows, no vertical impact) ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle{display:none}
-      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-orange-500,
-      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-red-500{display:none}
-      /* ─ Nav items: center icon horizontally ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;padding:8px 0}
-      /* ─ Brand: center DT logo ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:16px 0;display:flex;justify-content:center;align-items:center}
+      /* ─ Brand ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:14px 0;display:flex;justify-content:center;align-items:center}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand>div{justify-content:center;gap:0}
-      /* ─ Bottom: center profile photo + logout icon ─ */
+      /* ─ Bottom ─ */
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom{padding:8px 4px}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3{margin:0;padding:6px 0;display:flex;justify-content:center;align-items:center;background:transparent!important;border:none!important;border-radius:0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3>div{justify-content:center;gap:0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button{justify-content:center;padding:8px 0}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button{justify-content:center;padding:8px 0;gap:0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button span:last-child{display:none}
-      /* ─ Hover expand as overlay ─ */
-      body.sidebar-collapsed #sidebar:hover{width:240px!important;box-shadow:6px 0 32px rgba(0,0,0,0.3);z-index:30}
+      /* ─ Hover expand as overlay — nav clicks blocked during transition via JS ─ */
+      body.sidebar-collapsed #sidebar:hover{width:240px!important;box-shadow:8px 0 40px rgba(0,0,0,0.3);z-index:30}
     }
   </style>
 </head>
@@ -682,6 +678,28 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         document.body.classList.add('sidebar-collapsed');
       }
     }
+  })();
+
+  // ── Sidebar hover: block nav clicks during expand animation so hover target stays correct ──
+  (function(){
+    var sb=document.getElementById('sidebar');
+    if(!sb)return;
+    var links=[],timer,busy=false;
+    sb.addEventListener('mouseenter',function(){
+      if(!document.body.classList.contains('sidebar-collapsed')||busy)return;
+      busy=true;
+      links=Array.from(sb.querySelectorAll('nav a'));
+      links.forEach(function(a){a.style.pointerEvents='none'});
+      timer=setTimeout(function(){
+        links.forEach(function(a){a.style.pointerEvents=''});
+        busy=false;
+      },220);
+    });
+    sb.addEventListener('mouseleave',function(){
+      clearTimeout(timer);
+      links.forEach(function(a){a.style.pointerEvents=''});
+      busy=false;
+    });
   })();
 
   // ── Dark Mode ──
