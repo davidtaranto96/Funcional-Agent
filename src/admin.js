@@ -7,9 +7,22 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '3.0.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '3.1.0'; // Actualizar con cada deploy relevante
 
 const CHANGELOG = [
+  {
+    version: '3.1.0',
+    date: '2026-04-12',
+    title: 'Finanzas, Sidebar y Módulo de Presupuestos',
+    changes: [
+      'Módulo de Presupuestos completo: calculadora en pesos y dólares con tipo de cambio configurable',
+      'Presupuestos con detalle de mano de obra, servicios, licencias y mantenimiento',
+      'Vista para el cliente con beneficios, oportunidades e impresión',
+      'Página de Finanzas: saldos actuales editables (Anthropic, Groq, Resend)',
+      'Monitoreo de uso con presupuestos mensuales y alertas visuales (OK/Atención/Alerta)',
+      'Sidebar: íconos alineados correctamente en modo colapsado, sin botón redundante',
+    ],
+  },
   {
     version: '3.0.0',
     date: '2026-04-12',
@@ -479,10 +492,12 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text,
       body.sidebar-collapsed #sidebar:not(:hover) #darkToggle{display:none!important}
       body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;padding:8px 0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:16px 0;justify-content:center}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:14px 0;display:flex;justify-content:center;align-items:center}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand > div{justify-content:center;gap:0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand .w-8{width:32px;height:32px}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom{padding:8px 4px}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3{margin:0 4px;padding:8px 0;justify-content:center}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3{margin:0;padding:6px 0;display:flex;justify-content:center;align-items:center;background:transparent!important;border:none!important;border-radius:0}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3 > div{justify-content:center;gap:0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button{justify-content:center;padding:8px 0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button span:last-child{display:none}
       body.sidebar-collapsed #sidebar:not(:hover) nav{padding:12px 8px}
@@ -545,6 +560,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Finanzas</div>
         <div class="space-y-0.5">
           ${navItem('/admin/finanzas', '💰', 'Finanzas', 'finanzas')}
+          ${navItem('/admin/presupuesto', '🧮', 'Presupuestos', 'presupuesto')}
         </div>
       </div>
       <div>
@@ -5820,6 +5836,74 @@ router.get('/finanzas', requireAuth, async (req, res) => {
         <h1 class="text-xl font-bold text-slate-900">Finanzas</h1>
         <p class="text-sm text-slate-400 mt-1">Costos, ingresos y estimaciones del proyecto</p>
       </div>
+      <a href="/admin/presupuesto" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+        🧮 Nueva cotización
+      </a>
+    </div>
+
+    <!-- Saldos actuales editables -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+      <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-700">Saldos actuales</h2>
+          <p class="text-[10px] text-slate-400">Actualiza manualmente desde cada consola</p>
+        </div>
+        <button onclick="saveBalances()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg transition-colors font-medium">Guardar</button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+        <div class="px-5 py-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-sm">🤖</span>
+            <span class="text-xs font-semibold text-slate-600">Anthropic</span>
+            <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" class="text-[10px] text-blue-500 hover:underline ml-auto">Consola →</a>
+          </div>
+          <div class="flex items-baseline gap-1 mb-1">
+            <span class="text-[10px] text-slate-400">Saldo:</span>
+            <span class="text-[10px] text-slate-400">$</span>
+            <input id="bal-anthropic" type="number" step="0.01" min="0" value="4.36" class="w-20 text-lg font-bold text-slate-800 border-0 border-b border-dashed border-slate-300 focus:outline-none focus:border-blue-500 bg-transparent" oninput="updateBalanceBar('anthropic')">
+            <span class="text-xs text-slate-400">/ $5.00 USD</span>
+          </div>
+          <div class="h-1.5 bg-slate-100 rounded-full mt-2">
+            <div id="bar-anthropic" class="h-full rounded-full bg-emerald-500 transition-all" style="width:87%"></div>
+          </div>
+          <div id="pct-anthropic" class="text-[10px] text-slate-400 mt-1">87% usado · expira Apr 2027</div>
+        </div>
+        <div class="px-5 py-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-sm">⚡</span>
+            <span class="text-xs font-semibold text-slate-600">Groq</span>
+            <a href="https://console.groq.com/usage" target="_blank" rel="noopener" class="text-[10px] text-blue-500 hover:underline ml-auto">Consola →</a>
+          </div>
+          <div class="flex items-baseline gap-1 mb-1">
+            <span class="text-[10px] text-slate-400">Gastado:</span>
+            <span class="text-[10px] text-slate-400">$</span>
+            <input id="bal-groq" type="number" step="0.01" min="0" value="0.01" class="w-20 text-lg font-bold text-slate-800 border-0 border-b border-dashed border-slate-300 focus:outline-none focus:border-blue-500 bg-transparent" oninput="updateBalanceBar('groq')">
+            <span class="text-xs text-slate-400">USD (free tier)</span>
+          </div>
+          <div class="h-1.5 bg-slate-100 rounded-full mt-2">
+            <div id="bar-groq" class="h-full rounded-full bg-emerald-500 transition-all" style="width:0%"></div>
+          </div>
+          <div id="pct-groq" class="text-[10px] text-slate-400 mt-1">Sin cargo · whisper-large-v3</div>
+        </div>
+        <div class="px-5 py-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-sm">📧</span>
+            <span class="text-xs font-semibold text-slate-600">Resend</span>
+            <a href="https://resend.com/settings/usage" target="_blank" rel="noopener" class="text-[10px] text-blue-500 hover:underline ml-auto">Consola →</a>
+          </div>
+          <div class="flex items-baseline gap-1 mb-1">
+            <span class="text-[10px] text-slate-400">Emails:</span>
+            <input id="bal-resend-used" type="number" step="1" min="0" value="16" class="w-14 text-lg font-bold text-slate-800 border-0 border-b border-dashed border-slate-300 focus:outline-none focus:border-blue-500 bg-transparent" oninput="updateBalanceBar('resend')">
+            <span class="text-xs text-slate-400">/</span>
+            <input id="bal-resend-total" type="number" step="1" min="1" value="3000" class="w-16 text-sm font-medium text-slate-500 border-0 border-b border-dashed border-slate-200 focus:outline-none focus:border-blue-500 bg-transparent" oninput="updateBalanceBar('resend')">
+            <span class="text-xs text-slate-400">mes</span>
+          </div>
+          <div class="h-1.5 bg-slate-100 rounded-full mt-2">
+            <div id="bar-resend" class="h-full rounded-full bg-emerald-500 transition-all" style="width:1%"></div>
+          </div>
+          <div id="pct-resend" class="text-[10px] text-slate-400 mt-1">0.5% del límite mensual</div>
+        </div>
+      </div>
     </div>
 
     <!-- Resumen rápido -->
@@ -6162,6 +6246,43 @@ router.get('/finanzas', requireAuth, async (req, res) => {
     }
     updateCalc();
 
+    // Balance cards persistence & bars
+    function updateBalanceBar(key){
+      if(key==='anthropic'){
+        var val=parseFloat(document.getElementById('bal-anthropic').value)||0;
+        var total=5.00;
+        var pct=Math.min(100,Math.round((1-val/total)*100));
+        document.getElementById('bar-anthropic').style.width=pct+'%';
+        document.getElementById('bar-anthropic').className='h-full rounded-full transition-all '+(pct>=90?'bg-red-500':pct>=70?'bg-amber-500':'bg-emerald-500');
+        document.getElementById('pct-anthropic').textContent=pct+'% usado · expira Apr 2027';
+      }else if(key==='groq'){
+        var val=parseFloat(document.getElementById('bal-groq').value)||0;
+        document.getElementById('bar-groq').style.width=Math.min(100,val*100)+'%';
+        document.getElementById('pct-groq').textContent='$'+val.toFixed(2)+' USD gastado · whisper-large-v3';
+      }else if(key==='resend'){
+        var used=parseInt(document.getElementById('bal-resend-used').value)||0;
+        var total=parseInt(document.getElementById('bal-resend-total').value)||3000;
+        var pct=Math.min(100,Math.round(used/total*100));
+        document.getElementById('bar-resend').style.width=pct+'%';
+        document.getElementById('bar-resend').className='h-full rounded-full transition-all '+(pct>=90?'bg-red-500':pct>=70?'bg-amber-500':'bg-emerald-500');
+        document.getElementById('pct-resend').textContent=pct+'% del límite mensual';
+      }
+    }
+    function saveBalances(){
+      localStorage.setItem('dt-bal-anthropic',document.getElementById('bal-anthropic').value);
+      localStorage.setItem('dt-bal-groq',document.getElementById('bal-groq').value);
+      localStorage.setItem('dt-bal-resend-used',document.getElementById('bal-resend-used').value);
+      localStorage.setItem('dt-bal-resend-total',document.getElementById('bal-resend-total').value);
+      if(typeof showToast==='function')showToast('Saldos guardados');
+    }
+    (function initBalances(){
+      var a=localStorage.getItem('dt-bal-anthropic');if(a){document.getElementById('bal-anthropic').value=a;}
+      var g=localStorage.getItem('dt-bal-groq');if(g){document.getElementById('bal-groq').value=g;}
+      var ru=localStorage.getItem('dt-bal-resend-used');if(ru){document.getElementById('bal-resend-used').value=ru;}
+      var rt=localStorage.getItem('dt-bal-resend-total');if(rt){document.getElementById('bal-resend-total').value=rt;}
+      updateBalanceBar('anthropic');updateBalanceBar('groq');updateBalanceBar('resend');
+    })();
+
     // Budget tracker persistence
     function initBudgetTrackers(){
       document.querySelectorAll('.budget-input').forEach(function(input){
@@ -6176,6 +6297,800 @@ router.get('/finanzas', requireAuth, async (req, res) => {
     </script>`;
 
   res.send(layout('Finanzas', body, { activePage: 'finanzas', user: req.session?.user }));
+});
+
+// ─── Presupuestos ────────────────────────────────────────────────────────────
+
+router.get('/presupuesto', requireAuth, async (req, res) => {
+  const projects = await db.listProjects();
+  const projectsJson = JSON.stringify(projects.map(p => ({
+    id: p.id,
+    title: p.title || p.client_name,
+    client: p.client_name,
+    category: p.category,
+    budget: p.budget,
+    description: p.scope || p.notes || '',
+  })));
+
+  const body = `
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Calculadora de Presupuestos</h1>
+        <p class="text-sm text-slate-400 mt-1">Cotizá proyectos en ARS y USD con detalle completo para el cliente</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="printQuote()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+          🖨️ Imprimir
+        </button>
+        <button onclick="saveQuote()" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+          💾 Guardar
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-5 gap-5">
+
+      <!-- LEFT: Form -->
+      <div class="xl:col-span-3 space-y-4">
+
+        <!-- Configuración de tarifas -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <button onclick="toggleSection('cfg')" class="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">⚙️</span>
+              <span class="text-sm font-semibold text-slate-700">Configuración de tarifas</span>
+            </div>
+            <span id="cfg-arrow" class="text-slate-400 text-xs transition-transform">▼</span>
+          </button>
+          <div id="cfg-body" class="px-5 pb-5 border-t border-slate-100">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de cambio</label>
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-slate-400">$1 USD =</span>
+                  <input id="cfg-rate" type="number" value="1000" min="1" step="1" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="calcUpdate()">
+                  <span class="text-xs text-slate-400">ARS</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tarifa base/hora</label>
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-slate-400">$</span>
+                  <input id="cfg-hourly" type="number" value="25" min="1" step="1" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="calcUpdate()">
+                  <span class="text-xs text-slate-400">USD/h</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Margen de ganancia</label>
+                <div class="flex items-center gap-1">
+                  <input id="cfg-margin" type="number" value="40" min="0" max="200" step="5" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="calcUpdate()">
+                  <span class="text-xs text-slate-400">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Datos del proyecto -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">📋</span>
+              <span class="text-sm font-semibold text-slate-700">Datos del proyecto</span>
+            </div>
+          </div>
+          <div class="px-5 py-4 space-y-3">
+            <div class="flex items-center gap-2">
+              <select id="proj-load" class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600" onchange="loadProject()">
+                <option value="">— Cargar desde proyecto existente —</option>
+                ${projects.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title || p.client_name)} — ${escapeHtml(p.client_name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre del proyecto</label>
+                <input id="proj-name" type="text" placeholder="Ej: Tienda Online Ropa Nordeste" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" oninput="calcUpdate()">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cliente</label>
+                <input id="proj-client" type="text" placeholder="Nombre del cliente" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de proyecto</label>
+              <select id="proj-type" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="onTypeChange()">
+                <option value="web">Página web / Landing page</option>
+                <option value="ecommerce">E-commerce / Tienda online</option>
+                <option value="app">App web completa</option>
+                <option value="bot">Bot WhatsApp / Automatización</option>
+                <option value="design">Diseño y branding</option>
+                <option value="maintenance">Mantenimiento / Soporte</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Descripción / alcance</label>
+              <textarea id="proj-desc" rows="2" placeholder="Describí brevemente el alcance del proyecto..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none" oninput="calcUpdate()"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mano de obra -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">👷</span>
+              <span class="text-sm font-semibold text-slate-700">Mano de obra</span>
+            </div>
+            <button onclick="addLaborRow()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Agregar ítem</button>
+          </div>
+          <div class="px-5 py-3">
+            <div class="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1">
+              <div class="col-span-5">Concepto</div>
+              <div class="col-span-2">Horas</div>
+              <div class="col-span-3">Tarifa/h (USD)</div>
+              <div class="col-span-1"></div>
+            </div>
+            <div id="labor-rows" class="space-y-2"></div>
+          </div>
+          <div class="px-5 py-2 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+            <span class="text-xs text-slate-500">Total horas: <span id="total-hours" class="font-bold text-slate-700">0</span></span>
+            <span class="text-xs text-slate-500">Subtotal labor: <span id="labor-subtotal" class="font-bold text-slate-700">$0</span></span>
+          </div>
+        </div>
+
+        <!-- Servicios y gastos -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">🔧</span>
+              <span class="text-sm font-semibold text-slate-700">Servicios y gastos</span>
+            </div>
+            <button onclick="addCustomService()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Personalizado</button>
+          </div>
+          <div id="services-list" class="px-5 py-3 space-y-1.5"></div>
+          <div id="custom-services" class="px-5 pb-3 space-y-2"></div>
+          <div class="px-5 py-2 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+            <span class="text-xs text-slate-500">Subtotal servicios:</span>
+            <span id="services-subtotal" class="text-xs font-bold text-slate-700">$0</span>
+          </div>
+        </div>
+
+        <!-- Mantenimiento -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">🔄</span>
+              <span class="text-sm font-semibold text-slate-700">Mantenimiento mensual</span>
+            </div>
+          </div>
+          <div class="px-5 py-4">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="maint-options">
+              ${[
+                { key: '0', label: 'Sin mantenimiento', sub: '', usd: 0 },
+                { key: '30', label: 'Básico', sub: 'Actualizaciones, backups', usd: 30 },
+                { key: '60', label: 'Estándar', sub: 'Soporte, cambios menores', usd: 60 },
+                { key: '120', label: 'Premium', sub: 'Soporte 24h, mejoras', usd: 120 },
+              ].map((opt, i) => `
+                <label class="flex flex-col gap-1 border-2 ${i===0?'border-blue-500 bg-blue-50':'border-slate-200'} rounded-xl p-3 cursor-pointer hover:border-blue-300 transition-colors maint-opt" data-key="${opt.key}" onclick="selectMaint('${opt.key}',this)">
+                  <div class="flex items-center gap-2">
+                    <div class="w-3.5 h-3.5 rounded-full border-2 ${i===0?'border-blue-500 bg-blue-500':'border-slate-300'} flex-shrink-0 maint-radio"></div>
+                    <span class="text-xs font-semibold text-slate-700">${opt.label}</span>
+                  </div>
+                  ${opt.usd > 0 ? `<div class="text-xs font-bold text-blue-600 ml-5">$${opt.usd} USD/mes</div>` : '<div class="text-xs text-slate-400 ml-5">—</div>'}
+                  ${opt.sub ? `<div class="text-[10px] text-slate-400 ml-5">${opt.sub}</div>` : ''}
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: Results -->
+      <div class="xl:col-span-2 space-y-4">
+
+        <!-- Resumen de costos (interno) -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden sticky top-4">
+          <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+            <span class="text-sm font-semibold text-slate-700">Resumen</span>
+            <div class="flex items-center gap-1 text-[10px]">
+              <button id="btn-ars" onclick="setCurrency('ARS')" class="px-2 py-1 rounded-lg bg-blue-600 text-white font-bold transition-colors">ARS</button>
+              <button id="btn-usd" onclick="setCurrency('USD')" class="px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100 font-bold transition-colors">USD</button>
+            </div>
+          </div>
+          <div class="px-5 py-4 space-y-2.5">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-500">Mano de obra</span>
+              <div class="text-right">
+                <div id="r-labor" class="text-sm font-bold text-slate-800">$0</div>
+                <div id="r-labor-alt" class="text-[10px] text-slate-400">$0 USD</div>
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-500">Servicios (total)</span>
+              <div class="text-right">
+                <div id="r-services" class="text-sm font-bold text-slate-800">$0</div>
+                <div id="r-services-alt" class="text-[10px] text-slate-400">$0 USD</div>
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-500">Mantenimiento (anual)</span>
+              <div class="text-right">
+                <div id="r-maint" class="text-sm font-bold text-slate-800">—</div>
+                <div id="r-maint-alt" class="text-[10px] text-slate-400"></div>
+              </div>
+            </div>
+            <div class="border-t border-slate-100 pt-2">
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-slate-500">Costo total</span>
+                <div id="r-total-cost" class="text-sm font-bold text-slate-800">$0</div>
+              </div>
+              <div class="flex justify-between items-center mt-1">
+                <span class="text-xs text-slate-500">Margen (<span id="r-margin-pct">40</span>%)</span>
+                <div id="r-margin" class="text-xs font-medium text-emerald-600">$0</div>
+              </div>
+            </div>
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-4 text-white">
+              <div class="text-[10px] uppercase opacity-70 tracking-wide">Precio para el cliente</div>
+              <div id="r-client-price" class="text-2xl font-bold mt-1">$0</div>
+              <div id="r-client-price-alt" class="text-xs opacity-70 mt-0.5">$0 USD</div>
+              <div class="mt-2 pt-2 border-t border-white/20 text-[10px] opacity-70">
+                Mantenimiento: <span id="r-monthly">—</span>/mes
+              </div>
+            </div>
+          </div>
+          <div class="px-5 pb-4">
+            <button onclick="toggleClientView()" class="w-full py-2.5 border-2 border-blue-600 text-blue-600 hover:bg-blue-50 rounded-xl text-sm font-semibold transition-colors">
+              📄 Ver presupuesto para cliente
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Vista para el cliente (colapsable) -->
+    <div id="client-view" class="hidden mt-5">
+      <div class="bg-white rounded-xl border-2 border-blue-200 overflow-hidden" id="printable-quote">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-6 text-white">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-xs uppercase tracking-widest opacity-70 mb-1">Propuesta comercial</div>
+              <h2 id="cv-title" class="text-xl font-bold">Proyecto</h2>
+              <div id="cv-client" class="text-sm opacity-80 mt-1"></div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs opacity-70">DT Systems</div>
+              <div class="text-xs opacity-70">David Taranto</div>
+              <div id="cv-date" class="text-xs opacity-70 mt-1"></div>
+            </div>
+          </div>
+        </div>
+        <div class="px-8 py-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div>
+              <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Alcance del proyecto</h3>
+              <p id="cv-desc" class="text-sm text-slate-600 leading-relaxed">—</p>
+
+              <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3 mt-6">Inversión</h3>
+              <div id="cv-breakdown" class="space-y-2"></div>
+              <div class="mt-4 pt-4 border-t-2 border-slate-200">
+                <div class="flex justify-between items-center">
+                  <span class="text-sm font-bold text-slate-700">Inversión inicial</span>
+                  <span id="cv-total" class="text-lg font-bold text-blue-700">$0</span>
+                </div>
+                <div id="cv-monthly-row" class="flex justify-between items-center mt-1 hidden">
+                  <span class="text-xs text-slate-500">Mantenimiento mensual</span>
+                  <span id="cv-monthly" class="text-sm font-bold text-blue-600">$0/mes</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Qué incluye</h3>
+              <ul id="cv-benefits" class="space-y-2"></ul>
+
+              <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3 mt-6">Oportunidades</h3>
+              <ul id="cv-opportunities" class="space-y-2"></ul>
+
+              <div id="cv-custom-benefits" class="mt-4">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs font-bold text-slate-500 uppercase">Agregar beneficio/oportunidad</span>
+                </div>
+                <div class="flex gap-2">
+                  <input id="new-benefit" type="text" placeholder="Ej: Soporte técnico por 6 meses" class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs">
+                  <select id="new-benefit-type" class="px-2 py-2 border border-slate-200 rounded-lg text-xs">
+                    <option value="benefit">Beneficio ✅</option>
+                    <option value="opportunity">Oportunidad 📈</option>
+                  </select>
+                  <button onclick="addBenefit()" class="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="px-8 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between no-print">
+          <span class="text-xs text-slate-400">Este presupuesto tiene validez de 30 días</span>
+          <button onclick="printQuote()" class="text-sm text-blue-600 hover:underline font-medium">🖨️ Imprimir / Guardar PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <style>
+    @media print {
+      body > *:not(#printable-wrap) { display: none !important; }
+      .no-print { display: none !important; }
+      #printable-quote { border: none !important; box-shadow: none !important; }
+      #sidebar, #main-wrapper > :not(#printable-wrap), .fab-btn { display: none !important; }
+    }
+    </style>
+
+    <script>
+    var PROJECTS_DATA = ${projectsJson};
+    var primaryCurrency = 'ARS';
+    var maintUSD = 0;
+    var customBenefits = [];
+    var customOpportunities = [];
+    var laborRowId = 0;
+    var customServiceId = 0;
+
+    var SERVICES_PRESETS = [
+      { key:'hosting',    label:'Hosting (Railway)',         icon:'🚂', usd:5,    type:'monthly', months:12, checked:true,  note:'$5/mes × 12 meses = $60/año' },
+      { key:'domain_ar',  label:'Dominio .com.ar',           icon:'🌐', usd:4,    type:'annual',  months:1,  checked:true,  note:'$4/año aprox' },
+      { key:'domain_com', label:'Dominio .com',              icon:'🌍', usd:12,   type:'annual',  months:1,  checked:false, note:'$12/año aprox' },
+      { key:'ssl',        label:'Certificado SSL',           icon:'🔒', usd:0,    type:'annual',  months:1,  checked:true,  note:'Incluido en Railway' },
+      { key:'whatsapp',   label:'Meta WhatsApp API',         icon:'💬', usd:0,    type:'monthly', months:12, checked:false, note:'Free tier: 1000 conv/mes' },
+      { key:'claude',     label:'API Claude (Anthropic)',    icon:'🤖', usd:10,   type:'monthly', months:12, checked:false, note:'~$10/mes estimado' },
+      { key:'email',      label:'Email transaccional',       icon:'📧', usd:0,    type:'monthly', months:12, checked:false, note:'Free tier Resend' },
+      { key:'gdrive',     label:'Google Drive (storage)',    icon:'☁️', usd:0,    type:'monthly', months:12, checked:false, note:'15GB gratis' },
+      { key:'mercadopago',label:'MercadoPago (pagos)',       icon:'💳', usd:0,    type:'monthly', months:12, checked:false, note:'Sin costo fijo, comisión por venta' },
+      { key:'maps',       label:'Google Maps API',           icon:'🗺️', usd:0,    type:'monthly', months:12, checked:false, note:'Free tier: 200 USD/mes de crédito' },
+    ];
+
+    var BENEFITS_BY_TYPE = {
+      web: [
+        'Sitio web profesional accesible 24/7',
+        'Diseño adaptado a celular y tablet (responsive)',
+        'Optimizado para buscadores (SEO básico)',
+        'Dominio y hosting gestionados',
+        'Formulario de contacto funcional',
+        'Panel de administración de contenidos',
+      ],
+      ecommerce: [
+        'Tienda online operativa desde el día 1',
+        'Carrito de compras y checkout integrado',
+        'Sistema de pagos con MercadoPago',
+        'Catálogo de productos administrable',
+        'Notificaciones automáticas al comprador',
+        'Panel de gestión de pedidos y stock',
+      ],
+      bot: [
+        'Bot activo las 24 horas del día, 7 días a la semana',
+        'Respuestas automáticas a preguntas frecuentes',
+        'Captura de leads sin intervención manual',
+        'Reportes y métricas de conversaciones',
+        'Integración con tu sistema de gestión',
+        'Transcripción de audios automática',
+      ],
+      app: [
+        'Aplicación web accesible desde cualquier dispositivo',
+        'Panel de administración personalizado',
+        'Sistema de usuarios y niveles de acceso',
+        'Backups automáticos de datos',
+        'Integración con APIs y servicios externos',
+        'Soporte técnico en período de garantía',
+      ],
+      design: [
+        'Identidad visual coherente y profesional',
+        'Manual de marca con paleta de colores y tipografías',
+        'Formatos para redes sociales y materiales impresos',
+        'Logo en alta resolución (SVG, PNG, PDF)',
+        'Adaptaciones para uso digital y físico',
+      ],
+      maintenance: [
+        'Actualizaciones periódicas de seguridad',
+        'Monitoreo de disponibilidad del sitio',
+        'Respaldo diario de datos',
+        'Soporte técnico por consultas',
+        'Informe mensual de métricas',
+      ],
+      custom: [
+        'Solución a medida según necesidades específicas',
+        'Documentación técnica del proyecto',
+        'Capacitación para el equipo del cliente',
+      ],
+    };
+
+    var OPPORTUNITIES_BY_TYPE = {
+      web: [
+        'Captación de nuevos clientes las 24h sin esfuerzo',
+        'Mayor credibilidad y profesionalismo frente a la competencia',
+        'Posicionamiento en Google para búsquedas locales',
+        'Generación de consultas automáticas',
+      ],
+      ecommerce: [
+        'Ventas automáticas sin depender de horarios ni personal',
+        'Expansión del negocio a nivel regional o nacional',
+        'Datos reales de qué productos venden más',
+        'Reducción de costos operativos de atención',
+      ],
+      bot: [
+        'Atención al cliente escalable sin costo adicional de personal',
+        'Seguimiento automático de leads que no cerraron',
+        'Tiempo libre para enfocarse en clientes de mayor valor',
+        'Datos de las preguntas más frecuentes para mejorar el negocio',
+      ],
+      app: [
+        'Automatización de procesos internos que hoy son manuales',
+        'Acceso a datos en tiempo real desde cualquier lugar',
+        'Escalabilidad: crecer sin cambiar de plataforma',
+        'Reducción de errores humanos en la gestión',
+      ],
+      design: [
+        'Primera impresión profesional que genera confianza inmediata',
+        'Consistencia visual en todos los puntos de contacto',
+        'Diferenciación clara frente a la competencia',
+      ],
+      maintenance: [
+        'Tranquilidad de tener el sitio siempre actualizado',
+        'Prevención de caídas y pérdida de clientes',
+        'Mejoras continuas sin tener que contratar de cero',
+      ],
+      custom: [
+        'Solución adaptada exactamente al flujo de trabajo actual',
+        'Independencia tecnológica y control total del sistema',
+      ],
+    };
+
+    function getRate(){ return parseFloat(document.getElementById('cfg-rate').value)||1000; }
+    function getHourly(){ return parseFloat(document.getElementById('cfg-hourly').value)||25; }
+    function getMargin(){ return parseFloat(document.getElementById('cfg-margin').value)||40; }
+
+    function fmtARS(usd){ return '$'+(usd*getRate()).toLocaleString('es-AR',{maximumFractionDigits:0})+' ARS'; }
+    function fmtUSD(usd){ return '$'+usd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USD'; }
+    function fmt(usd){ return primaryCurrency==='ARS'?fmtARS(usd):fmtUSD(usd); }
+    function fmtAlt(usd){ return primaryCurrency==='ARS'?fmtUSD(usd):fmtARS(usd); }
+
+    function setCurrency(c){
+      primaryCurrency=c;
+      document.getElementById('btn-ars').className='px-2 py-1 rounded-lg font-bold transition-colors '+(c==='ARS'?'bg-blue-600 text-white':'text-slate-500 hover:bg-slate-100');
+      document.getElementById('btn-usd').className='px-2 py-1 rounded-lg font-bold transition-colors '+(c==='USD'?'bg-blue-600 text-white':'text-slate-500 hover:bg-slate-100');
+      calcUpdate();
+    }
+
+    function toggleSection(id){
+      var body=document.getElementById(id+'-body');
+      var arrow=document.getElementById(id+'-arrow');
+      body.classList.toggle('hidden');
+      arrow.style.transform=body.classList.contains('hidden')?'rotate(-90deg)':'';
+    }
+
+    // Labor rows
+    var laborRows = [];
+    function initLaborRows(rows){
+      laborRows=rows||[
+        {id:++laborRowId,concept:'Diseño UI/UX',hours:8,rate:null},
+        {id:++laborRowId,concept:'Desarrollo',hours:24,rate:null},
+        {id:++laborRowId,concept:'Testing y QA',hours:4,rate:null},
+      ];
+      renderLaborRows();
+    }
+    function addLaborRow(){
+      laborRows.push({id:++laborRowId,concept:'',hours:8,rate:null});
+      renderLaborRows();
+    }
+    function removeLaborRow(id){
+      laborRows=laborRows.filter(r=>r.id!==id);
+      renderLaborRows();
+    }
+    function renderLaborRows(){
+      var html=laborRows.map(r=>\`
+        <div class="grid grid-cols-12 gap-2 items-center" id="lr-\${r.id}">
+          <div class="col-span-5">
+            <input type="text" value="\${r.concept}" placeholder="Concepto" class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs" oninput="updateLaborRow(\${r.id},'concept',this.value)">
+          </div>
+          <div class="col-span-2">
+            <input type="number" value="\${r.hours}" min="0" step="0.5" class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center" oninput="updateLaborRow(\${r.id},'hours',parseFloat(this.value)||0)">
+          </div>
+          <div class="col-span-3">
+            <input type="number" value="\${r.rate||''}" placeholder="base" min="0" step="1" class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center" oninput="updateLaborRow(\${r.id},'rate',this.value?parseFloat(this.value):null)">
+          </div>
+          <div class="col-span-2 text-right">
+            <span class="text-[10px] text-slate-400 mr-1" id="lr-cost-\${r.id}"></span>
+            <button onclick="removeLaborRow(\${r.id})" class="text-slate-300 hover:text-red-400 transition-colors text-xs">✕</button>
+          </div>
+        </div>
+      \`).join('');
+      document.getElementById('labor-rows').innerHTML=html;
+      calcUpdate();
+    }
+    function updateLaborRow(id,field,val){
+      var r=laborRows.find(x=>x.id===id);
+      if(r)r[field]=val;
+      calcUpdate();
+    }
+
+    // Services
+    var servicesState = {};
+    function initServices(){
+      SERVICES_PRESETS.forEach(s=>{ servicesState[s.key]={...s}; });
+      renderServices();
+    }
+    function renderServices(){
+      var html=SERVICES_PRESETS.map(s=>{
+        var st=servicesState[s.key];
+        return \`<div class="flex items-center gap-2 py-1.5 border-b border-slate-50 last:border-0">
+          <input type="checkbox" id="svc-\${s.key}" \${st.checked?'checked':''} class="w-4 h-4 rounded text-blue-600" onchange="toggleService('\${s.key}',this.checked)">
+          <label for="svc-\${s.key}" class="flex-1 flex items-center gap-2 cursor-pointer">
+            <span class="text-sm">\${s.icon}</span>
+            <span class="text-xs text-slate-700">\${s.label}</span>
+            <span class="text-[10px] text-slate-400 ml-auto">\${s.note}</span>
+          </label>
+          <input type="number" value="\${st.usd}" min="0" step="1" class="w-14 px-1.5 py-1 border border-slate-200 rounded-lg text-xs text-center" oninput="updateServiceCost('\${s.key}',parseFloat(this.value)||0)" title="USD">
+          \${s.type==='monthly'?\`<select class="px-1 py-1 border border-slate-200 rounded-lg text-[10px]" onchange="updateServiceMonths('\${s.key}',parseInt(this.value))"><option value="1" \${st.months===1?'selected':''}>1m</option><option value="3" \${st.months===3?'selected':''}>3m</option><option value="6" \${st.months===6?'selected':''}>6m</option><option value="12" \${st.months===12?'selected':''}>12m</option></select>\`:'<span class="w-10 text-[10px] text-slate-400 text-center">anual</span>'}
+          <span class="text-[10px] font-bold text-slate-600 w-12 text-right">\${st.checked?'$'+(st.usd*(s.type==='monthly'?st.months:1)).toFixed(0):'—'}</span>
+        </div>\`;
+      }).join('');
+      document.getElementById('services-list').innerHTML=html;
+    }
+    function toggleService(key,val){servicesState[key].checked=val;renderServices();calcUpdate();}
+    function updateServiceCost(key,val){servicesState[key].usd=val;renderServices();calcUpdate();}
+    function updateServiceMonths(key,val){servicesState[key].months=val;renderServices();calcUpdate();}
+
+    // Custom services
+    var customServices = [];
+    function addCustomService(){
+      customServiceId++;
+      var id='cs'+customServiceId;
+      var div=document.createElement('div');
+      div.id=id;
+      div.className='flex items-center gap-2';
+      div.innerHTML=\`<input type="text" placeholder="Descripción" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs">
+        <span class="text-[10px] text-slate-400">$</span>
+        <input type="number" value="0" min="0" step="1" class="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center" oninput="calcUpdate()" title="USD">
+        <button onclick="document.getElementById('\${id}').remove();calcUpdate()" class="text-slate-300 hover:text-red-400 text-xs">✕</button>\`;
+      document.getElementById('custom-services').appendChild(div);
+      div.querySelectorAll('input')[0].addEventListener('input',()=>calcUpdate());
+    }
+
+    // Maintenance
+    function selectMaint(key, el){
+      maintUSD=parseFloat(key)||0;
+      document.querySelectorAll('.maint-opt').forEach(e=>{
+        e.classList.remove('border-blue-500','bg-blue-50');
+        e.classList.add('border-slate-200');
+        e.querySelector('.maint-radio').className='w-3.5 h-3.5 rounded-full border-2 border-slate-300 flex-shrink-0 maint-radio';
+      });
+      el.classList.add('border-blue-500','bg-blue-50');
+      el.classList.remove('border-slate-200');
+      el.querySelector('.maint-radio').className='w-3.5 h-3.5 rounded-full border-2 border-blue-500 bg-blue-500 flex-shrink-0 maint-radio';
+      calcUpdate();
+    }
+
+    // Main calculation
+    function calcUpdate(){
+      var hourly=getHourly();
+      // Labor
+      var totalHours=0,laborCostUSD=0;
+      laborRows.forEach(r=>{
+        var rate=r.rate||hourly;
+        var cost=r.hours*rate;
+        totalHours+=r.hours;
+        laborCostUSD+=cost;
+        var el=document.getElementById('lr-cost-'+r.id);
+        if(el)el.textContent='$'+cost.toFixed(0);
+      });
+      document.getElementById('total-hours').textContent=totalHours.toFixed(1);
+      document.getElementById('labor-subtotal').textContent=fmtUSD(laborCostUSD);
+
+      // Services
+      var servicesCostUSD=Object.values(servicesState).reduce((s,v)=>{
+        if(!v.checked)return s;
+        return s+v.usd*(v.type==='monthly'?v.months:1);
+      },0);
+      // Custom services
+      document.querySelectorAll('#custom-services > div').forEach(d=>{
+        var inputs=d.querySelectorAll('input');
+        servicesCostUSD+=(parseFloat(inputs[1]?.value)||0);
+      });
+      document.getElementById('services-subtotal').textContent=fmtUSD(servicesCostUSD);
+
+      // Maintenance annual
+      var maintAnnualUSD=maintUSD*12;
+      var totalCostUSD=laborCostUSD+servicesCostUSD+maintAnnualUSD;
+      var margin=getMargin()/100;
+      var clientPriceUSD=totalCostUSD*(1+margin);
+      // Round to nearest 50 in ARS equivalent, or 50 USD
+      var clientPriceRounded=Math.ceil(clientPriceUSD/50)*50;
+      var marginAmtUSD=clientPriceRounded-totalCostUSD;
+      var marginPct=totalCostUSD>0?Math.round(marginAmtUSD/clientPriceRounded*100):0;
+
+      // Update UI
+      document.getElementById('r-labor').textContent=fmt(laborCostUSD);
+      document.getElementById('r-labor-alt').textContent=fmtAlt(laborCostUSD);
+      document.getElementById('r-services').textContent=fmt(servicesCostUSD);
+      document.getElementById('r-services-alt').textContent=fmtAlt(servicesCostUSD);
+      if(maintUSD>0){
+        document.getElementById('r-maint').textContent=fmt(maintAnnualUSD);
+        document.getElementById('r-maint-alt').textContent=fmtAlt(maintAnnualUSD)+'/año';
+      } else {
+        document.getElementById('r-maint').textContent='—';
+        document.getElementById('r-maint-alt').textContent='';
+      }
+      document.getElementById('r-total-cost').textContent=fmt(totalCostUSD);
+      document.getElementById('r-margin').textContent='+'+fmt(marginAmtUSD);
+      document.getElementById('r-margin-pct').textContent=marginPct;
+      document.getElementById('r-client-price').textContent=fmt(clientPriceRounded);
+      document.getElementById('r-client-price-alt').textContent=fmtAlt(clientPriceRounded);
+      document.getElementById('r-monthly').textContent=maintUSD>0?fmt(maintUSD):'—';
+
+      // Update client view if visible
+      if(!document.getElementById('client-view').classList.contains('hidden')){
+        updateClientView(clientPriceRounded,laborCostUSD,servicesCostUSD,maintAnnualUSD);
+      }
+    }
+
+    // Benefits/opportunities
+    function getBenefits(){
+      var type=document.getElementById('proj-type').value;
+      return (BENEFITS_BY_TYPE[type]||BENEFITS_BY_TYPE.custom).concat(customBenefits);
+    }
+    function getOpportunities(){
+      var type=document.getElementById('proj-type').value;
+      return (OPPORTUNITIES_BY_TYPE[type]||OPPORTUNITIES_BY_TYPE.custom).concat(customOpportunities);
+    }
+    function addBenefit(){
+      var text=document.getElementById('new-benefit').value.trim();
+      if(!text)return;
+      var type=document.getElementById('new-benefit-type').value;
+      if(type==='benefit')customBenefits.push(text);
+      else customOpportunities.push(text);
+      document.getElementById('new-benefit').value='';
+      if(!document.getElementById('client-view').classList.contains('hidden')){
+        var totals=getCurrentTotals();
+        updateClientView(totals.clientPrice,totals.labor,totals.services,totals.maint);
+      }
+    }
+    function getCurrentTotals(){
+      var hourly=getHourly();
+      var laborCostUSD=laborRows.reduce((s,r)=>s+(r.hours*(r.rate||hourly)),0);
+      var servicesCostUSD=Object.values(servicesState).reduce((s,v)=>v.checked?s+v.usd*(v.type==='monthly'?v.months:1):s,0);
+      document.querySelectorAll('#custom-services > div').forEach(d=>{var i=d.querySelectorAll('input');servicesCostUSD+=(parseFloat(i[1]?.value)||0);});
+      var maintAnnualUSD=maintUSD*12;
+      var totalCost=laborCostUSD+servicesCostUSD+maintAnnualUSD;
+      var clientPrice=Math.ceil(totalCost*(1+getMargin()/100)/50)*50;
+      return {clientPrice,labor:laborCostUSD,services:servicesCostUSD,maint:maintAnnualUSD,totalCost};
+    }
+
+    function updateClientView(clientPrice,labor,services,maint){
+      var name=document.getElementById('proj-name').value||'Proyecto';
+      var client=document.getElementById('proj-client').value;
+      var desc=document.getElementById('proj-desc').value||'—';
+      document.getElementById('cv-title').textContent=name;
+      document.getElementById('cv-client').textContent=client?'Para: '+client:'';
+      document.getElementById('cv-desc').textContent=desc;
+      document.getElementById('cv-date').textContent='Fecha: '+new Date().toLocaleDateString('es-AR');
+      document.getElementById('cv-total').textContent=fmt(clientPrice);
+
+      // Breakdown
+      var breakdown='';
+      if(labor>0)breakdown+=\`<div class="flex justify-between text-sm"><span class="text-slate-600">Diseño y desarrollo</span><span class="font-medium text-slate-800">\${fmt(labor)}</span></div>\`;
+      if(services>0)breakdown+=\`<div class="flex justify-between text-sm mt-1"><span class="text-slate-600">Servicios y hosting</span><span class="font-medium text-slate-800">\${fmt(services)}</span></div>\`;
+      if(maint>0)breakdown+=\`<div class="flex justify-between text-sm mt-1"><span class="text-slate-600">Mantenimiento (anual)</span><span class="font-medium text-slate-800">\${fmt(maint)}</span></div>\`;
+      document.getElementById('cv-breakdown').innerHTML=breakdown;
+
+      // Monthly row
+      if(maintUSD>0){
+        document.getElementById('cv-monthly-row').classList.remove('hidden');
+        document.getElementById('cv-monthly').textContent=fmt(maintUSD)+'/mes';
+      } else {
+        document.getElementById('cv-monthly-row').classList.add('hidden');
+      }
+
+      // Benefits
+      document.getElementById('cv-benefits').innerHTML=getBenefits().map(b=>
+        \`<li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 flex-shrink-0 mt-0.5">✅</span><span>\${b}</span></li>\`
+      ).join('');
+      document.getElementById('cv-opportunities').innerHTML=getOpportunities().map(o=>
+        \`<li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-blue-500 flex-shrink-0 mt-0.5">📈</span><span>\${o}</span></li>\`
+      ).join('');
+    }
+
+    function toggleClientView(){
+      var cv=document.getElementById('client-view');
+      cv.classList.toggle('hidden');
+      if(!cv.classList.contains('hidden')){
+        var t=getCurrentTotals();
+        updateClientView(t.clientPrice,t.labor,t.services,t.maint);
+        cv.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+    }
+
+    function onTypeChange(){
+      calcUpdate();
+      // Update client view benefits if visible
+      if(!document.getElementById('client-view').classList.contains('hidden')){
+        var t=getCurrentTotals();
+        updateClientView(t.clientPrice,t.labor,t.services,t.maint);
+      }
+    }
+
+    // Load from project
+    function loadProject(){
+      var id=document.getElementById('proj-load').value;
+      if(!id)return;
+      var p=PROJECTS_DATA.find(x=>x.id===id);
+      if(!p)return;
+      document.getElementById('proj-name').value=p.title||'';
+      document.getElementById('proj-client').value=p.client||'';
+      document.getElementById('proj-desc').value=p.description||'';
+      // Map category to type
+      var catMap={wordpress:'web',landing:'web',ecommerce:'ecommerce',app:'app',bot:'bot',design:'design',maintenance:'maintenance'};
+      var type=catMap[p.category]||'web';
+      document.getElementById('proj-type').value=type;
+      calcUpdate();
+    }
+
+    function saveQuote(){
+      var data={
+        rate:document.getElementById('cfg-rate').value,
+        hourly:document.getElementById('cfg-hourly').value,
+        margin:document.getElementById('cfg-margin').value,
+        name:document.getElementById('proj-name').value,
+        client:document.getElementById('proj-client').value,
+        type:document.getElementById('proj-type').value,
+        desc:document.getElementById('proj-desc').value,
+        laborRows,
+        services:servicesState,
+        maintUSD,
+        customBenefits,
+        customOpportunities,
+        currency:primaryCurrency,
+      };
+      localStorage.setItem('dt-quote-last',JSON.stringify(data));
+      if(typeof showToast==='function')showToast('Cotización guardada localmente');
+    }
+
+    function loadSavedQuote(){
+      var saved=localStorage.getItem('dt-quote-last');
+      if(!saved)return;
+      try{
+        var d=JSON.parse(saved);
+        document.getElementById('cfg-rate').value=d.rate||1000;
+        document.getElementById('cfg-hourly').value=d.hourly||25;
+        document.getElementById('cfg-margin').value=d.margin||40;
+        document.getElementById('proj-name').value=d.name||'';
+        document.getElementById('proj-client').value=d.client||'';
+        document.getElementById('proj-type').value=d.type||'web';
+        document.getElementById('proj-desc').value=d.desc||'';
+        if(d.laborRows&&d.laborRows.length){laborRows=d.laborRows;laborRowId=Math.max(...d.laborRows.map(r=>r.id));}
+        if(d.services)Object.assign(servicesState,d.services);
+        if(d.maintUSD)maintUSD=d.maintUSD;
+        if(d.customBenefits)customBenefits=d.customBenefits;
+        if(d.customOpportunities)customOpportunities=d.customOpportunities;
+        if(d.currency)primaryCurrency=d.currency;
+      }catch(e){}
+    }
+
+    function printQuote(){
+      if(document.getElementById('client-view').classList.contains('hidden')){
+        toggleClientView();
+        setTimeout(()=>window.print(),400);
+      } else {
+        window.print();
+      }
+    }
+
+    // Init
+    initLaborRows();
+    initServices();
+    loadSavedQuote();
+    renderLaborRows();
+    renderServices();
+    calcUpdate();
+    </script>`;
+
+  res.send(layout('Presupuestos', body, { activePage: 'presupuesto', user: req.session?.user }));
 });
 
 // ─── Changelog ──────────────────────────────────────────────────────────────
@@ -6250,6 +7165,8 @@ router.get('/api/search-index', requireAuth, async (req, res) => {
     items.push({ type: 'page', icon: '✅', title: 'Tareas', sub: 'Kanban de tareas', href: '/admin/tasks' });
     items.push({ type: 'page', icon: '👥', title: 'Clientes', sub: 'Base de clientes', href: '/admin/clientes' });
     items.push({ type: 'page', icon: '📂', title: 'Documentos', sub: 'Archivos y docs', href: '/admin/documentos' });
+    items.push({ type: 'page', icon: '💰', title: 'Finanzas', sub: 'Costos y estimaciones', href: '/admin/finanzas' });
+    items.push({ type: 'page', icon: '🧮', title: 'Presupuestos', sub: 'Calculadora ARS/USD', href: '/admin/presupuesto' });
 
     // WA Clients
     clients.forEach(c => {
