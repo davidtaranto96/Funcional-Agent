@@ -71,6 +71,50 @@ const CHANGELOG = [
     ],
   },
 ];
+
+// ─── Costos de servicios y precios de APIs ──────────────────────────────────
+
+const SERVICES = [
+  { key: 'railway',   name: 'Railway (hosting)',       icon: '🚂', monthly: 5,    unit: 'USD/mes',   category: 'infra',  notes: 'Hobby plan, incluye 5GB RAM + 1GB disco' },
+  { key: 'turso',     name: 'Turso (database)',        icon: '🗄️', monthly: 0,    unit: 'USD/mes',   category: 'infra',  notes: 'Free tier: 9GB storage, 500 DBs' },
+  { key: 'resend',    name: 'Resend (emails)',         icon: '📧', monthly: 0,    unit: 'USD/mes',   category: 'infra',  notes: 'Free tier: 100 emails/dia' },
+  { key: 'meta_wa',   name: 'Meta WhatsApp API',      icon: '💬', monthly: 0,    unit: 'USD/mes',   category: 'infra',  notes: 'Free tier: 1000 conv. servicio/mes' },
+  { key: 'google',    name: 'Google (OAuth+Calendar)', icon: '📅', monthly: 0,    unit: 'USD/mes',   category: 'infra',  notes: 'APIs gratis' },
+  { key: 'gdrive',    name: 'Google Drive (storage)',  icon: '☁️', monthly: 0,    unit: 'USD/mes',   category: 'infra',  notes: '15GB gratis' },
+  { key: 'domain',    name: 'Dominio (.com)',          icon: '🌐', monthly: 1,    unit: 'USD/mes',   category: 'infra',  notes: '~$12/año' },
+];
+
+const API_PRICING = {
+  'claude-haiku-4-5': {
+    name: 'Claude Haiku 4.5',
+    input: 1.00,   // USD por 1M tokens input
+    output: 5.00,  // USD por 1M tokens output
+    uses: 'Conversaciones, reportes, mockup WhatsApp',
+  },
+  'claude-sonnet-4': {
+    name: 'Claude Sonnet 4',
+    input: 3.00,
+    output: 15.00,
+    uses: 'Generación de landing pages demo',
+  },
+  'groq-whisper': {
+    name: 'Groq Whisper v3',
+    input: 0.111,  // USD por hora de audio
+    output: 0,
+    uses: 'Transcripción de audios',
+    unit: 'USD/hora',
+  },
+};
+
+// Estimación de tokens por operación
+const TOKEN_ESTIMATES = {
+  conversation_msg:    { input: 800,  output: 400,  model: 'claude-haiku-4-5', label: 'Mensaje de conversación' },
+  report_generation:   { input: 2000, output: 1500, model: 'claude-haiku-4-5', label: 'Generación de reporte' },
+  landing_demo:        { input: 3000, output: 6000, model: 'claude-sonnet-4',  label: 'Demo landing page' },
+  whatsapp_mockup:     { input: 1500, output: 1200, model: 'claude-haiku-4-5', label: 'Mockup WhatsApp' },
+  audio_transcription: { input: 0.5,  output: 0,    model: 'groq-whisper',     label: 'Transcripción audio (min)', unit: 'minutos' },
+};
+
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -424,21 +468,31 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .fab-menu a span.fab-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
     /* ── Sidebar collapse (desktop) ── */
     @media(min-width:768px){
-      body.sidebar-collapsed #sidebar{width:64px!important}
-      body.sidebar-collapsed #sidebar .sidebar-label,
-      body.sidebar-collapsed #sidebar .sidebar-section-label,
-      body.sidebar-collapsed #sidebar .sidebar-search,
-      body.sidebar-collapsed #sidebar .sidebar-user-info,
-      body.sidebar-collapsed #sidebar .sidebar-brand-text{display:none!important}
-      body.sidebar-collapsed #sidebar nav a{justify-content:center;padding:10px}
-      body.sidebar-collapsed #sidebar nav a span.text-\\[15px\\]{font-size:18px;opacity:1}
-      body.sidebar-collapsed #sidebar .sidebar-brand{justify-content:center;padding:12px 0}
-      body.sidebar-collapsed #sidebar .sidebar-bottom{padding:8px}
-      body.sidebar-collapsed #sidebar .sidebar-bottom form button{justify-content:center}
-      body.sidebar-collapsed #sidebar .sidebar-bottom form button span:last-child{display:none}
-      body.sidebar-collapsed #main-wrapper{margin-left:64px!important}
-      body.sidebar-collapsed #sidebar #darkToggle{display:none}
-      body.sidebar-collapsed #sidebar .sidebar-collapse-btn svg{transform:rotate(180deg)}
+      #sidebar{transition:width .22s cubic-bezier(.4,0,.2,1),box-shadow .22s ease}
+      body.sidebar-collapsed #sidebar{width:64px!important;overflow:visible}
+      body.sidebar-collapsed #main-wrapper{margin-left:64px!important;transition:margin-left .22s cubic-bezier(.4,0,.2,1)}
+      /* Hidden when collapsed and NOT hovered */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-label,
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-label,
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search,
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-user-info,
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text,
+      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle,
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-collapse-text{display:none!important}
+      body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;padding:10px 0}
+      body.sidebar-collapsed #sidebar:not(:hover) nav a span:first-child{font-size:18px;opacity:0.8}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:16px 0;justify-content:center}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand .w-8{width:32px;height:32px}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom{padding:8px 4px}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3{margin:0 4px;padding:8px 0;justify-content:center}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button{justify-content:center;padding:8px 0}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button span:last-child{display:none}
+      body.sidebar-collapsed #sidebar:not(:hover) nav{padding:12px 8px}
+      body.sidebar-collapsed #sidebar:not(:hover) nav>div{margin-bottom:4px}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-collapse-btn{justify-content:center;padding:8px 0}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-collapse-btn svg{transform:rotate(180deg)}
+      /* Hover expand as overlay */
+      body.sidebar-collapsed #sidebar:hover{width:240px!important;box-shadow:6px 0 32px rgba(0,0,0,0.3);z-index:30}
     }
   </style>
 </head>
@@ -492,6 +546,12 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         </div>
       </div>
       <div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Finanzas</div>
+        <div class="space-y-0.5">
+          ${navItem('/admin/finanzas', '💰', 'Finanzas', 'finanzas')}
+        </div>
+      </div>
+      <div>
         <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Recursos</div>
         <div class="space-y-0.5">
           ${navItem('/admin/documentos', '📂', 'Documentos', 'documentos')}
@@ -502,9 +562,9 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
 
     <!-- Collapse toggle (desktop only) -->
     <div class="hidden md:block px-3 py-1.5 border-t border-white/5">
-      <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn w-full flex items-center gap-2 text-[10px] text-slate-500 hover:text-slate-300 transition-colors px-3 py-2 rounded-lg hover:bg-white/5" title="Colapsar menú">
+      <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn w-full flex items-center gap-2 text-[10px] text-slate-500 hover:text-slate-300 transition-colors px-3 py-2 rounded-lg hover:bg-white/5" title="Colapsar/expandir menú">
         <svg class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"/></svg>
-        <span class="sidebar-label">Colapsar</span>
+        <span class="sidebar-collapse-text">Colapsar</span>
       </button>
     </div>
 
@@ -582,14 +642,31 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   }
 
   // ── Sidebar collapse (desktop) ──
-  function toggleSidebarCollapse(){
-    document.body.classList.toggle('sidebar-collapsed');
-    var collapsed=document.body.classList.contains('sidebar-collapsed');
-    localStorage.setItem('dt-sidebar',collapsed?'collapsed':'expanded');
+  function collapseSidebar(){
+    if(window.innerWidth<768)return;
+    document.body.classList.add('sidebar-collapsed');
+    localStorage.setItem('dt-sidebar','collapsed');
   }
+  function expandSidebar(){
+    document.body.classList.remove('sidebar-collapsed');
+    localStorage.setItem('dt-sidebar','expanded');
+  }
+  function toggleSidebarCollapse(){
+    if(document.body.classList.contains('sidebar-collapsed')){expandSidebar();}else{collapseSidebar();}
+  }
+  // Click outside sidebar → collapse
+  document.getElementById('main-wrapper').addEventListener('click',function(){
+    if(window.innerWidth>=768&&!document.body.classList.contains('sidebar-collapsed')){
+      collapseSidebar();
+    }
+  });
+  // Init from localStorage
   (function(){
-    if(window.innerWidth>=768&&localStorage.getItem('dt-sidebar')==='collapsed'){
-      document.body.classList.add('sidebar-collapsed');
+    if(window.innerWidth>=768){
+      var pref=localStorage.getItem('dt-sidebar');
+      if(pref==='collapsed'||pref===null){
+        document.body.classList.add('sidebar-collapsed');
+      }
     }
   })();
 
@@ -5674,6 +5751,353 @@ router.post('/create-demo-lead', requireAuth, async (req, res) => {
   orchestrator.processNewReport(demo.phone, demo.report).catch(console.error);
 
   res.redirect(`/admin/client/${encodeURIComponent(demo.phone)}`);
+});
+
+// ─── Finanzas ───────────────────────────────────────────────────────────────
+
+router.get('/finanzas', requireAuth, async (req, res) => {
+  const [clients, projects] = await Promise.all([
+    db.listAllClients(),
+    db.listProjects(),
+  ]);
+
+  // ── Costos mensuales de infraestructura ──
+  const totalMonthlyCost = SERVICES.reduce((s, sv) => s + sv.monthly, 0);
+
+  // ── Uso estimado de APIs basado en datos reales ──
+  const totalConversations = clients.length;
+  const totalMessages = clients.reduce((s, c) => {
+    const hist = c.history || [];
+    return s + hist.length;
+  }, 0);
+  const demosGenerated = clients.filter(c => c.demo_status && !['none','generating'].includes(c.demo_status)).length;
+  const reportsGenerated = clients.filter(c => c.report).length;
+
+  // Calcular costos estimados de API
+  function estimateCost(opKey, count) {
+    const est = TOKEN_ESTIMATES[opKey];
+    if (!est) return 0;
+    const pricing = API_PRICING[est.model];
+    if (!pricing) return 0;
+    if (est.model === 'groq-whisper') {
+      return (est.input * count / 60) * pricing.input; // minutos a horas
+    }
+    const inputCost = (est.input * count / 1000000) * pricing.input;
+    const outputCost = (est.output * count / 1000000) * pricing.output;
+    return inputCost + outputCost;
+  }
+
+  const apiUsage = [
+    { label: 'Mensajes de conversación', count: totalMessages, cost: estimateCost('conversation_msg', totalMessages), model: 'Claude Haiku 4.5' },
+    { label: 'Reportes generados', count: reportsGenerated, cost: estimateCost('report_generation', reportsGenerated), model: 'Claude Haiku 4.5' },
+    { label: 'Demos landing page', count: demosGenerated, cost: estimateCost('landing_demo', demosGenerated), model: 'Claude Sonnet 4' },
+    { label: 'Mockups WhatsApp', count: demosGenerated, cost: estimateCost('whatsapp_mockup', demosGenerated), model: 'Claude Haiku 4.5' },
+  ];
+  const totalApiCost = apiUsage.reduce((s, u) => s + u.cost, 0);
+
+  // ── Pipeline de ingresos ──
+  const parseBudget = b => parseFloat(String(b || '0').replace(/[^0-9.]/g, '')) || 0;
+  const withBudget = projects.filter(p => parseBudget(p.budget) > 0);
+  const revenue = {
+    total: withBudget.reduce((s, p) => s + parseBudget(p.budget), 0),
+    paid: withBudget.filter(p => p.budget_status === 'paid').reduce((s, p) => s + parseBudget(p.budget), 0),
+    approved: withBudget.filter(p => ['approved','partial','paid'].includes(p.budget_status)).reduce((s, p) => s + parseBudget(p.budget), 0),
+    pending: withBudget.filter(p => ['not_quoted','quoted'].includes(p.budget_status)).reduce((s, p) => s + parseBudget(p.budget), 0),
+    partial: withBudget.filter(p => p.budget_status === 'partial').reduce((s, p) => s + parseBudget(p.budget), 0),
+  };
+
+  const fmtMoney = n => {
+    if (n >= 1000) return '$' + (n/1000).toFixed(n%1000===0?0:1) + 'K';
+    if (n >= 1) return '$' + n.toFixed(0);
+    if (n > 0) return '$' + n.toFixed(4);
+    return '$0';
+  };
+
+  // ── Costo por lead/proyecto ──
+  const costPerLead = totalConversations > 0 ? totalApiCost / totalConversations : 0;
+  const costPerDemo = demosGenerated > 0 ? (estimateCost('landing_demo', demosGenerated) + estimateCost('whatsapp_mockup', demosGenerated)) / demosGenerated : 0;
+
+  // ── Proyección mensual ──
+  const daysActive = (() => {
+    if (clients.length === 0) return 1;
+    const oldest = clients.reduce((min, c) => {
+      const d = new Date(c.created_at);
+      return d < min ? d : min;
+    }, new Date());
+    return Math.max(1, Math.ceil((Date.now() - oldest.getTime()) / 86400000));
+  })();
+  const dailyRate = totalApiCost / daysActive;
+  const projectedMonthlyApi = dailyRate * 30;
+
+  const body = `
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Finanzas</h1>
+        <p class="text-sm text-slate-400 mt-1">Costos, ingresos y estimaciones del proyecto</p>
+      </div>
+    </div>
+
+    <!-- Resumen rápido -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white">
+        <div class="text-xs opacity-75 uppercase tracking-wide">Ingresos pipeline</div>
+        <div class="text-2xl font-bold mt-1">${fmtMoney(revenue.total)}</div>
+        <div class="text-xs opacity-60 mt-0.5">${withBudget.length} proyectos</div>
+      </div>
+      <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white">
+        <div class="text-xs opacity-75 uppercase tracking-wide">Cobrado</div>
+        <div class="text-2xl font-bold mt-1">${fmtMoney(revenue.paid)}</div>
+        <div class="text-xs opacity-60 mt-0.5">${revenue.total > 0 ? Math.round(revenue.paid/revenue.total*100) : 0}% del pipeline</div>
+      </div>
+      <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl p-4 text-white">
+        <div class="text-xs opacity-75 uppercase tracking-wide">Costo API total</div>
+        <div class="text-2xl font-bold mt-1">${fmtMoney(totalApiCost)}</div>
+        <div class="text-xs opacity-60 mt-0.5">~${fmtMoney(projectedMonthlyApi)}/mes proy.</div>
+      </div>
+      <div class="bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl p-4 text-white">
+        <div class="text-xs opacity-75 uppercase tracking-wide">Infra mensual</div>
+        <div class="text-2xl font-bold mt-1">${fmtMoney(totalMonthlyCost)}</div>
+        <div class="text-xs opacity-60 mt-0.5">${SERVICES.filter(s => s.monthly > 0).length} servicios pagos</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+
+      <!-- Costos de servicios -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100">
+          <h2 class="text-sm font-semibold text-slate-700">Servicios e infraestructura</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Costos mensuales fijos</p>
+        </div>
+        <div class="divide-y divide-slate-100">
+          ${SERVICES.map(sv => `
+            <div class="px-5 py-3 flex items-center gap-3">
+              <span class="text-base flex-shrink-0">${sv.icon}</span>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-slate-700">${sv.name}</div>
+                <div class="text-[10px] text-slate-400">${sv.notes}</div>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <div class="text-sm font-bold ${sv.monthly > 0 ? 'text-amber-600' : 'text-emerald-600'}">${sv.monthly > 0 ? '$'+sv.monthly : 'Gratis'}</div>
+                <div class="text-[10px] text-slate-400">${sv.unit}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+          <span class="text-sm font-semibold text-slate-700">Total mensual</span>
+          <span class="text-lg font-bold text-slate-900">${fmtMoney(totalMonthlyCost)}</span>
+        </div>
+      </div>
+
+      <!-- Consumo de APIs -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100">
+          <h2 class="text-sm font-semibold text-slate-700">Consumo de APIs (Anthropic + Groq)</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Estimado según uso real · ${daysActive} dias activo${daysActive > 1 ? 's' : ''}</p>
+        </div>
+        <div class="divide-y divide-slate-100">
+          ${apiUsage.map(u => `
+            <div class="px-5 py-3 flex items-center gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-slate-700">${u.label}</div>
+                <div class="text-[10px] text-slate-400">${u.model}</div>
+              </div>
+              <div class="text-center flex-shrink-0 px-3">
+                <div class="text-sm font-bold text-slate-800">${u.count}</div>
+                <div class="text-[10px] text-slate-400">usos</div>
+              </div>
+              <div class="text-right flex-shrink-0 w-16">
+                <div class="text-sm font-bold ${u.cost > 0.01 ? 'text-amber-600' : 'text-emerald-600'}">${u.cost > 0 ? '$'+u.cost.toFixed(4) : '$0'}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-semibold text-slate-700">Total gastado en APIs</span>
+            <span class="text-lg font-bold text-amber-600">${fmtMoney(totalApiCost)}</span>
+          </div>
+          <div class="flex justify-between items-center mt-1">
+            <span class="text-[11px] text-slate-400">Proyección mensual (30 días)</span>
+            <span class="text-sm font-semibold text-slate-600">~${fmtMoney(projectedMonthlyApi)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs de costo -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      <div class="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+        <div class="text-lg font-bold text-slate-800">${costPerLead > 0 ? '$'+costPerLead.toFixed(4) : '—'}</div>
+        <div class="text-[10px] text-slate-400 uppercase tracking-wide">Costo por lead</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+        <div class="text-lg font-bold text-slate-800">${costPerDemo > 0 ? '$'+costPerDemo.toFixed(4) : '—'}</div>
+        <div class="text-[10px] text-slate-400 uppercase tracking-wide">Costo por demo</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+        <div class="text-lg font-bold text-slate-800">${totalConversations}</div>
+        <div class="text-[10px] text-slate-400 uppercase tracking-wide">Leads totales</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+        <div class="text-lg font-bold text-slate-800">${demosGenerated}</div>
+        <div class="text-[10px] text-slate-400 uppercase tracking-wide">Demos generados</div>
+      </div>
+    </div>
+
+    <!-- Precios de referencia de APIs -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+      <div class="px-5 py-4 border-b border-slate-100">
+        <h2 class="text-sm font-semibold text-slate-700">Precios de referencia — APIs</h2>
+        <p class="text-[11px] text-slate-400 mt-0.5">Precios actuales por modelo para calcular costos</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 text-left">
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Modelo</th>
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Input</th>
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Output</th>
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Se usa para</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            ${Object.entries(API_PRICING).map(([key, p]) => `
+              <tr>
+                <td class="px-5 py-2.5 font-medium text-slate-700">${p.name}</td>
+                <td class="px-5 py-2.5 text-slate-600">${p.unit ? p.unit : '$'+p.input.toFixed(2)+'/1M tok'}</td>
+                <td class="px-5 py-2.5 text-slate-600">${p.output > 0 ? '$'+p.output.toFixed(2)+'/1M tok' : '—'}</td>
+                <td class="px-5 py-2.5 text-slate-400 text-xs">${p.uses}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pipeline de ingresos por proyecto -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+      <div class="px-5 py-4 border-b border-slate-100">
+        <h2 class="text-sm font-semibold text-slate-700">Pipeline de ingresos por proyecto</h2>
+      </div>
+      ${withBudget.length > 0 ? `
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 text-left">
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Proyecto</th>
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Cliente</th>
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Presupuesto</th>
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Estado pago</th>
+              <th class="px-5 py-2 text-[10px] font-semibold text-slate-500 uppercase">Estado proyecto</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            ${projects.filter(p => parseBudget(p.budget) > 0).map(p => `
+              <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/admin/projects/${p.id}'">
+                <td class="px-5 py-2.5 font-medium text-slate-700">${escapeHtml(p.title || '—')}</td>
+                <td class="px-5 py-2.5 text-slate-500">${escapeHtml(p.client_name)}</td>
+                <td class="px-5 py-2.5 font-bold text-slate-800">$${parseBudget(p.budget).toLocaleString()}</td>
+                <td class="px-5 py-2.5">${budgetStatusBadge(p.budget_status)}</td>
+                <td class="px-5 py-2.5">${projectStatusBadge(p.status)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 py-3 bg-slate-50 border-t border-slate-200">
+        <div class="flex flex-wrap gap-4">
+          <div><span class="text-xs text-slate-400">Pipeline total:</span> <span class="text-sm font-bold text-slate-800">${fmtMoney(revenue.total)}</span></div>
+          <div><span class="text-xs text-slate-400">Cobrado:</span> <span class="text-sm font-bold text-emerald-600">${fmtMoney(revenue.paid)}</span></div>
+          <div><span class="text-xs text-slate-400">Aprobado:</span> <span class="text-sm font-bold text-blue-600">${fmtMoney(revenue.approved)}</span></div>
+          <div><span class="text-xs text-slate-400">Pendiente:</span> <span class="text-sm font-bold text-amber-600">${fmtMoney(revenue.pending)}</span></div>
+        </div>
+      </div>` : `
+      <div class="px-5 py-8 text-center">
+        <div class="text-2xl mb-2">💰</div>
+        <div class="text-sm text-slate-400">Sin proyectos con presupuesto definido</div>
+        <a href="/admin/projects" class="text-xs text-blue-600 hover:underline mt-1 block">Agregar presupuesto a un proyecto →</a>
+      </div>`}
+    </div>
+
+    <!-- Calculadora de presupuestos -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+      <div class="px-5 py-4 border-b border-slate-100">
+        <h2 class="text-sm font-semibold text-slate-700">Calculadora de presupuestos</h2>
+        <p class="text-[11px] text-slate-400 mt-0.5">Estima el costo y precio sugerido de un proyecto</p>
+      </div>
+      <div class="px-5 py-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Horas estimadas</label>
+            <input type="number" id="calcHours" value="40" min="1" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Tarifa/hora (USD)</label>
+            <input type="number" id="calcRate" value="25" min="1" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Tipo de proyecto</label>
+            <select id="calcType" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
+              <option value="web">Pagina web / Landing</option>
+              <option value="app">App web completa</option>
+              <option value="ecommerce">E-commerce</option>
+              <option value="bot">Bot / Automatización</option>
+              <option value="design">Diseño / Branding</option>
+              <option value="maintenance">Mantenimiento mensual</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Costos extras (hosting, dominio, APIs)</label>
+            <input type="number" id="calcExtras" value="10" min="0" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Requiere mantenimiento?</label>
+            <select id="calcMaint" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
+              <option value="0">No</option>
+              <option value="50">Básico ($50/mes)</option>
+              <option value="100">Intermedio ($100/mes)</option>
+              <option value="200">Avanzado ($200/mes)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Resultado -->
+        <div id="calcResult" class="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200">
+        </div>
+      </div>
+    </div>
+
+    <script>
+    function updateCalc(){
+      var hours=parseFloat(document.getElementById('calcHours').value)||0;
+      var rate=parseFloat(document.getElementById('calcRate').value)||0;
+      var type=document.getElementById('calcType').value;
+      var extras=parseFloat(document.getElementById('calcExtras').value)||0;
+      var maint=parseFloat(document.getElementById('calcMaint').value)||0;
+      var multipliers={web:1,app:1.3,ecommerce:1.4,bot:1.1,design:0.9,maintenance:0.8};
+      var mult=multipliers[type]||1;
+      var laborCost=hours*rate;
+      var totalCost=laborCost+(extras*Math.ceil(hours/160||1));
+      var suggestedPrice=Math.ceil((totalCost*mult*1.4)/100)*100; // 40% margen + redondeo
+      var margin=suggestedPrice-totalCost;
+      var marginPct=totalCost>0?Math.round(margin/suggestedPrice*100):0;
+      var maintNote=maint>0?'<div class="mt-3 pt-3 border-t border-slate-200"><div class="flex justify-between"><span class="text-xs text-slate-500">Mantenimiento mensual</span><span class="text-sm font-bold text-purple-600">$'+maint+'/mes</span></div><div class="flex justify-between mt-1"><span class="text-xs text-slate-500">Ingreso anual por mantenimiento</span><span class="text-sm font-bold text-purple-600">$'+(maint*12)+'</span></div></div>':'';
+      document.getElementById('calcResult').innerHTML=
+        '<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">'+
+        '<div><div class="text-[10px] text-slate-500 uppercase">Costo mano de obra</div><div class="text-lg font-bold text-slate-800">$'+laborCost.toLocaleString()+'</div></div>'+
+        '<div><div class="text-[10px] text-slate-500 uppercase">Costo total</div><div class="text-lg font-bold text-amber-600">$'+Math.round(totalCost).toLocaleString()+'</div></div>'+
+        '<div><div class="text-[10px] text-slate-500 uppercase">Precio sugerido</div><div class="text-lg font-bold text-emerald-600">$'+suggestedPrice.toLocaleString()+'</div></div>'+
+        '<div><div class="text-[10px] text-slate-500 uppercase">Margen</div><div class="text-lg font-bold text-blue-600">'+marginPct+'%</div><div class="text-[10px] text-slate-400">$'+Math.round(margin).toLocaleString()+'</div></div>'+
+        '</div>'+maintNote;
+    }
+    updateCalc();
+    </script>`;
+
+  res.send(layout('Finanzas', body, { activePage: 'finanzas', user: req.session?.user }));
 });
 
 // ─── Changelog ──────────────────────────────────────────────────────────────
