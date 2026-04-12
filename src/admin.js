@@ -336,15 +336,38 @@ function timelineIcon(ev) {
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
+// ─── SVG icon set (Heroicons outline, stroke="currentColor") ───────────────────
+const NAV_ICONS = {
+  dashboard:   `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
+  clients:     `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591L15.75 12.75V21l-7.5-3V12.75L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z"/></svg>`,
+  control:     `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/></svg>`,
+  clientes:    `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>`,
+  projects:    `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>`,
+  tasks:       `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
+  finanzas:    `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"/></svg>`,
+  presupuesto: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>`,
+  documentos:  `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>`,
+  changelog:   `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>`,
+};
+const LOGOUT_ICON = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/></svg>`;
+
 function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = '', user = null } = {}) {
+  // Section label: ALWAYS same height (20px). Collapsed shows divider line, expanded shows text.
+  // This keeps icon Y-positions identical in both states → no shift on hover expand.
+  const sectionLabel = (name) =>
+    `<div class="sidebar-section-label flex items-center" style="height:20px;margin-bottom:4px;padding:0 4px">
+      <span class="sidebar-section-text text-[10px] font-semibold text-slate-600 uppercase tracking-widest leading-none">${name}</span>
+      <div class="sidebar-section-divider" style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:none"></div>
+    </div>`;
+
   const navItem = (href, icon, label, page) => {
     const active = activePage === page;
     let badge = '';
-    if (page === 'clients' && pendingCount > 0) badge = `<span class="bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>`;
-    if (page === 'control' && notifCount > 0) badge = `<span class="bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
-    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${active ? 'bg-blue-600/90 text-white shadow-sm' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}">
-      <span class="text-[15px] leading-none flex-shrink-0 ${active ? 'opacity-100' : 'opacity-60'}">${icon}</span>
-      <span class="flex-1 sidebar-label">${label}</span>
+    if (page === 'clients' && pendingCount > 0) badge = `<span class="sidebar-badge bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>`;
+    if (page === 'control' && notifCount > 0) badge = `<span class="sidebar-badge bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
+    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 ${active ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'}">
+      <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center ${active ? 'text-white' : 'text-slate-400'}">${icon}</span>
+      <span class="flex-1 sidebar-label whitespace-nowrap overflow-hidden">${label}</span>
       ${badge}
     </a>`;
   };
@@ -484,20 +507,18 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       #sidebar{transition:width .2s cubic-bezier(.25,.46,.45,.94),box-shadow .2s ease}
       body.sidebar-collapsed #sidebar{width:72px!important;overflow:visible}
       body.sidebar-collapsed #main-wrapper{margin-left:72px!important;transition:margin-left .2s cubic-bezier(.25,.46,.45,.94)}
-      /* ─ Hide text/labels in collapsed non-hovered (display:none keeps layout compact) ─ */
+      /* ─ Section label: swap text↔divider line (same 20px height → icons never shift) ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-text{display:none!important}
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-divider{display:block!important}
+      /* ─ Text labels hidden (inline in flex row — no height impact) ─ */
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-label,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-label,
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-user-info,
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text,
       body.sidebar-collapsed #sidebar:not(:hover) #darkToggle,
-      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-orange-500,
-      body.sidebar-collapsed #sidebar:not(:hover) nav a .bg-red-500{display:none!important}
-      /* ─ Nav items: icon centered, no gap (gap-3 would offset icon left) ─ */
+      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-badge{display:none!important}
+      /* ─ Nav items: center icon (gap:0 prevents gap-3 from offsetting icon) ─ */
       body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;gap:0;padding:10px 0}
-      /* ─ Compact nav spacing ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) nav{padding:8px 6px}
-      body.sidebar-collapsed #sidebar:not(:hover) nav>div{margin-top:0!important}
-      /* ─ Search: icon-only (keeps height, no vertical shift vs expanded) ─ */
+      /* ─ Search: icon-only (same height as full bar → no vertical shift) ─ */
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search{padding:6px 8px}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button{justify-content:center;padding:7px 0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button>span,
@@ -510,8 +531,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3{margin:0;padding:6px 0;display:flex;justify-content:center;align-items:center;background:transparent!important;border:none!important;border-radius:0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3>div{justify-content:center;gap:0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button{justify-content:center;padding:8px 0;gap:0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button span:last-child{display:none}
-      /* ─ Hover expand as overlay — nav clicks blocked during transition via JS ─ */
+      /* ─ Hover expand as overlay ─ */
       body.sidebar-collapsed #sidebar:hover{width:240px!important;box-shadow:8px 0 40px rgba(0,0,0,0.3);z-index:30}
     }
   </style>
@@ -543,40 +563,40 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       </button>
     </div>
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+    <nav class="flex-1 overflow-y-auto py-3 px-3 space-y-4">
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">General</div>
+        ${sectionLabel('General')}
         <div class="space-y-0.5">
-          ${navItem('/admin', '📊', 'Dashboard', 'dashboard')}
+          ${navItem('/admin', NAV_ICONS.dashboard, 'Dashboard', 'dashboard')}
         </div>
       </div>
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Clientes</div>
+        ${sectionLabel('Clientes')}
         <div class="space-y-0.5">
-          ${navItem('/admin/clients', '💬', 'Pipeline', 'clients')}
-          ${navItem('/admin/control', '🎛️', 'Centro de Control', 'control')}
-          ${navItem('/admin/clientes', '👥', 'Clientes', 'clientes')}
+          ${navItem('/admin/clients', NAV_ICONS.clients, 'Pipeline', 'clients')}
+          ${navItem('/admin/control', NAV_ICONS.control, 'Centro de Control', 'control')}
+          ${navItem('/admin/clientes', NAV_ICONS.clientes, 'Clientes', 'clientes')}
         </div>
       </div>
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Trabajo</div>
+        ${sectionLabel('Trabajo')}
         <div class="space-y-0.5">
-          ${navItem('/admin/projects', '📁', 'Proyectos', 'projects')}
-          ${navItem('/admin/tasks', '✅', 'Tareas', 'tasks')}
+          ${navItem('/admin/projects', NAV_ICONS.projects, 'Proyectos', 'projects')}
+          ${navItem('/admin/tasks', NAV_ICONS.tasks, 'Tareas', 'tasks')}
         </div>
       </div>
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Finanzas</div>
+        ${sectionLabel('Finanzas')}
         <div class="space-y-0.5">
-          ${navItem('/admin/finanzas', '💰', 'Finanzas', 'finanzas')}
-          ${navItem('/admin/presupuesto', '🧮', 'Presupuestos', 'presupuesto')}
+          ${navItem('/admin/finanzas', NAV_ICONS.finanzas, 'Finanzas', 'finanzas')}
+          ${navItem('/admin/presupuesto', NAV_ICONS.presupuesto, 'Presupuestos', 'presupuesto')}
         </div>
       </div>
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Recursos</div>
+        ${sectionLabel('Recursos')}
         <div class="space-y-0.5">
-          ${navItem('/admin/documentos', '📂', 'Documentos', 'documentos')}
-          ${navItem('/admin/changelog', '🔄', 'Actualizaciones', 'changelog')}
+          ${navItem('/admin/documentos', NAV_ICONS.documentos, 'Documentos', 'documentos')}
+          ${navItem('/admin/changelog', NAV_ICONS.changelog, 'Actualizaciones', 'changelog')}
         </div>
       </div>
     </nav>
@@ -585,8 +605,9 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     <div class="pb-3 border-t border-slate-700/40 pt-3 sidebar-bottom">
       ${userBlock}
       <form method="POST" action="/admin/logout" class="px-3">
-        <button class="flex items-center gap-2 text-xs text-slate-500 hover:text-red-400 transition-colors w-full px-3 py-2 rounded-lg hover:bg-slate-800">
-          <span>🚪</span><span>Cerrar sesión</span>
+        <button class="flex items-center gap-2 text-xs text-slate-500 hover:text-red-400 transition-colors w-full px-3 py-2 rounded-xl hover:bg-slate-800">
+          <span class="flex-shrink-0 text-slate-500">${LOGOUT_ICON}</span>
+          <span class="sidebar-label">Cerrar sesión</span>
         </button>
       </form>
     </div>
