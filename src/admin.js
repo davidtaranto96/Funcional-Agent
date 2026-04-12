@@ -396,10 +396,21 @@ function loginPage(errorMsg = '') {
     .input{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:13px 16px;color:rgba(255,255,255,0.9);font-size:14px;outline:none;transition:border-color 0.2s;font-family:inherit}
     .input::placeholder{color:rgba(255,255,255,0.25)}
     .input:focus{border-color:rgba(99,102,241,0.6);background:rgba(99,102,241,0.06)}
-    .btn-submit{width:100%;background:linear-gradient(135deg,#6366f1,#7c3aed);border:none;border-radius:12px;padding:13px;color:white;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:10px;font-family:inherit}
+    .btn-submit{width:100%;background:linear-gradient(135deg,#6366f1,#7c3aed);border:none;border-radius:12px;padding:13px;color:white;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:10px;font-family:inherit;position:relative;overflow:hidden}
+    .btn-submit::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(to bottom right,transparent 45%,rgba(255,255,255,0.08) 50%,transparent 55%);transform:rotate(-45deg);transition:all 0.5s}
     .btn-submit:hover{background:linear-gradient(135deg,#4f46e5,#6d28d9);transform:translateY(-1px);box-shadow:0 8px 24px rgba(99,102,241,0.4)}
+    .btn-submit:hover::after{left:100%}
     .error-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:12px 16px;color:#fca5a5;font-size:13px;margin-bottom:18px}
-    .logo-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#7c3aed);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+    .logo-ring{width:80px;height:80px;border-radius:20px;border:2px solid rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;box-shadow:0 0 30px rgba(99,102,241,0.15)}
+    .logo-icon{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#7c3aed);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(99,102,241,0.5),0 0 80px rgba(99,102,241,0.2);animation:pulse-glow 3s ease-in-out infinite}
+    .card{animation:fade-up 0.6s ease-out}
+    .particles{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+    .particles::before,.particles::after{content:'';position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(99,102,241,0.4);box-shadow:0 0 12px rgba(99,102,241,0.6);animation:float-dot 8s ease-in-out infinite}
+    .particles::before{top:20%;left:15%;animation-delay:0s}
+    .particles::after{top:60%;right:20%;width:4px;height:4px;background:rgba(139,92,246,0.35);box-shadow:0 0 10px rgba(139,92,246,0.5);animation-delay:-4s}
+    @keyframes pulse-glow{0%,100%{box-shadow:0 0 40px rgba(99,102,241,0.4),0 0 80px rgba(99,102,241,0.15)}50%{box-shadow:0 0 60px rgba(99,102,241,0.6),0 0 120px rgba(99,102,241,0.25)}}
+    @keyframes fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes float-dot{0%,100%{transform:translateY(0) translateX(0)}25%{transform:translateY(-20px) translateX(10px)}50%{transform:translateY(-5px) translateX(-8px)}75%{transform:translateY(-25px) translateX(5px)}}
   </style>
 </head>
 <body>
@@ -407,14 +418,17 @@ function loginPage(errorMsg = '') {
   <div class="blob2"></div>
   <div class="blob3"></div>
   <div class="grid-bg"></div>
+  <div class="particles"></div>
 
   <div style="width:100%;max-width:400px;padding:0 20px;position:relative;z-index:10">
     <!-- Brand -->
     <div style="text-align:center;margin-bottom:28px">
-      <div class="logo-icon">
-        <span style="color:white;font-size:13px;font-weight:900;letter-spacing:-0.5px">DT</span>
+      <div class="logo-ring">
+        <div class="logo-icon">
+          <span style="color:white;font-size:22px;font-weight:900;letter-spacing:-0.5px">DT</span>
+        </div>
       </div>
-      <div style="font-size:26px;font-weight:800;letter-spacing:-0.8px" class="gradient-text">DT Systems</div>
+      <div style="font-size:36px;font-weight:800;letter-spacing:-0.8px" class="gradient-text">DT Systems</div>
       <div style="color:rgba(255,255,255,0.35);font-size:13px;margin-top:4px">David Sebastian Taranto · CRM & Proyectos</div>
     </div>
 
@@ -791,6 +805,11 @@ router.get('/clients', requireAuth, async (req, res) => {
             <span class="text-xs text-slate-300">${timeAgo(c.updated_at)}</span>
           </div>
         </div>
+        ${showArchived ? `<div class="mt-3 pt-3 border-t border-slate-100">
+          <form method="POST" action="/admin/unarchive/${phoneUrl}" onclick="event.preventDefault(); event.stopPropagation(); this.submit();">
+            <button class="w-full bg-emerald-500 text-white hover:bg-emerald-600 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">Desarchivar</button>
+          </form>
+        </div>` : ''}
       </a>`;
   }).join('');
 
@@ -832,7 +851,11 @@ router.get('/clients', requireAuth, async (req, res) => {
         </td>
         <td class="px-4 py-3.5 text-xs text-slate-400 whitespace-nowrap">${timeAgo(c.updated_at)}</td>
         <td class="px-4 py-3.5 text-right">
-          ${c.demo_status === 'pending_review'
+          ${showArchived
+            ? `<form method="POST" action="/admin/unarchive/${phoneUrl}" class="inline" onclick="event.stopPropagation()">
+                <button class="bg-emerald-500 text-white hover:bg-emerald-600 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">Desarchivar</button>
+              </form>`
+            : c.demo_status === 'pending_review'
             ? `<a href="/admin/review/${phoneUrl}" class="bg-orange-500 text-white hover:bg-orange-600 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors" onclick="event.stopPropagation()">Revisar →</a>`
             : `<span class="opacity-0 group-hover:opacity-100 text-blue-600 text-xs transition-opacity font-medium">Abrir →</span>`}
         </td>
@@ -1124,6 +1147,7 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
 
   const body = `
     <div class="mb-5"><a href="/admin/clients" class="text-sm text-slate-500 hover:text-blue-600">← Pipeline</a></div>
+    ${conv.archived ? `<div class="bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium px-4 py-2.5 rounded-xl mb-4">📦 Este contacto está archivado</div>` : ''}
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
       <div>
         <h1 class="text-xl md:text-2xl font-bold text-slate-900">${escapeHtml(nombre)}</h1>
@@ -1135,9 +1159,13 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
     </div>
 
     <div class="flex items-center gap-2 mb-4 flex-wrap">
-      <form method="POST" action="/admin/archive/${phoneUrl}" class="inline">
+      ${conv.archived
+        ? `<form method="POST" action="/admin/unarchive/${phoneUrl}" class="inline">
+        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-600 hover:text-emerald-700 rounded-lg text-xs font-medium transition-colors">📦 Desarchivar</button>
+      </form>`
+        : `<form method="POST" action="/admin/archive/${phoneUrl}" class="inline">
         <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-700 rounded-lg text-xs font-medium transition-colors">📦 Archivar</button>
-      </form>
+      </form>`}
       <form method="POST" action="/admin/reset-conv/${phoneUrl}" class="inline" onsubmit="return confirm('Esto borra toda la conversación y reinicia el contacto. ¿Seguro?')">
         <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-600 hover:text-amber-700 rounded-lg text-xs font-medium transition-colors">🔄 Resetear</button>
       </form>
@@ -2056,7 +2084,30 @@ router.post('/archive/:phone', requireAuth, async (req, res) => {
 
 router.post('/unarchive/:phone', requireAuth, async (req, res) => {
   await db.unarchiveConversation(req.params.phone);
-  res.redirect('/admin/clients?archived=1');
+  await db.appendTimelineEvent(req.params.phone, { event: 'unarchived', note: 'Desarchivado desde el panel' });
+  const referer = req.get('Referer') || '';
+  if (referer.includes('/client/')) {
+    res.redirect(`/admin/client/${encodeURIComponent(req.params.phone)}`);
+  } else {
+    res.redirect('/admin/clients?archived=1');
+  }
+});
+
+router.post('/dismiss-action/:phone', requireAuth, async (req, res) => {
+  const phone = req.params.phone;
+  const conv = await db.getConversation(phone);
+  if (conv) {
+    if (conv.demo_status === 'pending_review' || conv.demo_status === 'changes_requested') {
+      await db.updateDemoStatus(phone, 'dismissed');
+    } else if (conv.stage === 'awaiting_feedback') {
+      await db.updateClientStage(phone, 'demo_sent');
+      await db.upsertConversation(phone, { stage: 'done' });
+    } else if (conv.stage === 'done' && (!conv.demo_status || conv.demo_status === 'none')) {
+      await db.updateDemoStatus(phone, 'skipped');
+    }
+    await db.appendTimelineEvent(phone, { event: 'action_dismissed', note: 'Acción descartada manualmente' });
+  }
+  res.redirect('/admin/control');
 });
 
 router.post('/reset-conv/:phone', requireAuth, async (req, res) => {
@@ -2120,10 +2171,10 @@ router.get('/control', requireAuth, async (req, res) => {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   // ── Actionable items: things that need David's attention ──
-  const pendingDemos = allClients.filter(c => c.demo_status === 'pending_review');
-  const changesRequested = allClients.filter(c => c.demo_status === 'changes_requested');
-  const clientsFeedback = activeClients.filter(c => c.stage === 'awaiting_feedback');
-  const reportsReady = activeClients.filter(c => c.stage === 'done' && c.report && (!c.demo_status || c.demo_status === 'none'));
+  const pendingDemos = allClients.filter(c => c.demo_status === 'pending_review' && c.client_stage !== 'won' && c.client_stage !== 'lost');
+  const changesRequested = allClients.filter(c => c.demo_status === 'changes_requested' && c.client_stage !== 'won' && c.client_stage !== 'lost');
+  const clientsFeedback = activeClients.filter(c => c.stage === 'awaiting_feedback' && c.demo_status !== 'dismissed' && c.client_stage !== 'won' && c.client_stage !== 'lost');
+  const reportsReady = activeClients.filter(c => c.stage === 'done' && c.report && (!c.demo_status || c.demo_status === 'none') && c.client_stage !== 'won' && c.client_stage !== 'lost');
 
   const actionItems = [];
   const actionBtn = (href, label, style) => `<a href="${href}" class="px-2.5 py-1 ${style} rounded-lg text-xs font-medium transition-colors">${label}</a>`;
@@ -2142,7 +2193,7 @@ router.get('/control', requireAuth, async (req, res) => {
       actions: `${actionBtn(`/admin/review/${ph}`, 'Revisar', 'bg-orange-500 hover:bg-orange-600 text-white font-semibold')}
         ${actionForm(`/admin/approve/${ph}`, 'Aprobar', 'bg-emerald-500 hover:bg-emerald-600 text-white')}
         ${actionForm(`/admin/reject/${ph}`, 'Rechazar', 'bg-red-100 hover:bg-red-200 text-red-600 border border-red-200')}
-        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
+        ${actionForm(`/admin/dismiss-action/${ph}`, 'Descartar acción', 'text-slate-400 hover:text-red-500 hover:bg-red-50', '¿Descartar esta acción pendiente?')}`,
       time: c.updated_at,
     });
   });
@@ -2155,7 +2206,7 @@ router.get('/control', requireAuth, async (req, res) => {
       subtitle: c.demo_notes ? `"${escapeHtml(c.demo_notes).slice(0, 80)}"` : '',
       actions: `${actionBtn(`/admin/review/${ph}`, 'Ver cambios', 'bg-violet-600 hover:bg-violet-700 text-white font-semibold')}
         ${actionForm(`/admin/regenerate/${ph}`, 'Regenerar', 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-200')}
-        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
+        ${actionForm(`/admin/dismiss-action/${ph}`, 'Descartar acción', 'text-slate-400 hover:text-red-500 hover:bg-red-50', '¿Descartar esta acción pendiente?')}`,
       time: c.updated_at,
     });
   });
@@ -2168,7 +2219,7 @@ router.get('/control', requireAuth, async (req, res) => {
       subtitle: 'Reporte generado, demo no iniciado',
       actions: `${actionForm(`/admin/regenerate/${ph}`, 'Generar demo', 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold')}
         ${actionBtn(`/admin/client/${ph}`, 'Ver', 'border border-slate-200 text-slate-600 hover:bg-slate-50')}
-        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
+        ${actionForm(`/admin/dismiss-action/${ph}`, 'Descartar acción', 'text-slate-400 hover:text-red-500 hover:bg-red-50', '¿Descartar esta acción pendiente?')}`,
       time: c.updated_at,
     });
   });
@@ -2181,7 +2232,7 @@ router.get('/control', requireAuth, async (req, res) => {
       subtitle: 'Demo enviado, esperando feedback del cliente',
       actions: `${actionBtn(`/admin/client/${ph}`, 'Ver', 'border border-blue-200 text-blue-600 hover:bg-blue-50')}
         ${actionBtn(`https://wa.me/${phoneSlug(c.phone)}`, 'WhatsApp', 'border border-emerald-200 text-emerald-600 hover:bg-emerald-50')}
-        ${actionForm(`/admin/archive/${ph}`, 'Descartar', 'text-slate-400 hover:text-red-500 hover:bg-red-50', 'Archivar este contacto?')}`,
+        ${actionForm(`/admin/dismiss-action/${ph}`, 'Descartar acción', 'text-slate-400 hover:text-red-500 hover:bg-red-50', '¿Descartar esta acción pendiente?')}`,
       time: c.updated_at,
     });
   });

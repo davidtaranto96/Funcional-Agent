@@ -541,7 +541,7 @@ async function generateMiniPDF(report) {
 
       // Contact row
       doc.fillColor('white').fontSize(9).font('Helvetica-Bold').opacity(0.7)
-         .text('📱 WhatsApp  ·  📧 david.taranto@gmail.com  ·  💼 David Taranto — Desarrollador Freelance', MARGIN + 20, ctaY + 82, { width: CW - 40 });
+         .text('WhatsApp  |  david.taranto@gmail.com  |  David Taranto — Desarrollador Freelance', MARGIN + 20, ctaY + 82, { width: CW - 40 });
       doc.opacity(1);
     }
 
