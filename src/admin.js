@@ -477,10 +477,8 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search,
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-user-info,
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text,
-      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-collapse-text{display:none!important}
-      body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;padding:10px 0}
-      body.sidebar-collapsed #sidebar:not(:hover) nav a span:first-child{font-size:18px;opacity:0.8}
+      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle{display:none!important}
+      body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;padding:8px 0}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:16px 0;justify-content:center}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand .w-8{width:32px;height:32px}
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom{padding:8px 4px}
@@ -489,8 +487,6 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button span:last-child{display:none}
       body.sidebar-collapsed #sidebar:not(:hover) nav{padding:12px 8px}
       body.sidebar-collapsed #sidebar:not(:hover) nav>div{margin-bottom:4px}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-collapse-btn{justify-content:center;padding:8px 0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-collapse-btn svg{transform:rotate(180deg)}
       /* Hover expand as overlay */
       body.sidebar-collapsed #sidebar:hover{width:240px!important;box-shadow:6px 0 32px rgba(0,0,0,0.3);z-index:30}
     }
@@ -559,14 +555,6 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         </div>
       </div>
     </nav>
-
-    <!-- Collapse toggle (desktop only) -->
-    <div class="hidden md:block px-3 py-1.5 border-t border-white/5">
-      <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn w-full flex items-center gap-2 text-[10px] text-slate-500 hover:text-slate-300 transition-colors px-3 py-2 rounded-lg hover:bg-white/5" title="Colapsar/expandir menú">
-        <svg class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"/></svg>
-        <span class="sidebar-collapse-text">Colapsar</span>
-      </button>
-    </div>
 
     <!-- User + Logout -->
     <div class="pb-3 border-t border-slate-700/40 pt-3 sidebar-bottom">
@@ -650,9 +638,6 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   function expandSidebar(){
     document.body.classList.remove('sidebar-collapsed');
     localStorage.setItem('dt-sidebar','expanded');
-  }
-  function toggleSidebarCollapse(){
-    if(document.body.classList.contains('sidebar-collapsed')){expandSidebar();}else{collapseSidebar();}
   }
   // Click outside sidebar → collapse
   document.getElementById('main-wrapper').addEventListener('click',function(){
@@ -5946,6 +5931,87 @@ router.get('/finanzas', requireAuth, async (req, res) => {
       </div>
     </div>
 
+    <!-- Monitoreo y alertas -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+      <div class="px-5 py-4 border-b border-slate-100">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-700">Monitoreo de uso y alertas</h2>
+            <p class="text-[11px] text-slate-400 mt-0.5">Define presupuestos mensuales y recibe alertas visuales</p>
+          </div>
+          <span class="px-2 py-1 rounded-full text-[10px] font-medium bg-blue-50 text-blue-600">Auto-tracking</span>
+        </div>
+      </div>
+      <div class="px-5 py-4">
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+          <div class="flex items-start gap-2">
+            <span class="text-sm mt-0.5">ℹ️</span>
+            <div class="text-xs text-blue-700 leading-relaxed">
+              <strong>Tracking local:</strong> los costos se estiman segun operaciones registradas en la base de datos (mensajes, reportes, demos).
+              Para datos de balance y consumo exacto, accede a los dashboards:
+              <div class="flex flex-wrap gap-2 mt-2">
+                <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors font-medium">
+                  <span>🤖</span> Anthropic Console
+                </a>
+                <a href="https://console.groq.com/usage" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors font-medium">
+                  <span>⚡</span> Groq Dashboard
+                </a>
+                <a href="https://resend.com/settings/usage" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors font-medium">
+                  <span>📧</span> Resend Usage
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Budget trackers -->
+        <div class="space-y-4" id="budgetTrackers">
+          ${[
+            { key: 'anthropic', label: 'Anthropic (Claude)', icon: '🤖', estimated: totalApiCost - estimateCost('landing_demo', demosGenerated) > 0 ? totalApiCost - estimateCost('landing_demo', demosGenerated) : totalApiCost, defaultBudget: 10 },
+            { key: 'groq', label: 'Groq (Whisper)', icon: '⚡', estimated: 0, defaultBudget: 5 },
+            { key: 'infra', label: 'Infraestructura', icon: '🏗️', estimated: totalMonthlyCost, defaultBudget: 10 },
+          ].map(tracker => {
+            const pct = tracker.defaultBudget > 0 ? Math.min(100, Math.round(tracker.estimated / tracker.defaultBudget * 100)) : 0;
+            const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
+            const alertBadge = pct >= 90
+              ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 animate-pulse">ALERTA</span>'
+              : pct >= 70
+              ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">ATENCION</span>'
+              : '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700">OK</span>';
+            return `
+            <div class="border border-slate-200 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">${tracker.icon}</span>
+                  <span class="text-sm font-medium text-slate-700">${tracker.label}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  ${alertBadge}
+                  <div class="flex items-center gap-1">
+                    <span class="text-xs text-slate-500">Presupuesto:</span>
+                    <input type="number" class="w-16 px-2 py-1 border border-slate-200 rounded-lg text-xs text-right budget-input"
+                           data-key="${tracker.key}" value="${tracker.defaultBudget}" min="0" step="1"
+                           onchange="updateBudgetTracker(this)">
+                    <span class="text-xs text-slate-400">USD</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <div class="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="${barColor} h-full rounded-full transition-all" style="width:${pct}%"></div>
+                </div>
+                <span class="text-xs font-bold text-slate-600 w-24 text-right">$${tracker.estimated.toFixed(2)} / $${tracker.defaultBudget}</span>
+              </div>
+              <div class="text-[10px] text-slate-400 mt-1">${pct}% del presupuesto mensual estimado</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="px-5 py-3 bg-slate-50 border-t border-slate-200">
+        <div class="text-[10px] text-slate-400">Los presupuestos se guardan en tu navegador. Las estimaciones se actualizan con cada operacion registrada en el sistema.</div>
+      </div>
+    </div>
+
     <!-- Precios de referencia de APIs -->
     <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
       <div class="px-5 py-4 border-b border-slate-100">
@@ -6095,6 +6161,18 @@ router.get('/finanzas', requireAuth, async (req, res) => {
         '</div>'+maintNote;
     }
     updateCalc();
+
+    // Budget tracker persistence
+    function initBudgetTrackers(){
+      document.querySelectorAll('.budget-input').forEach(function(input){
+        var saved = localStorage.getItem('dt-budget-' + input.dataset.key);
+        if(saved) input.value = saved;
+      });
+    }
+    function updateBudgetTracker(input){
+      localStorage.setItem('dt-budget-' + input.dataset.key, input.value);
+    }
+    initBudgetTrackers();
     </script>`;
 
   res.send(layout('Finanzas', body, { activePage: 'finanzas', user: req.session?.user }));
