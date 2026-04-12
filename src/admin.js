@@ -7,7 +7,70 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '2.0.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '3.0.0'; // Actualizar con cada deploy relevante
+
+const CHANGELOG = [
+  {
+    version: '3.0.0',
+    date: '2026-04-12',
+    title: 'Upgrade Flowlu — Dark Mode, Command Palette, Sidebar Colapsable',
+    changes: [
+      'Modo oscuro/claro con toggle y persistencia en localStorage',
+      'Command Palette (⌘K / Ctrl+K) — buscar clientes, proyectos, tareas desde cualquier página',
+      'Sidebar colapsable en desktop (modo íconos para más espacio)',
+      'Barra de búsqueda rápida en el sidebar',
+      'FAB (botón flotante) con acciones rápidas: nuevo proyecto, nuevo cliente, buscar',
+      'Widget financiero en Dashboard — pipeline de ingresos, cobrado vs pendiente',
+      'Changelog / historial de actualizaciones accesible desde configuración',
+    ],
+  },
+  {
+    version: '2.0.0',
+    date: '2026-04-11',
+    title: 'Kanban Views + Centro de Control Upgrade',
+    changes: [
+      'Vistas Kanban con drag-and-drop para Tareas (3 columnas: Pendiente/En progreso/Completada)',
+      'Kanban para Proyectos (columnas por status con drag-and-drop)',
+      'Pipeline CRM con drag-and-drop entre stages',
+      'Widget "Mis tareas" en Centro de Control con checkbox para completar',
+      'Reuniones más prominentes con countdown y botón Meet grande',
+      'SortableJS integrado para drag-and-drop nativo',
+      'Sistema de toast notifications para feedback visual',
+      'API endpoints JSON para operaciones kanban (task-move, project-status, client-stage)',
+      'Toggle de vista Lista/Kanban en Tareas y Proyectos',
+    ],
+  },
+  {
+    version: '1.5.0',
+    date: '2026-04-10',
+    title: 'Documentos + Clientes + Mejoras UI',
+    changes: [
+      'Módulo de Documentos (Mi Drive) con carpetas personalizadas',
+      'Base de clientes con CRUD completo y vinculación a proyectos',
+      'Categorías de proyectos (Cliente, Personal, Ventas, Desarrollo, Diseño)',
+      'Sistema de presupuestos y estados de pago',
+      'Deadlines y timeline de proyectos',
+      'Sidebar rediseñado con secciones organizadas',
+      'Login con Google OAuth + contraseña',
+      'Responsive mobile con sidebar drawer',
+    ],
+  },
+  {
+    version: '1.0.0',
+    date: '2026-04-01',
+    title: 'Lanzamiento inicial — CRM WhatsApp',
+    changes: [
+      'Pipeline de clientes WhatsApp con agente conversacional',
+      'Generación automática de demos (Landing, WhatsApp mockup, PDF)',
+      'Sistema de revisión y aprobación de demos',
+      'Centro de Control con acciones pendientes',
+      'Notificaciones in-app',
+      'Transcripción de audios con Groq Whisper',
+      'Email automático al generar demos',
+      'Dashboard con métricas clave',
+    ],
+  },
+];
 const orchestrator = require('./orchestrator');
 const { generateReport } = require('./reports');
 
@@ -136,6 +199,18 @@ const PROJECT_CATEGORIES = [
   { key: 'otro',       label: 'Otro',        color: '#64748b', badge: 'bg-slate-100 text-slate-600',    dot: '⚪' },
 ];
 
+const TASK_STATUS = [
+  { key: 'todo',        label: 'Pendiente',    color: '#94a3b8', badge: 'bg-slate-100 text-slate-600' },
+  { key: 'in_progress', label: 'En progreso',  color: '#3b82f6', badge: 'bg-blue-100 text-blue-700' },
+  { key: 'done',        label: 'Completada',   color: '#10b981', badge: 'bg-emerald-100 text-emerald-700' },
+];
+
+function taskStatus(t) {
+  if (t.done) return 'done';
+  if (t.status === 'in_progress') return 'in_progress';
+  return 'todo';
+}
+
 const CLIENT_CATEGORIES = [
   { key: 'cliente',     label: 'Cliente',     badge: 'bg-blue-100 text-blue-700' },
   { key: 'empresa',     label: 'Empresa',     badge: 'bg-indigo-100 text-indigo-700' },
@@ -212,7 +287,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     if (page === 'control' && notifCount > 0) badge = `<span class="bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
     return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${active ? 'bg-blue-600/90 text-white shadow-sm' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}">
       <span class="text-[15px] leading-none flex-shrink-0 ${active ? 'opacity-100' : 'opacity-60'}">${icon}</span>
-      <span class="flex-1">${label}</span>
+      <span class="flex-1 sidebar-label">${label}</span>
       ${badge}
     </a>`;
   };
@@ -228,7 +303,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         ${userPhoto
           ? `<img src="${userPhoto}" class="w-7 h-7 rounded-full flex-shrink-0 ring-2 ring-blue-500/30" alt="">`
           : `<div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${userInitial}</div>`}
-        <div class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1 sidebar-user-info">
           <div class="text-xs font-semibold text-slate-200 truncate leading-tight">${escapeHtml(userName || 'David Taranto')}</div>
           ${userEmail ? `<div class="text-[10px] text-slate-500 truncate leading-tight">${escapeHtml(userEmail)}</div>` : '<div class="text-[10px] text-slate-500 leading-tight">Admin</div>'}
         </div>
@@ -242,6 +317,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>${escapeHtml(title)} · DT Systems</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <style>
     ::-webkit-scrollbar{width:5px;height:5px}
     ::-webkit-scrollbar-track{background:#f1f5f9}
@@ -253,6 +329,22 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .nav-active{background:rgba(59,130,246,0.15)!important}
     .card-hover{transition:box-shadow 0.2s,transform 0.2s}
     .card-hover:hover{box-shadow:0 8px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
+    /* Toast notifications */
+    .toast{position:fixed;bottom:24px;right:24px;z-index:999;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:500;color:white;opacity:0;transform:translateY(20px);transition:all .3s ease;max-width:320px}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toast-success{background:#059669}
+    .toast-error{background:#dc2626}
+    /* Kanban */
+    .kanban-ghost{opacity:0.4;background:#e0e7ff!important;border-radius:12px}
+    .kanban-drag{box-shadow:0 12px 40px rgba(0,0,0,0.15);transform:rotate(1.5deg);z-index:100}
+    .kanban-col{min-height:120px;transition:background .2s}
+    .kanban-col.sortable-chosen-hover{background:#eff6ff;border-color:#93c5fd}
+    .kanban-card{transition:box-shadow .2s,transform .15s}
+    .kanban-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.08);transform:translateY(-1px)}
+    .kanban-empty{border:2px dashed #e2e8f0;border-radius:12px;padding:24px;text-align:center;color:#94a3b8;font-size:13px}
+    /* View toggle */
+    .view-toggle .active{background:#3b82f6;color:white}
+    .view-toggle button{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:500;transition:all .15s}
     #sidebar{transition:transform 0.28s cubic-bezier(.4,0,.2,1)}
     #sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:19;opacity:0;visibility:hidden;transition:opacity 0.28s ease,visibility 0.28s ease}
     #sidebar-backdrop.open{opacity:1;visibility:visible}
@@ -261,33 +353,131 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       #sidebar.open{transform:translateX(0)}
       #main-wrapper{margin-left:0!important}
     }
+    /* ── Dark Mode ── */
+    html.dark body{background:linear-gradient(135deg,#0c1222 0%,#060d1a 100%)!important;color:#cbd5e1}
+    html.dark .bg-white{background-color:#162032!important}
+    html.dark .bg-slate-50\/80,html.dark .bg-slate-50{background-color:#0f1729!important}
+    html.dark .border-slate-200{border-color:#1e3050!important}
+    html.dark .border-slate-100{border-color:rgba(30,48,80,0.5)!important}
+    html.dark .divide-slate-100>*+*{border-color:rgba(30,48,80,0.5)!important}
+    html.dark .text-slate-900,html.dark .text-slate-800{color:#f1f5f9!important}
+    html.dark .text-slate-700{color:#e2e8f0!important}
+    html.dark .text-slate-600{color:#cbd5e1!important}
+    html.dark .text-slate-500{color:#94a3b8!important}
+    html.dark .text-slate-400{color:#64748b!important}
+    html.dark .hover\:bg-slate-50:hover{background-color:#1e293b!important}
+    html.dark .hover\:bg-slate-50\/50:hover{background-color:rgba(30,41,59,0.3)!important}
+    html.dark input:not([type="checkbox"]):not([type="radio"]):not(.no-dark),html.dark textarea,html.dark select{background-color:#0c1629!important;border-color:#1e3050!important;color:#e2e8f0!important}
+    html.dark input::placeholder,html.dark textarea::placeholder{color:#475569!important}
+    html.dark ::-webkit-scrollbar-track{background:#0f172a}
+    html.dark ::-webkit-scrollbar-thumb{background:#334155}
+    html.dark .kanban-card{background:#162032!important;border-color:#1e3050!important}
+    html.dark .kanban-empty{border-color:#1e3050!important;color:#475569!important}
+    html.dark .kanban-ghost{background:#1e3a5f!important}
+    html.dark .kanban-col.sortable-chosen-hover{background:#1a2744!important;border-color:#2563eb!important}
+    html.dark .bg-slate-100{background-color:#1e293b!important}
+    html.dark .bg-slate-100.text-slate-600{color:#94a3b8!important}
+    html.dark .bg-gray-100{background-color:#1e293b!important}
+    html.dark .bg-gray-100.text-gray-400,html.dark .bg-gray-100.text-gray-500{color:#64748b!important}
+    html.dark .bg-orange-50{background-color:rgba(251,146,60,0.1)!important}
+    html.dark .bg-blue-50{background-color:rgba(59,130,246,0.1)!important}
+    html.dark .bg-emerald-50{background-color:rgba(16,185,129,0.1)!important}
+    html.dark .bg-red-50{background-color:rgba(239,68,68,0.1)!important}
+    html.dark .toast-success{background:#065f46}
+    html.dark .toast-error{background:#991b1b}
+    html.dark #sidebar{background:#060d1a!important;border-color:rgba(30,48,80,0.3)!important}
+    html.dark .card-hover:hover{box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+    /* ── Command Palette ── */
+    .cmd-palette{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-start;justify-content:center;padding-top:min(20vh,160px)}
+    .cmd-palette.open{display:flex}
+    .cmd-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+    .cmd-box{position:relative;width:100%;max-width:560px;margin:0 16px;background:white;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;animation:cmd-in .15s ease}
+    html.dark .cmd-box{background:#1a2236;border:1px solid #1e3050}
+    @keyframes cmd-in{from{opacity:0;transform:scale(0.96) translateY(-8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+    .cmd-input{width:100%;border:none;outline:none;padding:16px 20px 16px 48px;font-size:15px;background:transparent;color:#1e293b}
+    html.dark .cmd-input{color:#e2e8f0}
+    .cmd-input::placeholder{color:#94a3b8}
+    .cmd-results{max-height:360px;overflow-y:auto;border-top:1px solid #e2e8f0}
+    html.dark .cmd-results{border-top-color:#1e3050}
+    .cmd-item{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background .1s;font-size:13px;color:#475569}
+    .cmd-item:hover,.cmd-item.active{background:#f1f5f9}
+    html.dark .cmd-item{color:#94a3b8}
+    html.dark .cmd-item:hover,html.dark .cmd-item.active{background:#162032}
+    .cmd-item .cmd-type{font-size:10px;padding:2px 8px;border-radius:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+    .cmd-empty{padding:32px 20px;text-align:center;color:#94a3b8;font-size:13px}
+    .cmd-footer{display:flex;align-items:center;gap:16px;padding:10px 20px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8}
+    html.dark .cmd-footer{border-top-color:#1e3050}
+    .cmd-footer kbd{background:#f1f5f9;border:1px solid #e2e8f0;padding:2px 6px;border-radius:4px;font-family:inherit;font-size:10px}
+    html.dark .cmd-footer kbd{background:#0f172a;border-color:#1e3050;color:#64748b}
+    /* ── FAB ── */
+    .fab-container{position:fixed;bottom:24px;right:24px;z-index:50}
+    .fab-btn{width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(59,130,246,0.4);transition:all .2s}
+    .fab-btn:hover{transform:scale(1.05);box-shadow:0 12px 32px rgba(59,130,246,0.5)}
+    .fab-btn svg{transition:transform .2s}
+    .fab-menu{position:absolute;bottom:60px;right:0;background:white;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);border:1px solid #e2e8f0;padding:6px;min-width:200px;opacity:0;visibility:hidden;transform:translateY(8px) scale(0.95);transition:all .15s ease}
+    .fab-menu.open{opacity:1;visibility:visible;transform:translateY(0) scale(1)}
+    html.dark .fab-menu{background:#1a2236;border-color:#1e3050;box-shadow:0 12px 40px rgba(0,0,0,0.4)}
+    .fab-menu a{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;color:#475569;text-decoration:none;transition:background .1s}
+    .fab-menu a:hover{background:#f1f5f9}
+    html.dark .fab-menu a{color:#94a3b8}
+    html.dark .fab-menu a:hover{background:#162032}
+    .fab-menu a span.fab-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+    /* ── Sidebar collapse (desktop) ── */
+    @media(min-width:768px){
+      body.sidebar-collapsed #sidebar{width:64px!important}
+      body.sidebar-collapsed #sidebar .sidebar-label,
+      body.sidebar-collapsed #sidebar .sidebar-section-label,
+      body.sidebar-collapsed #sidebar .sidebar-search,
+      body.sidebar-collapsed #sidebar .sidebar-user-info,
+      body.sidebar-collapsed #sidebar .sidebar-brand-text{display:none!important}
+      body.sidebar-collapsed #sidebar nav a{justify-content:center;padding:10px}
+      body.sidebar-collapsed #sidebar nav a span.text-\\[15px\\]{font-size:18px;opacity:1}
+      body.sidebar-collapsed #sidebar .sidebar-brand{justify-content:center;padding:12px 0}
+      body.sidebar-collapsed #sidebar .sidebar-bottom{padding:8px}
+      body.sidebar-collapsed #sidebar .sidebar-bottom form button{justify-content:center}
+      body.sidebar-collapsed #sidebar .sidebar-bottom form button span:last-child{display:none}
+      body.sidebar-collapsed #main-wrapper{margin-left:64px!important}
+      body.sidebar-collapsed #sidebar #darkToggle{display:none}
+      body.sidebar-collapsed #sidebar .sidebar-collapse-btn svg{transform:rotate(180deg)}
+    }
   </style>
 </head>
 <body class="bg-slate-50/80 text-slate-800 min-h-screen" style="display:flex;background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%)">
   <aside id="sidebar" style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-[#0f172a] flex flex-col border-r border-white/5">
     <!-- Brand -->
-    <div class="px-4 py-4 border-b border-white/5">
+    <div class="px-4 py-4 border-b border-white/5 sidebar-brand">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-900/40">
           <span class="text-white text-[11px] font-black tracking-tight">DT</span>
         </div>
-        <div>
+        <div class="flex-1 min-w-0 sidebar-brand-text">
           <div class="text-sm font-bold text-white tracking-tight leading-tight">DT Systems</div>
           <div class="text-[10px] text-slate-500 leading-none mt-0.5">CRM & Proyectos · <span class="text-slate-600">v${APP_VERSION}</span></div>
         </div>
+        <button onclick="toggleDarkMode()" id="darkToggle" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0" title="Tema claro/oscuro">
+          <svg id="darkIcon" class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+        </button>
       </div>
     </div>
 
+    <!-- Search trigger -->
+    <div class="px-3 pt-3 pb-1 sidebar-search">
+      <button onclick="openCmdPalette()" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-colors cursor-pointer group">
+        <svg class="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <span class="text-xs text-slate-500 flex-1 text-left">Buscar...</span>
+        <kbd class="text-[9px] text-slate-600 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-mono">⌘K</kbd>
+      </button>
+    </div>
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-5">
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">General</div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">General</div>
         <div class="space-y-0.5">
           ${navItem('/admin', '📊', 'Dashboard', 'dashboard')}
         </div>
       </div>
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Clientes</div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Clientes</div>
         <div class="space-y-0.5">
           ${navItem('/admin/clients', '💬', 'Pipeline', 'clients')}
           ${navItem('/admin/control', '🎛️', 'Centro de Control', 'control')}
@@ -295,22 +485,31 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         </div>
       </div>
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Trabajo</div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Trabajo</div>
         <div class="space-y-0.5">
           ${navItem('/admin/projects', '📁', 'Proyectos', 'projects')}
           ${navItem('/admin/tasks', '✅', 'Tareas', 'tasks')}
         </div>
       </div>
       <div>
-        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recursos</div>
+        <div class="px-2 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest sidebar-section-label">Recursos</div>
         <div class="space-y-0.5">
           ${navItem('/admin/documentos', '📂', 'Documentos', 'documentos')}
+          ${navItem('/admin/changelog', '🔄', 'Actualizaciones', 'changelog')}
         </div>
       </div>
     </nav>
 
+    <!-- Collapse toggle (desktop only) -->
+    <div class="hidden md:block px-3 py-1.5 border-t border-white/5">
+      <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn w-full flex items-center gap-2 text-[10px] text-slate-500 hover:text-slate-300 transition-colors px-3 py-2 rounded-lg hover:bg-white/5" title="Colapsar menú">
+        <svg class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"/></svg>
+        <span class="sidebar-label">Colapsar</span>
+      </button>
+    </div>
+
     <!-- User + Logout -->
-    <div class="pb-3 border-t border-slate-700/40 pt-3">
+    <div class="pb-3 border-t border-slate-700/40 pt-3 sidebar-bottom">
       ${userBlock}
       <form method="POST" action="/admin/logout" class="px-3">
         <button class="flex items-center gap-2 text-xs text-slate-500 hover:text-red-400 transition-colors w-full px-3 py-2 rounded-lg hover:bg-slate-800">
@@ -334,7 +533,38 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     <main class="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 pb-16 min-h-screen">${body}</main>
   </div>
   <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+  <!-- Command Palette -->
+  <div id="cmdPalette" class="cmd-palette" onclick="if(event.target===this||event.target.classList.contains('cmd-backdrop'))closeCmdPalette()">
+    <div class="cmd-backdrop"></div>
+    <div class="cmd-box">
+      <div style="position:relative">
+        <svg class="w-4 h-4 text-slate-400" style="position:absolute;left:18px;top:50%;transform:translateY(-50%)" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input id="cmdInput" class="cmd-input" placeholder="Buscar clientes, proyectos, tareas..." autocomplete="off" spellcheck="false">
+      </div>
+      <div id="cmdResults" class="cmd-results"></div>
+      <div class="cmd-footer">
+        <span><kbd>↑↓</kbd> navegar</span>
+        <span><kbd>↵</kbd> abrir</span>
+        <span><kbd>esc</kbd> cerrar</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB Quick Actions -->
+  <div class="fab-container">
+    <div id="fabMenu" class="fab-menu">
+      <a href="/admin/projects/new"><span class="fab-icon bg-blue-100 text-blue-600">📁</span>Nuevo proyecto</a>
+      <a href="/admin/clientes/new"><span class="fab-icon bg-emerald-100 text-emerald-600">👤</span>Nuevo cliente</a>
+      <a href="/admin/clients" onclick="event.preventDefault();document.getElementById('fabMenu').classList.remove('open');openCmdPalette()"><span class="fab-icon bg-purple-100 text-purple-600">🔍</span>Buscar <kbd class="text-[9px] ml-auto bg-slate-100 border border-slate-200 px-1 rounded">⌘K</kbd></a>
+    </div>
+    <button class="fab-btn" onclick="toggleFab()" id="fabBtn" title="Acciones rapidas">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+    </button>
+  </div>
+
   <script>
+  // ── Sidebar ──
   function toggleSidebar(){
     const s=document.getElementById('sidebar');
     const b=document.getElementById('sidebar-backdrop');
@@ -350,18 +580,144 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     document.getElementById('sidebar-backdrop').classList.remove('open');
     document.body.style.overflow='';
   }
-  // Cerrar con tecla Escape
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeSidebar();});
-  // Auto-fetch notif badge
-  fetch('/admin/api/notif-count').then(r=>r.json()).then(d=>{
+
+  // ── Sidebar collapse (desktop) ──
+  function toggleSidebarCollapse(){
+    document.body.classList.toggle('sidebar-collapsed');
+    var collapsed=document.body.classList.contains('sidebar-collapsed');
+    localStorage.setItem('dt-sidebar',collapsed?'collapsed':'expanded');
+  }
+  (function(){
+    if(window.innerWidth>=768&&localStorage.getItem('dt-sidebar')==='collapsed'){
+      document.body.classList.add('sidebar-collapsed');
+    }
+  })();
+
+  // ── Dark Mode ──
+  function initDarkMode(){
+    var pref=localStorage.getItem('dt-theme');
+    if(pref==='dark'||(pref===null&&window.matchMedia('(prefers-color-scheme:dark)').matches)){
+      document.documentElement.classList.add('dark');
+    }
+    updateDarkIcon();
+  }
+  function toggleDarkMode(){
+    document.documentElement.classList.toggle('dark');
+    var isDark=document.documentElement.classList.contains('dark');
+    localStorage.setItem('dt-theme',isDark?'dark':'light');
+    updateDarkIcon();
+    showToast(isDark?'Modo oscuro activado':'Modo claro activado');
+  }
+  function updateDarkIcon(){
+    var icon=document.getElementById('darkIcon');
+    if(!icon)return;
+    var isDark=document.documentElement.classList.contains('dark');
+    icon.innerHTML=isDark
+      ?'<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>'
+      :'<path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>';
+  }
+  initDarkMode();
+
+  // ── Toast ──
+  function showToast(msg,type){
+    type=type||'success';
+    var t=document.createElement('div');
+    t.className='toast toast-'+type;
+    t.textContent=msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(function(){t.classList.add('show');});
+    setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},300);},3000);
+  }
+
+  // ── Command Palette ──
+  var _cmdData=null;
+  var _cmdIdx=-1;
+  function openCmdPalette(){
+    var p=document.getElementById('cmdPalette');
+    p.classList.add('open');
+    var inp=document.getElementById('cmdInput');
+    inp.value='';
+    inp.focus();
+    _cmdIdx=-1;
+    if(!_cmdData){
+      document.getElementById('cmdResults').innerHTML='<div class="cmd-empty">Cargando...</div>';
+      fetch('/admin/api/search-index').then(function(r){return r.json()}).then(function(d){
+        _cmdData=d;
+        renderCmdResults('');
+      }).catch(function(){
+        document.getElementById('cmdResults').innerHTML='<div class="cmd-empty">Error cargando datos</div>';
+      });
+    } else {
+      renderCmdResults('');
+    }
+  }
+  function closeCmdPalette(){
+    document.getElementById('cmdPalette').classList.remove('open');
+  }
+  function renderCmdResults(q){
+    var box=document.getElementById('cmdResults');
+    if(!_cmdData){box.innerHTML='<div class="cmd-empty">Cargando...</div>';return;}
+    q=(q||'').toLowerCase().trim();
+    var items=_cmdData.filter(function(it){
+      if(!q)return true;
+      return (it.title||'').toLowerCase().includes(q)||(it.sub||'').toLowerCase().includes(q)||(it.type||'').toLowerCase().includes(q);
+    }).slice(0,12);
+    if(items.length===0){
+      box.innerHTML='<div class="cmd-empty">Sin resultados para "'+q+'"</div>';
+      return;
+    }
+    var typeColors={client:'bg-blue-100 text-blue-700',project:'bg-purple-100 text-purple-700',task:'bg-amber-100 text-amber-700',page:'bg-slate-100 text-slate-600'};
+    var typeLabels={client:'Cliente',project:'Proyecto',task:'Tarea',page:'Pagina'};
+    box.innerHTML=items.map(function(it,i){
+      var tc=typeColors[it.type]||'bg-slate-100 text-slate-600';
+      var tl=typeLabels[it.type]||it.type;
+      return '<a href="'+it.href+'" class="cmd-item'+(i===_cmdIdx?' active':'')+'" data-idx="'+i+'">'+
+        '<span class="text-base flex-shrink-0">'+(it.icon||'•')+'</span>'+
+        '<div class="flex-1 min-w-0"><div class="text-sm font-medium" style="color:inherit">'+it.title+'</div>'+(it.sub?'<div class="text-[11px] opacity-60 truncate">'+it.sub+'</div>':'')+'</div>'+
+        '<span class="cmd-type '+tc+'">'+tl+'</span></a>';
+    }).join('');
+  }
+  document.addEventListener('keydown',function(e){
+    // Cmd+K / Ctrl+K
+    if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openCmdPalette();return;}
+    if(e.key==='Escape'){
+      if(document.getElementById('cmdPalette').classList.contains('open')){closeCmdPalette();return;}
+      closeSidebar();
+    }
+    // Arrow navigation in command palette
+    var p=document.getElementById('cmdPalette');
+    if(!p.classList.contains('open'))return;
+    var items=document.querySelectorAll('#cmdResults .cmd-item');
+    if(e.key==='ArrowDown'){e.preventDefault();_cmdIdx=Math.min(_cmdIdx+1,items.length-1);items.forEach(function(el,i){el.classList.toggle('active',i===_cmdIdx)});if(items[_cmdIdx])items[_cmdIdx].scrollIntoView({block:'nearest'});}
+    if(e.key==='ArrowUp'){e.preventDefault();_cmdIdx=Math.max(_cmdIdx-1,0);items.forEach(function(el,i){el.classList.toggle('active',i===_cmdIdx)});if(items[_cmdIdx])items[_cmdIdx].scrollIntoView({block:'nearest'});}
+    if(e.key==='Enter'&&items[_cmdIdx]){e.preventDefault();items[_cmdIdx].click();}
+  });
+  var cmdInp=document.getElementById('cmdInput');
+  if(cmdInp)cmdInp.addEventListener('input',function(){_cmdIdx=-1;renderCmdResults(this.value);});
+
+  // ── FAB ──
+  function toggleFab(){
+    document.getElementById('fabMenu').classList.toggle('open');
+    var svg=document.querySelector('#fabBtn svg');
+    if(svg)svg.style.transform=document.getElementById('fabMenu').classList.contains('open')?'rotate(45deg)':'';
+  }
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('.fab-container')){
+      var m=document.getElementById('fabMenu');
+      if(m&&m.classList.contains('open')){m.classList.remove('open');var svg=document.querySelector('#fabBtn svg');if(svg)svg.style.transform='';}
+    }
+  });
+
+  // ── Notif badge ──
+  fetch('/admin/api/notif-count').then(function(r){return r.json()}).then(function(d){
     if(d.count>0){
-      document.querySelectorAll('a[href="/admin/notifications"] .flex-1').forEach(el=>{
-        let badge=el.parentElement.querySelector('.notif-badge');
+      document.querySelectorAll('a[href="/admin/notifications"] .flex-1').forEach(function(el){
+        var badge=el.parentElement.querySelector('.notif-badge');
         if(!badge){badge=document.createElement('span');badge.className='notif-badge bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center';el.parentElement.appendChild(badge);}
         badge.textContent=d.count;
       });
     }
-  }).catch(()=>{});
+  }).catch(function(){});
   </script>
 </body>
 </html>`;
@@ -619,6 +975,23 @@ router.get('/', requireAuth, async (req, res) => {
     .sort((a, b) => a.deadlineDate - b.deadlineDate)
     .slice(0, 6);
 
+  // Financial overview
+  const financialData = (() => {
+    const withBudget = projects.filter(p => p.budget && parseFloat(String(p.budget).replace(/[^0-9.]/g, '')) > 0);
+    const parseBudget = b => parseFloat(String(b || '0').replace(/[^0-9.]/g, '')) || 0;
+    const totalRevenue = withBudget.reduce((s, p) => s + parseBudget(p.budget), 0);
+    const paid = withBudget.filter(p => p.budget_status === 'paid').reduce((s, p) => s + parseBudget(p.budget), 0);
+    const approved = withBudget.filter(p => ['approved','partial','paid'].includes(p.budget_status)).reduce((s, p) => s + parseBudget(p.budget), 0);
+    const pending = withBudget.filter(p => ['not_quoted','quoted'].includes(p.budget_status)).reduce((s, p) => s + parseBudget(p.budget), 0);
+    const fmtMoney = n => n >= 1000 ? (n/1000).toFixed(n%1000===0?0:1) + 'K' : n.toFixed(0);
+    const byStatus = BUDGET_STATUS.map(bs => ({
+      ...bs,
+      count: withBudget.filter(p => p.budget_status === bs.key).length,
+      total: withBudget.filter(p => p.budget_status === bs.key).reduce((s, p) => s + parseBudget(p.budget), 0),
+    })).filter(bs => bs.count > 0);
+    return { totalRevenue, paid, approved, pending, withBudget, fmtMoney, byStatus };
+  })();
+
   const body = `
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
       <div>
@@ -715,6 +1088,48 @@ router.get('/', requireAuth, async (req, res) => {
         ${recentProjects || '<p class="text-sm text-slate-400">Sin proyectos</p>'}
       </div>
     </div>
+
+    <!-- Resumen financiero -->
+    ${financialData.withBudget.length > 0 ? `
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 overflow-hidden mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-slate-700">💰 Resumen financiero</h2>
+        <a href="/admin/projects?view=kanban" class="text-xs text-blue-600 hover:underline">Ver proyectos →</a>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-slate-800">$${financialData.fmtMoney(financialData.totalRevenue)}</div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Pipeline total</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-emerald-600">$${financialData.fmtMoney(financialData.paid)}</div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Cobrado</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-blue-600">$${financialData.fmtMoney(financialData.approved)}</div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Aprobado</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-amber-500">$${financialData.fmtMoney(financialData.pending)}</div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Pendiente</div>
+        </div>
+      </div>
+      <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex">
+        ${financialData.totalRevenue > 0 ? `
+          <div class="h-full bg-emerald-500 rounded-l-full" style="width:${Math.round(financialData.paid/financialData.totalRevenue*100)}%" title="Cobrado"></div>
+          <div class="h-full bg-blue-500" style="width:${Math.round((financialData.approved-financialData.paid)/financialData.totalRevenue*100)}%" title="Aprobado"></div>
+          <div class="h-full bg-amber-400 rounded-r-full" style="width:${Math.round(financialData.pending/financialData.totalRevenue*100)}%" title="Pendiente"></div>
+        ` : ''}
+      </div>
+      <div class="flex items-center gap-4 mt-3">
+        ${financialData.byStatus.map(bs => `
+          <div class="flex items-center gap-1.5">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${bs.badge}">${bs.label}</span>
+            <span class="text-[10px] text-slate-400">${bs.count} · $${financialData.fmtMoney(bs.total)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
 
     <!-- Actividad reciente (collapsible/compact) -->
     ${activityFeed ? `
@@ -862,7 +1277,7 @@ router.get('/clients', requireAuth, async (req, res) => {
       </tr>`;
   }).join('');
 
-  // Kanban view: group clients by stage
+  // Kanban view: group clients by stage — with drag-and-drop
   const kanbanHtml = (() => {
     const kanbanStages = STAGES.slice(0, 7); // exclude 'dormant' for space
     return `
@@ -873,17 +1288,18 @@ router.get('/clients', requireAuth, async (req, res) => {
           return `
             <div class="flex-shrink-0" style="width:260px">
               <div class="flex items-center gap-2 mb-3 px-1">
-                <div class="w-2 h-2 rounded-full" style="background:${s.dot}"></div>
+                <div class="w-2.5 h-2.5 rounded-full" style="background:${s.dot}"></div>
                 <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">${s.label}</span>
                 <span class="ml-auto text-xs font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">${stageClients.length}</span>
               </div>
-              <div class="space-y-2">
+              <div class="pipeline-kanban-col kanban-col bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 p-2" data-stage="${s.key}" style="min-height:200px">
                 ${stageClients.length > 0 ? stageClients.map(c => {
                   const nombre = c.report?.cliente?.nombre || c.context?.nombre || '—';
                   const tipo = c.report?.proyecto?.tipo || '';
                   return `
-                    <div class="bg-white rounded-xl border border-slate-200 p-3 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all"
-                         onclick="location.href='/admin/client/${encodeURIComponent(c.phone)}'">
+                    <div class="kanban-card bg-white rounded-xl border border-slate-200 p-3 mb-2 cursor-grab active:cursor-grabbing"
+                         data-phone="${escapeHtml(c.phone)}"
+                         onclick="if(!window._pipelineDragging)location.href='/admin/client/${encodeURIComponent(c.phone)}'">
                       <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(nombre)}</div>
                       ${tipo ? `<div class="text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(tipo)}</div>` : ''}
                       <div class="flex items-center justify-between mt-2">
@@ -892,12 +1308,52 @@ router.get('/clients', requireAuth, async (req, res) => {
                       </div>
                     </div>`;
                 }).join('')
-                : `<div class="text-center py-4 text-xs text-slate-300 border border-dashed border-slate-100 rounded-xl">Sin leads</div>`}
+                : '<div class="kanban-empty">Arrastra contactos aqu&iacute;</div>'}
               </div>
             </div>`;
         }).join('')}
       </div>
-      </div>`;
+      </div>
+      <script>
+      window._pipelineDragging = false;
+      document.querySelectorAll('.pipeline-kanban-col').forEach(function(col) {
+        new Sortable(col, {
+          group: 'pipeline',
+          animation: 200,
+          ghostClass: 'kanban-ghost',
+          dragClass: 'kanban-drag',
+          onStart: function() { window._pipelineDragging = true; },
+          onEnd: function(evt) {
+            setTimeout(function() { window._pipelineDragging = false; }, 100);
+            var card = evt.item;
+            var newStage = evt.to.dataset.stage;
+            fetch('/admin/api/client-stage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: card.dataset.phone, newStage: newStage })
+            }).then(function(r) { return r.json(); }).then(function(d) {
+              if (d.ok) {
+                showToast('Contacto movido');
+                document.querySelectorAll('.pipeline-kanban-col').forEach(function(c) {
+                  var empty = c.querySelector('.kanban-empty');
+                  if (c.querySelectorAll('.kanban-card').length === 0 && !empty) {
+                    c.innerHTML = '<div class="kanban-empty">Arrastra contactos aqu\\u00ed</div>';
+                  } else if (empty && c.querySelectorAll('.kanban-card').length > 0) {
+                    empty.remove();
+                  }
+                });
+              } else {
+                showToast('Error: ' + (d.error || ''), 'error');
+                setTimeout(function() { location.reload(); }, 1500);
+              }
+            }).catch(function() {
+              showToast('Error de red', 'error');
+              setTimeout(function() { location.reload(); }, 1500);
+            });
+          }
+        });
+      });
+      </script>`;
   })();
 
   const body = `
@@ -2357,6 +2813,71 @@ router.get('/control', requireAuth, async (req, res) => {
       </div>`;
     }).join('');
 
+  // ── My tasks widget ──
+  const allProjectsForTasks = await db.listProjects();
+  const myTasks = allProjectsForTasks
+    .flatMap(p => (p.tasks || [])
+      .map((t, i) => ({ ...t, idx: i, project: p }))
+      .filter(t => !t.done && (t.assignee === 'david' || !t.assignee))
+    )
+    .sort((a, b) => {
+      const prio = { high: 0, medium: 1, low: 2 };
+      const pa = prio[a.priority] ?? 1;
+      const pb = prio[b.priority] ?? 1;
+      if (pa !== pb) return pa - pb;
+      if (a.due_date && b.due_date) return new Date(a.due_date) - new Date(b.due_date);
+      if (a.due_date) return -1;
+      if (b.due_date) return 1;
+      return 0;
+    })
+    .slice(0, 8);
+
+  const myTaskPriorityDot = p => {
+    if (p === 'high') return '<span class="w-2 h-2 rounded-full bg-red-400 flex-shrink-0"></span>';
+    if (p === 'medium') return '<span class="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"></span>';
+    return '<span class="w-2 h-2 rounded-full bg-slate-300 flex-shrink-0"></span>';
+  };
+
+  const myTaskRows = myTasks.length === 0
+    ? '<div class="px-4 py-6 text-center text-sm text-slate-400">Sin tareas pendientes</div>'
+    : myTasks.map(t => {
+      const dueBadge = t.due_date ? (() => {
+        const d = new Date(t.due_date);
+        const dl = Math.ceil((d - new Date()) / 86400000);
+        const color = dl < 0 ? 'text-red-500' : dl <= 2 ? 'text-orange-500' : 'text-slate-400';
+        const label = dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : dl + 'd';
+        return `<span class="text-[10px] ${color} font-medium">${label}</span>`;
+      })() : '';
+      return `
+      <div class="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+        <button onclick="completeControlTask('${t.project.id}',${t.idx},this)" class="w-4 h-4 rounded border-2 border-slate-300 hover:border-blue-500 flex-shrink-0 transition-colors flex items-center justify-center cursor-pointer" title="Completar"></button>
+        ${myTaskPriorityDot(t.priority)}
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-slate-700 truncate">${escapeHtml(t.text)}</div>
+          <div class="flex items-center gap-2 mt-0.5">
+            <a href="/admin/projects/${t.project.id}" class="text-[10px] text-blue-500 hover:underline truncate">${escapeHtml(t.project.title || t.project.client_name)}</a>
+            ${dueBadge}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+  // ── Enhanced meetings ──
+  const nextMeeting = upcomingMeetings[0];
+  const meetingCountdown = nextMeeting ? (() => {
+    const now = new Date();
+    const start = new Date(nextMeeting.start);
+    const diffMs = start - now;
+    const diffH = Math.floor(diffMs / 3600000);
+    const diffM = Math.floor((diffMs % 3600000) / 60000);
+    if (diffMs < 0) return 'Ahora';
+    if (diffH < 1) return `en ${diffM}min`;
+    if (diffH < 24) return `en ${diffH}h ${diffM}m`;
+    const diffD = Math.ceil(diffMs / 86400000);
+    return `en ${diffD} dia${diffD > 1 ? 's' : ''}`;
+  })() : '';
+  const isToday = nextMeeting ? new Date(nextMeeting.start).toDateString() === new Date().toDateString() : false;
+
   const body = `
     <div class="mb-5">
       <h1 class="text-xl font-bold text-slate-900">Centro de Control</h1>
@@ -2373,8 +2894,9 @@ router.get('/control', requireAuth, async (req, res) => {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
-      <!-- Acciones pendientes -->
+      <!-- Columna izquierda -->
       <div class="lg:col-span-3">
+        <!-- Acciones pendientes -->
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h2 class="text-sm font-semibold text-slate-700">Acciones pendientes</h2>
@@ -2399,37 +2921,75 @@ router.get('/control', requireAuth, async (req, res) => {
             <a href="/admin/clients" class="text-xs text-blue-500 hover:underline">Ver todo</a>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100">
-            <div class="px-4 py-3 text-center">
+            <a href="/admin/clients?stage=all&view=kanban" class="px-4 py-3 text-center hover:bg-slate-50 transition-colors">
               <div class="text-2xl font-bold text-blue-600">${stats.gathering}</div>
               <div class="text-[10px] text-slate-400 mt-0.5">Conversando</div>
-            </div>
-            <div class="px-4 py-3 text-center">
+            </a>
+            <a href="/admin/clients?stage=all&view=kanban" class="px-4 py-3 text-center hover:bg-slate-50 transition-colors">
               <div class="text-2xl font-bold text-amber-500">${stats.done + stats.generating}</div>
               <div class="text-[10px] text-slate-400 mt-0.5">Procesando</div>
-            </div>
-            <div class="px-4 py-3 text-center">
+            </a>
+            <a href="/admin/clients?stage=negotiating&view=kanban" class="px-4 py-3 text-center hover:bg-slate-50 transition-colors">
               <div class="text-2xl font-bold text-purple-600">${stats.awaitingFeedback + stats.awaitingSlot}</div>
               <div class="text-[10px] text-slate-400 mt-0.5">Negociando</div>
-            </div>
-            <div class="px-4 py-3 text-center">
+            </a>
+            <a href="/admin/clients?stage=won" class="px-4 py-3 text-center hover:bg-slate-50 transition-colors">
               <div class="text-2xl font-bold text-emerald-600">${stats.won}</div>
               <div class="text-[10px] text-slate-400 mt-0.5">Cerrados</div>
-            </div>
+            </a>
           </div>
         </div>
       </div>
 
-      <!-- Feed de notificaciones -->
+      <!-- Columna derecha -->
       <div class="lg:col-span-2">
-        <!-- Próximas reuniones -->
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <h2 class="text-sm font-semibold text-slate-700">📅 Próximas reuniones</h2>
-            <span class="text-[10px] text-slate-400">${upcomingMeetings.length} agendadas</span>
+        <!-- Proximas reuniones (PROMINENTE) -->
+        <div class="bg-white rounded-xl border ${isToday ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'} overflow-hidden mb-5">
+          <div class="flex items-center justify-between px-4 py-3 border-b ${isToday ? 'border-blue-100 bg-blue-50/50' : 'border-slate-100'}">
+            <h2 class="text-sm font-semibold ${isToday ? 'text-blue-700' : 'text-slate-700'}">📅 Proximas reuniones</h2>
+            <span class="text-[10px] ${isToday ? 'text-blue-500' : 'text-slate-400'}">${upcomingMeetings.length} agendadas</span>
           </div>
-          ${meetingRows}
+          ${nextMeeting ? `
+          <div class="px-4 py-3 ${isToday ? 'bg-gradient-to-r from-blue-50 to-indigo-50' : 'bg-slate-50/50'} border-b border-slate-100">
+            <div class="flex items-center justify-between">
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-semibold ${isToday ? 'text-blue-800' : 'text-slate-800'}">${escapeHtml((nextMeeting.summary || '').replace(/Reunion con /i, '').replace(/ — DT Systems/i, ''))}</div>
+                <div class="text-xs ${isToday ? 'text-blue-600' : 'text-slate-500'} mt-0.5 capitalize">${formatDate(nextMeeting.start).full}</div>
+                <div class="text-[10px] font-bold ${isToday ? 'text-blue-500' : 'text-indigo-500'} mt-1 uppercase tracking-wide">${meetingCountdown}</div>
+              </div>
+              <div class="flex flex-col gap-1.5 flex-shrink-0 ml-3">
+                ${nextMeeting.meetLink ? `<a href="${escapeHtml(nextMeeting.meetLink)}" target="_blank" class="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold text-center">Google Meet</a>` : ''}
+                <a href="${escapeHtml(nextMeeting.htmlLink)}" target="_blank" class="text-[10px] px-3 py-1 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors text-center">Ver en Calendar</a>
+              </div>
+            </div>
+          </div>` : ''}
+          ${upcomingMeetings.slice(1).length > 0 ? upcomingMeetings.slice(1).map(m => {
+            const dt = formatDate(m.start);
+            const clientName = (m.summary || '').replace(/Reunion con /i, '').replace(/ — DT Systems/i, '');
+            const meetBtn = m.meetLink ? `<a href="${escapeHtml(m.meetLink)}" target="_blank" class="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-medium">Meet</a>` : '';
+            return `<div class="px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="min-w-0">
+                  <div class="text-sm text-slate-700">${escapeHtml(clientName)}</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5 capitalize">${dt.full}</div>
+                </div>
+                <div class="flex items-center gap-1.5 flex-shrink-0">${meetBtn}</div>
+              </div>
+            </div>`;
+          }).join('') : ''}
+          ${upcomingMeetings.length === 0 ? '<div class="px-4 py-6 text-center text-sm text-slate-400">No hay reuniones proximas</div>' : ''}
         </div>
 
+        <!-- Mis tareas (NUEVO) -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-700">Mis tareas</h2>
+            <a href="/admin/tasks?view=kanban" class="text-xs text-blue-500 hover:underline">Ver todas</a>
+          </div>
+          ${myTaskRows}
+        </div>
+
+        <!-- Actividad -->
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h2 class="text-sm font-semibold text-slate-700">Actividad</h2>
@@ -2450,11 +3010,12 @@ router.get('/control', requireAuth, async (req, res) => {
               </form>` : ''}
             </div>
           </div>
-          <div class="max-h-[500px] overflow-y-auto">
+          <div class="max-h-[400px] overflow-y-auto">
             ${notifRows}
           </div>
         </div>
 
+        <!-- Sistema -->
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mt-5">
           <div class="px-4 py-3 border-b border-slate-100">
             <h2 class="text-sm font-semibold text-slate-700">Sistema</h2>
@@ -2473,6 +3034,23 @@ router.get('/control', requireAuth, async (req, res) => {
     </div>
     <script>
       setTimeout(function(){ location.reload(); }, 30000);
+      function completeControlTask(projectId, taskIdx, btn) {
+        btn.innerHTML = '<svg class="w-3 h-3 spin text-blue-500" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 2a10 10 0 010 20 10 10 0 010-20" stroke-dasharray="60" stroke-dashoffset="20"/></svg>';
+        fetch('/admin/api/task-move', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: projectId, taskIdx: taskIdx, newStatus: 'done' })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d.ok) {
+            showToast('Tarea completada');
+            var row = btn.closest('.flex.items-center');
+            if (row) { row.style.opacity = '0.3'; row.style.textDecoration = 'line-through'; }
+            setTimeout(function() { if (row) row.remove(); }, 800);
+          } else {
+            showToast('Error', 'error');
+          }
+        }).catch(function() { showToast('Error de red', 'error'); });
+      }
     </script>`;
 
   res.send(layout('Centro de Control', body, { pendingCount, activePage: 'control', user: req.session?.user }));
@@ -2552,6 +3130,7 @@ router.get('/tasks', requireAuth, async (req, res) => {
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
 
   const filter = req.query.filter || 'all'; // all | high | overdue | today
+  const view = req.query.view || 'kanban'; // list | kanban
 
   // Clientes primero por defecto — personal/diseño van al fondo
   const CAT_PRIORITY = { cliente: 0, ventas: 1, desarrollo: 2, diseño: 3, personal: 4, otro: 5 };
@@ -2572,6 +3151,8 @@ router.get('/tasks', requireAuth, async (req, res) => {
   if (filter === 'hermana') taskGroups = taskGroups.map(g => ({ ...g, tasks: g.tasks.filter(t => t.assignee === 'hermana') })).filter(g => g.tasks.length > 0);
 
   const totalPending = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done).length, 0);
+  const inProgressCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.status === 'in_progress').length, 0);
+  const doneCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => t.done).length, 0);
   const highPriority = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.priority === 'high').length, 0);
   const overdueCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done && t.due_date && new Date(t.due_date) < new Date()).length, 0);
   const todayCount = projects.reduce((n, p) => n + (p.tasks || []).filter(t => {
@@ -2583,11 +3164,11 @@ router.get('/tasks', requireAuth, async (req, res) => {
   const filterTabs = [
     { key: 'all', label: `Todas (${totalPending})` },
     { key: 'high', label: `Alta prioridad (${highPriority})` },
-    overdueCount > 0 ? { key: 'overdue', label: `⚠ Vencidas (${overdueCount})` } : null,
-    todayCount > 0 ? { key: 'today', label: `📅 Hoy (${todayCount})` } : null,
+    overdueCount > 0 ? { key: 'overdue', label: `Vencidas (${overdueCount})` } : null,
+    todayCount > 0 ? { key: 'today', label: `Hoy (${todayCount})` } : null,
     { key: 'david', label: 'David' },
     { key: 'hermana', label: 'Hermana' },
-  ].filter(Boolean).map(t => `<a href="/admin/tasks?filter=${t.key}" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">${t.label}</a>`).join('');
+  ].filter(Boolean).map(t => `<a href="/admin/tasks?filter=${t.key}&view=${view}" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">${t.label}</a>`).join('');
 
   const priorityDot = p => {
     if (p === 'high') return '<span class="w-2 h-2 rounded-full bg-red-400 flex-shrink-0 mt-1"></span>';
@@ -2595,6 +3176,26 @@ router.get('/tasks', requireAuth, async (req, res) => {
     return '<span class="w-2 h-2 rounded-full bg-slate-300 flex-shrink-0 mt-1"></span>';
   };
 
+  const priorityDotKanban = p => {
+    if (p === 'high') return '<span class="w-2 h-2 rounded-full bg-red-400 flex-shrink-0"></span>';
+    if (p === 'medium') return '<span class="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"></span>';
+    return '<span class="w-2 h-2 rounded-full bg-slate-300 flex-shrink-0"></span>';
+  };
+
+  // ── View toggle ──
+  const viewToggle = `
+    <div class="view-toggle flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
+      <a href="/admin/tasks?filter=${filter}&view=list" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'list' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        Lista
+      </a>
+      <a href="/admin/tasks?filter=${filter}&view=kanban" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'kanban' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+        Kanban
+      </a>
+    </div>`;
+
+  // ── List view (existing) ──
   const groups = taskGroups.map(g => `
     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-4">
       <div class="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50">
@@ -2605,12 +3206,12 @@ router.get('/tasks', requireAuth, async (req, res) => {
             ${g.project.deadline ? (() => {
               const d = new Date(g.project.deadline);
               const dl = Math.ceil((d - new Date()) / 86400000);
-              return `<span class="text-[10px] ${dl < 0 ? 'bg-red-100 text-red-600' : dl <= 3 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'} px-2 py-0.5 rounded-full font-medium">📅 ${dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : `${dl}d`}</span>`;
+              return `<span class="text-[10px] ${dl < 0 ? 'bg-red-100 text-red-600' : dl <= 3 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'} px-2 py-0.5 rounded-full font-medium">${dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : `${dl}d`}</span>`;
             })() : ''}
           </div>
           ${g.project.client_name && g.project.title ? `<div class="text-xs text-slate-400">${escapeHtml(g.project.client_name)}</div>` : ''}
         </div>
-        <a href="/admin/projects/${g.project.id}" class="text-xs text-blue-600 hover:underline flex-shrink-0">Ver proyecto →</a>
+        <a href="/admin/projects/${g.project.id}" class="text-xs text-blue-600 hover:underline flex-shrink-0">Ver proyecto</a>
       </div>
       <div class="divide-y divide-slate-100">
         ${g.tasks.map((t, i) => `
@@ -2628,7 +3229,7 @@ router.get('/tasks', requireAuth, async (req, res) => {
                     const dl = Math.ceil((d - new Date()) / 86400000);
                     const color = dl < 0 ? 'text-red-500' : dl <= 2 ? 'text-orange-500' : 'text-slate-400';
                     const label = dl < 0 ? `Vencida` : dl === 0 ? 'Hoy' : `${dl}d`;
-                    return `<span class="text-[10px] ${color} font-medium ml-1">📅 ${label}</span>`;
+                    return `<span class="text-[10px] ${color} font-medium ml-1">${label}</span>`;
                   })() : ''}
                 </div>
               </div>
@@ -2637,22 +3238,128 @@ router.get('/tasks', requireAuth, async (req, res) => {
       </div>
     </div>`).join('');
 
-  const body = `
-    <div class="flex items-center gap-3 mb-6">
-      <div class="flex-1">
-        <h1 class="text-xl md:text-2xl font-bold text-slate-900">Tareas pendientes</h1>
-        <div class="text-sm text-slate-400 mt-0.5">${totalPending} tarea${totalPending !== 1 ? 's' : ''} sin completar en ${projects.filter(p => (p.tasks||[]).some(t=>!t.done)).length} proyectos</div>
+  // ── Kanban view ──
+  // Gather ALL tasks (including done) for kanban, with their project index
+  const allTasksFlat = projects
+    .sort((a, b) => (CAT_PRIORITY[a.category] ?? 99) - (CAT_PRIORITY[b.category] ?? 99))
+    .flatMap(p => (p.tasks || []).map((t, idx) => ({ ...t, projectId: p.id, projectTitle: p.title || p.client_name, projectCategory: p.category || 'cliente', taskIdx: idx })));
+
+  const todoTasks = allTasksFlat.filter(t => taskStatus(t) === 'todo');
+  const ipTasks = allTasksFlat.filter(t => taskStatus(t) === 'in_progress');
+  const doneTasks = allTasksFlat.filter(t => taskStatus(t) === 'done').slice(0, 20); // Limit done to last 20
+
+  const kanbanCard = (t) => {
+    const dueBadge = t.due_date ? (() => {
+      const d = new Date(t.due_date);
+      const dl = Math.ceil((d - new Date()) / 86400000);
+      const color = dl < 0 ? 'bg-red-100 text-red-600' : dl <= 2 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500';
+      const label = dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : `${dl}d`;
+      return `<span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium ${color}">${label}</span>`;
+    })() : '';
+    const assigneeBadge = t.assignee ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">${escapeHtml(t.assignee)}</span>` : '';
+    const cat = PROJECT_CATEGORIES.find(c => c.key === t.projectCategory) || PROJECT_CATEGORIES[0];
+    return `
+      <div class="kanban-card bg-white rounded-xl border border-slate-200 p-3 mb-2 cursor-grab active:cursor-grabbing"
+           data-project-id="${t.projectId}" data-task-idx="${t.taskIdx}">
+        <div class="flex items-start gap-2">
+          ${priorityDotKanban(t.priority)}
+          <div class="flex-1 min-w-0">
+            <div class="text-sm text-slate-700 leading-snug ${t.done ? 'line-through text-slate-400' : ''}">${escapeHtml(t.text)}</div>
+            <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+              <a href="/admin/projects/${t.projectId}" onclick="event.stopPropagation()" class="text-[10px] px-1.5 py-0.5 rounded-full font-medium hover:opacity-80 transition-opacity" style="background:${cat.color}15;color:${cat.color}">${escapeHtml(t.projectTitle)}</a>
+              ${assigneeBadge}
+              ${dueBadge}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  const kanbanColumn = (status, label, color, tasks) => `
+    <div class="flex-1 min-w-[280px] max-w-[400px]">
+      <div class="flex items-center gap-2 mb-3 px-1">
+        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${color}"></span>
+        <span class="text-sm font-semibold text-slate-700">${label}</span>
+        <span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${tasks.length}</span>
       </div>
+      <div class="kanban-col bg-slate-50/80 rounded-2xl border-2 border-dashed border-slate-200 p-2" data-status="${status}" style="min-height:200px">
+        ${tasks.length > 0 ? tasks.map(t => kanbanCard(t)).join('') : '<div class="kanban-empty">Arrastra tareas aqu&iacute;</div>'}
+      </div>
+    </div>`;
+
+  const kanbanView = `
+    <div class="flex gap-4 overflow-x-auto pb-4" style="min-height:400px">
+      ${kanbanColumn('todo', 'Pendientes', '#94a3b8', todoTasks)}
+      ${kanbanColumn('in_progress', 'En progreso', '#3b82f6', ipTasks)}
+      ${kanbanColumn('done', 'Completadas', '#10b981', doneTasks)}
+    </div>
+    <script>
+    document.querySelectorAll('.kanban-col[data-status]').forEach(function(col) {
+      new Sortable(col, {
+        group: 'tasks',
+        animation: 200,
+        ghostClass: 'kanban-ghost',
+        dragClass: 'kanban-drag',
+        onEnd: function(evt) {
+          var card = evt.item;
+          var newStatus = evt.to.dataset.status;
+          fetch('/admin/api/task-move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId: card.dataset.projectId,
+              taskIdx: parseInt(card.dataset.taskIdx),
+              newStatus: newStatus
+            })
+          }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok) {
+              showToast('Tarea movida');
+              // Update empty state
+              document.querySelectorAll('.kanban-col').forEach(function(c) {
+                var empty = c.querySelector('.kanban-empty');
+                if (c.querySelectorAll('.kanban-card').length === 0 && !empty) {
+                  c.innerHTML = '<div class="kanban-empty">Arrastra tareas aqu\\u00ed</div>';
+                } else if (empty && c.querySelectorAll('.kanban-card').length > 0) {
+                  empty.remove();
+                }
+              });
+              // Update counters
+              document.querySelectorAll('.kanban-col').forEach(function(c) {
+                var count = c.querySelectorAll('.kanban-card').length;
+                var header = c.closest('.min-w-\\\\[280px\\\\]') || c.parentElement;
+                var badge = header.querySelector('.text-xs.text-slate-400');
+                if (badge) badge.textContent = count;
+              });
+            } else {
+              showToast('Error: ' + (d.error || ''), 'error');
+              setTimeout(function() { location.reload(); }, 1500);
+            }
+          }).catch(function() {
+            showToast('Error de red', 'error');
+            setTimeout(function() { location.reload(); }, 1500);
+          });
+        }
+      });
+    });
+    </script>`;
+
+  const body = `
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+      <div class="flex-1">
+        <h1 class="text-xl md:text-2xl font-bold text-slate-900">Tareas</h1>
+        <div class="text-sm text-slate-400 mt-0.5">${totalPending} pendiente${totalPending !== 1 ? 's' : ''} · ${inProgressCount} en progreso · ${doneCount} completada${doneCount !== 1 ? 's' : ''}</div>
+      </div>
+      ${viewToggle}
     </div>
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${filterTabs}</div>
-    ${taskGroups.length > 0 ? groups : `
+    ${view === 'kanban' ? kanbanView : (taskGroups.length > 0 ? groups : `
       <div class="text-center py-20">
         <div class="text-5xl mb-4">✅</div>
-        <h3 class="text-lg font-semibold text-slate-700 mb-2">Todo al día</h3>
+        <h3 class="text-lg font-semibold text-slate-700 mb-2">Todo al dia</h3>
         <p class="text-sm text-slate-400">No hay tareas pendientes${filter !== 'all' ? ' con este filtro' : ''}.</p>
-      </div>`}`;
+      </div>`)}`;
 
-  res.send(layout('Tareas pendientes', body, { pendingCount, activePage: 'tasks', user: req.session?.user }));
+  res.send(layout('Tareas', body, { pendingCount, activePage: 'tasks', user: req.session?.user }));
 });
 
 // ─── Projects list ───────────────────────────────────────────────────────────
@@ -2661,6 +3368,7 @@ router.get('/projects', requireAuth, async (req, res) => {
   const filter = req.query.status || 'all';
   const search = (req.query.q || '').toLowerCase();
   const sort = req.query.sort || 'clientes'; // clientes | recientes | deadline | status
+  const view = req.query.view || 'cards'; // cards | kanban
   let projects = await db.listProjects();
   const allProjects = projects;
   const pendingCount = (await db.listAllClients()).filter(c => c.demo_status === 'pending_review').length;
@@ -2701,10 +3409,23 @@ router.get('/projects', requireAuth, async (req, res) => {
   ].filter(t => t.key === 'all' || t.count > 0);
 
   const tabHtml = tabs.map(t => `
-    <a href="/admin/projects?status=${t.key}${search ? '&q=' + encodeURIComponent(search) : ''}"
+    <a href="/admin/projects?status=${t.key}${search ? '&q=' + encodeURIComponent(search) : ''}&view=${view}"
       class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${filter === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">
       ${t.label} <span class="text-xs ${filter === t.key ? 'opacity-70' : 'text-slate-400'}">${t.count}</span>
     </a>`).join('');
+
+  // ── View toggle ──
+  const viewToggle = `
+    <div class="view-toggle flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
+      <a href="/admin/projects?status=${filter}${search ? '&q=' + encodeURIComponent(search) : ''}&sort=${sort}&view=cards" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'cards' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Cards
+      </a>
+      <a href="/admin/projects?status=${filter}${search ? '&q=' + encodeURIComponent(search) : ''}&sort=${sort}&view=kanban" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'kanban' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+        Kanban
+      </a>
+    </div>`;
 
   const cards = projects.map(p => {
     const tasks = p.tasks || [];
@@ -2734,7 +3455,7 @@ router.get('/projects', requireAuth, async (req, res) => {
             const d = new Date(p.deadline);
             const dl = Math.ceil((d - new Date()) / 86400000);
             const color = dl < 0 ? 'bg-red-100 text-red-600' : dl <= 3 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500';
-            return `<span class="text-[10px] px-2 py-0.5 rounded-full font-medium ${color}">📅 ${dl < 0 ? `Vencida` : dl === 0 ? 'Hoy' : `${dl}d`}</span>`;
+            return `<span class="text-[10px] px-2 py-0.5 rounded-full font-medium ${color}">${dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : `${dl}d`}</span>`;
           })() : ''}
         </div>
         ${p.description ? `<p class="text-xs text-slate-500 mb-3 line-clamp-2">${escapeHtml(p.description)}</p>` : ''}
@@ -2745,7 +3466,7 @@ router.get('/projects', requireAuth, async (req, res) => {
                 <span class="${t.priority === 'high' ? 'text-red-400' : 'text-orange-300'} mt-0.5 flex-shrink-0">●</span>
                 <span class="truncate">${escapeHtml(t.text)}</span>
               </div>`).join('')}
-            ${pendingTasks.length > 2 ? `<div class="text-xs text-slate-400">+${pendingTasks.length - 2} más</div>` : ''}
+            ${pendingTasks.length > 2 ? `<div class="text-xs text-slate-400">+${pendingTasks.length - 2} mas</div>` : ''}
           </div>` : ''}
         ${tasks.length > 0 ? `
           <div class="flex items-center gap-2 mt-3">
@@ -2762,35 +3483,136 @@ router.get('/projects', requireAuth, async (req, res) => {
     </div>`;
   }).join('');
 
+  // ── Projects Kanban view ──
+  const kanbanStatuses = PROJECT_STATUS.filter(s =>
+    ['planning','in_progress','waiting_client','review','delivered'].includes(s.key) ||
+    allProjects.some(p => p.status === s.key)
+  );
+
+  const projKanbanCard = (p) => {
+    const tasks = p.tasks || [];
+    const doneTasks = tasks.filter(t => t.done).length;
+    const pct = tasks.length > 0 ? Math.round(doneTasks / tasks.length * 100) : 0;
+    const cat = PROJECT_CATEGORIES.find(c => c.key === (p.category || 'cliente')) || PROJECT_CATEGORIES[0];
+    const deadlineBadge = p.deadline ? (() => {
+      const d = new Date(p.deadline);
+      const dl = Math.ceil((d - new Date()) / 86400000);
+      const color = dl < 0 ? 'bg-red-100 text-red-600' : dl <= 3 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500';
+      return `<span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium ${color}">${dl < 0 ? 'Vencida' : dl === 0 ? 'Hoy' : dl + 'd'}</span>`;
+    })() : '';
+    return `
+      <div class="kanban-card bg-white rounded-xl border border-slate-200 p-3.5 mb-2 cursor-grab active:cursor-grabbing"
+           data-project-id="${p.id}" onclick="if(!window._dragging)location.href='/admin/projects/${p.id}'" style="border-left:3px solid ${cat.color}">
+        <div class="font-medium text-sm text-slate-800 truncate mb-1">${escapeHtml(p.title || p.client_name)}</div>
+        <div class="text-[11px] text-slate-400 truncate mb-2">${escapeHtml(p.client_name)}</div>
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style="background:${cat.color}15;color:${cat.color}">${cat.dot} ${cat.label}</span>
+          ${deadlineBadge}
+          ${p.budget ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">${escapeHtml(p.budget)}</span>` : ''}
+        </div>
+        ${tasks.length > 0 ? `
+          <div class="flex items-center gap-2 mt-2.5">
+            <div class="flex-1 bg-slate-100 rounded-full h-1">
+              <div class="h-1 rounded-full" style="width:${pct}%;background:${cat.color}"></div>
+            </div>
+            <span class="text-[10px] text-slate-400">${doneTasks}/${tasks.length}</span>
+          </div>` : ''}
+      </div>`;
+  };
+
+  const projKanbanHtml = `
+    <div class="flex gap-4 overflow-x-auto pb-4" style="min-height:400px">
+      ${kanbanStatuses.map(s => {
+        const colProjects = allProjects.filter(p => p.status === s.key);
+        return `
+        <div class="flex-shrink-0" style="width:280px">
+          <div class="flex items-center gap-2 mb-3 px-1">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${s.dot}"></span>
+            <span class="text-sm font-semibold text-slate-700">${s.label}</span>
+            <span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${colProjects.length}</span>
+          </div>
+          <div class="kanban-col bg-slate-50/80 rounded-2xl border-2 border-dashed border-slate-200 p-2 proj-kanban-col" data-status="${s.key}" style="min-height:200px">
+            ${colProjects.length > 0 ? colProjects.map(p => projKanbanCard(p)).join('') : '<div class="kanban-empty">Arrastra proyectos aqu&iacute;</div>'}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <script>
+    window._dragging = false;
+    document.querySelectorAll('.proj-kanban-col').forEach(function(col) {
+      new Sortable(col, {
+        group: 'projects',
+        animation: 200,
+        ghostClass: 'kanban-ghost',
+        dragClass: 'kanban-drag',
+        onStart: function() { window._dragging = true; },
+        onEnd: function(evt) {
+          setTimeout(function() { window._dragging = false; }, 100);
+          var card = evt.item;
+          var newStatus = evt.to.dataset.status;
+          fetch('/admin/api/project-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId: card.dataset.projectId, newStatus: newStatus })
+          }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok) {
+              showToast('Proyecto movido');
+              document.querySelectorAll('.proj-kanban-col').forEach(function(c) {
+                var empty = c.querySelector('.kanban-empty');
+                if (c.querySelectorAll('.kanban-card').length === 0 && !empty) {
+                  c.innerHTML = '<div class="kanban-empty">Arrastra proyectos aqu\\u00ed</div>';
+                } else if (empty && c.querySelectorAll('.kanban-card').length > 0) {
+                  empty.remove();
+                }
+              });
+            } else {
+              showToast('Error: ' + (d.error || ''), 'error');
+              setTimeout(function() { location.reload(); }, 1500);
+            }
+          }).catch(function() {
+            showToast('Error de red', 'error');
+            setTimeout(function() { location.reload(); }, 1500);
+          });
+        }
+      });
+    });
+    </script>`;
+
   const emptyState = `
     <div class="text-center py-20">
       <div class="text-5xl mb-4">📋</div>
-      <h3 class="text-lg font-semibold text-slate-700 mb-2">Sin proyectos todavía</h3>
-      <p class="text-sm text-slate-400 mb-6">Creá tu primer proyecto o convertí un lead de WhatsApp.</p>
+      <h3 class="text-lg font-semibold text-slate-700 mb-2">Sin proyectos todavia</h3>
+      <p class="text-sm text-slate-400 mb-6">Crea tu primer proyecto o converti un lead de WhatsApp.</p>
       <a href="/admin/projects/new" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo proyecto</a>
     </div>`;
 
   const body = `
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
       <h1 class="text-xl md:text-2xl font-bold text-slate-900">Proyectos</h1>
-      <a href="/admin/projects/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo proyecto</a>
+      <div class="flex items-center gap-3">
+        ${viewToggle}
+        <a href="/admin/projects/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">+ Nuevo proyecto</a>
+      </div>
     </div>
+    ${view === 'cards' ? `
     <div class="flex items-center gap-2 mb-4">
       <form method="GET" action="/admin/projects" class="flex-1 flex items-center gap-2">
         <input type="hidden" name="status" value="${escapeHtml(filter)}">
         <input type="hidden" name="sort" value="${escapeHtml(sort)}">
-        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por cliente, título o tipo..."
+        <input type="hidden" name="view" value="${view}">
+        <input type="text" name="q" value="${escapeHtml(search)}" placeholder="Buscar por cliente, titulo o tipo..."
           class="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       </form>
       <form method="GET" action="/admin/projects">
         <input type="hidden" name="status" value="${escapeHtml(filter)}">
         <input type="hidden" name="q" value="${escapeHtml(search)}">
+        <input type="hidden" name="view" value="${view}">
         <select name="sort" onchange="this.form.submit()"
           class="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-          <option value="clientes" ${sort==='clientes'?'selected':''}>🔵 Clientes primero</option>
-          <option value="status"   ${sort==='status'?'selected':''}>📊 Por estado</option>
-          <option value="deadline" ${sort==='deadline'?'selected':''}>📅 Por deadline</option>
-          <option value="recientes"${sort==='recientes'?'selected':''}>🕐 Más recientes</option>
+          <option value="clientes" ${sort==='clientes'?'selected':''}>Clientes primero</option>
+          <option value="status"   ${sort==='status'?'selected':''}>Por estado</option>
+          <option value="deadline" ${sort==='deadline'?'selected':''}>Por deadline</option>
+          <option value="recientes"${sort==='recientes'?'selected':''}>Mas recientes</option>
         </select>
       </form>
     </div>
@@ -2799,7 +3621,7 @@ router.get('/projects', requireAuth, async (req, res) => {
         { label: 'Total', value: allProjects.length, color: 'text-slate-600', bg: 'bg-slate-100' },
         { label: 'Planificando', value: allProjects.filter(p => p.status === 'planning').length, color: 'text-amber-700', bg: 'bg-amber-50' },
         { label: 'En progreso', value: allProjects.filter(p => p.status === 'in_progress').length, color: 'text-blue-700', bg: 'bg-blue-50' },
-        { label: 'En revisión', value: allProjects.filter(p => p.status === 'review').length, color: 'text-purple-700', bg: 'bg-purple-50' },
+        { label: 'En revision', value: allProjects.filter(p => p.status === 'review').length, color: 'text-purple-700', bg: 'bg-purple-50' },
         { label: 'Entregados', value: allProjects.filter(p => p.status === 'delivered').length, color: 'text-emerald-700', bg: 'bg-emerald-50' },
       ].filter(s => s.value > 0 || s.label === 'Total').map(s => `
         <div class="flex items-center gap-2 ${s.bg} px-3 py-1.5 rounded-full">
@@ -2808,7 +3630,7 @@ router.get('/projects', requireAuth, async (req, res) => {
         </div>`).join('')}
     </div>
     <div class="flex items-center gap-1.5 mb-5 flex-wrap">${tabHtml}</div>
-    ${cards ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${cards}</div>` : emptyState}`;
+    ${cards ? '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">' + cards + '</div>' : emptyState}` : projKanbanHtml}`;
 
   res.send(layout('Proyectos', body, { pendingCount, activePage: 'projects', user: req.session?.user }));
 });
@@ -4852,6 +5674,169 @@ router.post('/create-demo-lead', requireAuth, async (req, res) => {
   orchestrator.processNewReport(demo.phone, demo.report).catch(console.error);
 
   res.redirect(`/admin/client/${encodeURIComponent(demo.phone)}`);
+});
+
+// ─── Changelog ──────────────────────────────────────────────────────────────
+
+router.get('/changelog', requireAuth, (req, res) => {
+  const pendingCount = 0;
+
+  const changelogHtml = CHANGELOG.map((release, idx) => {
+    const isLatest = idx === 0;
+    const dateFormatted = new Date(release.date + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+    return `
+    <div class="relative pl-8 pb-8 ${idx < CHANGELOG.length - 1 ? 'border-l-2 border-slate-200' : ''} ml-3">
+      <div class="absolute -left-[9px] top-1 w-[18px] h-[18px] rounded-full ${isLatest ? 'bg-blue-500 ring-4 ring-blue-100' : 'bg-slate-300'} flex items-center justify-center">
+        ${isLatest ? '<div class="w-2 h-2 bg-white rounded-full"></div>' : ''}
+      </div>
+      <div class="bg-white rounded-xl border ${isLatest ? 'border-blue-200 ring-1 ring-blue-100' : 'border-slate-200'} overflow-hidden">
+        <div class="px-5 py-4 ${isLatest ? 'bg-gradient-to-r from-blue-50 to-indigo-50' : ''}">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="px-2.5 py-1 rounded-lg text-xs font-bold ${isLatest ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}">v${release.version}</span>
+            <span class="text-xs text-slate-400">${dateFormatted}</span>
+            ${isLatest ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase">Actual</span>' : ''}
+          </div>
+          <h3 class="text-sm font-semibold text-slate-800 mt-2">${escapeHtml(release.title)}</h3>
+        </div>
+        <div class="px-5 py-3 border-t border-slate-100">
+          <ul class="space-y-1.5">
+            ${release.changes.map(c => `
+              <li class="flex items-start gap-2 text-sm text-slate-600">
+                <span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
+                <span>${escapeHtml(c)}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const body = `
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Historial de actualizaciones</h1>
+        <p class="text-sm text-slate-400 mt-1">Todas las mejoras y correcciones de DT Systems</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg">v${APP_VERSION}</span>
+      </div>
+    </div>
+    <div class="max-w-2xl">
+      ${changelogHtml}
+    </div>`;
+
+  res.send(layout('Actualizaciones', body, { pendingCount, activePage: 'changelog', user: req.session?.user }));
+});
+
+// ─── Search API (Command Palette) ────────────────────────────────────────────
+
+router.get('/api/search-index', requireAuth, async (req, res) => {
+  try {
+    const [clients, projects, clientRecords] = await Promise.all([
+      db.listAllClients(),
+      db.listProjects(),
+      db.listClientRecords ? db.listClientRecords() : Promise.resolve([]),
+    ]);
+    const items = [];
+
+    // Static pages
+    items.push({ type: 'page', icon: '📊', title: 'Dashboard', sub: '', href: '/admin' });
+    items.push({ type: 'page', icon: '💬', title: 'Pipeline', sub: 'Clientes WhatsApp', href: '/admin/clients' });
+    items.push({ type: 'page', icon: '🎛️', title: 'Centro de Control', sub: 'Acciones pendientes', href: '/admin/control' });
+    items.push({ type: 'page', icon: '📁', title: 'Proyectos', sub: 'Todos los proyectos', href: '/admin/projects' });
+    items.push({ type: 'page', icon: '✅', title: 'Tareas', sub: 'Kanban de tareas', href: '/admin/tasks' });
+    items.push({ type: 'page', icon: '👥', title: 'Clientes', sub: 'Base de clientes', href: '/admin/clientes' });
+    items.push({ type: 'page', icon: '📂', title: 'Documentos', sub: 'Archivos y docs', href: '/admin/documentos' });
+
+    // WA Clients
+    clients.forEach(c => {
+      const name = c.report?.cliente?.nombre || c.context?.nombre || c.phone;
+      items.push({ type: 'client', icon: '💬', title: name, sub: c.phone + ' · ' + (STAGES.find(s => s.key === c.client_stage)?.label || c.client_stage), href: '/admin/client/' + encodeURIComponent(c.phone) });
+    });
+
+    // Client records
+    (clientRecords || []).forEach(cr => {
+      items.push({ type: 'client', icon: '👤', title: cr.name || cr.company || '-', sub: (cr.phone || '') + ' · ' + (cr.company || ''), href: '/admin/clientes/' + cr.id });
+    });
+
+    // Projects
+    projects.forEach(p => {
+      items.push({ type: 'project', icon: '📁', title: p.title || p.client_name, sub: p.client_name + ' · ' + (PROJECT_STATUS.find(s => s.key === p.status)?.label || p.status), href: '/admin/projects/' + p.id });
+    });
+
+    // Tasks
+    projects.forEach(p => {
+      (p.tasks || []).forEach((t, i) => {
+        if (!t.done) {
+          items.push({ type: 'task', icon: t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '⚪', title: t.text, sub: (p.title || p.client_name), href: '/admin/projects/' + p.id });
+        }
+      });
+    });
+
+    res.json(items);
+  } catch (err) {
+    console.error('[api/search-index] Error:', err.message);
+    res.json([]);
+  }
+});
+
+// ─── Kanban API endpoints (JSON) ──────────────────────────────────────────────
+
+router.post('/api/task-move', requireAuth, async (req, res) => {
+  try {
+    const { projectId, taskIdx, newStatus } = req.body;
+    const project = await db.getProject(projectId);
+    if (!project) return res.json({ ok: false, error: 'Proyecto no encontrado' });
+    const tasks = project.tasks || [];
+    const idx = parseInt(taskIdx, 10);
+    if (!tasks[idx]) return res.json({ ok: false, error: 'Tarea no encontrada' });
+
+    if (newStatus === 'done') {
+      tasks[idx].done = true;
+      tasks[idx].status = 'done';
+    } else if (newStatus === 'in_progress') {
+      tasks[idx].done = false;
+      tasks[idx].status = 'in_progress';
+    } else {
+      tasks[idx].done = false;
+      tasks[idx].status = 'todo';
+    }
+    await db.updateProject(projectId, { ...project, tasks });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[api/task-move] Error:', err.message);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/api/project-status', requireAuth, async (req, res) => {
+  try {
+    const { projectId, newStatus } = req.body;
+    const valid = PROJECT_STATUS.map(s => s.key);
+    if (!valid.includes(newStatus)) return res.json({ ok: false, error: 'Status inválido' });
+    const project = await db.getProject(projectId);
+    if (!project) return res.json({ ok: false, error: 'Proyecto no encontrado' });
+    await db.updateProject(projectId, { ...project, status: newStatus });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[api/project-status] Error:', err.message);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/api/client-stage', requireAuth, async (req, res) => {
+  try {
+    const { phone, newStage } = req.body;
+    const valid = STAGES.map(s => s.key);
+    if (!valid.includes(newStage)) return res.json({ ok: false, error: 'Stage inválido' });
+    await db.updateClientStage(phone, newStage);
+    await db.appendTimelineEvent(phone, { event: 'stage_changed', note: `Movido a ${STAGES.find(s => s.key === newStage)?.label || newStage} (kanban)` });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[api/client-stage] Error:', err.message);
+    res.json({ ok: false, error: err.message });
+  }
 });
 
 // ─── Global error handler para rutas del admin ───────────────────────────────
