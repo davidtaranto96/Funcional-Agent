@@ -6171,81 +6171,16 @@ router.get('/finanzas', requireAuth, async (req, res) => {
       </div>`}
     </div>
 
-    <!-- Calculadora de presupuestos -->
-    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden mb-5">
-      <div class="px-5 py-4 border-b border-slate-100">
-        <h2 class="text-sm font-semibold text-slate-700">Calculadora de presupuestos</h2>
-        <p class="text-[11px] text-slate-400 mt-0.5">Estima el costo y precio sugerido de un proyecto</p>
+    <!-- Banner → módulo de presupuestos -->
+    <div class="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 mb-5 flex items-center justify-between">
+      <div>
+        <div class="text-sm font-semibold text-blue-800">Calculadora de presupuestos</div>
+        <div class="text-xs text-blue-600 mt-0.5">Usá el módulo dedicado para crear y guardar presupuestos con todos los detalles.</div>
       </div>
-      <div class="px-5 py-4">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Horas estimadas</label>
-            <input type="number" id="calcHours" value="40" min="1" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Tarifa/hora (USD)</label>
-            <input type="number" id="calcRate" value="25" min="1" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Tipo de proyecto</label>
-            <select id="calcType" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
-              <option value="web">Pagina web / Landing</option>
-              <option value="app">App web completa</option>
-              <option value="ecommerce">E-commerce</option>
-              <option value="bot">Bot / Automatización</option>
-              <option value="design">Diseño / Branding</option>
-              <option value="maintenance">Mantenimiento mensual</option>
-            </select>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Costos extras (hosting, dominio, APIs)</label>
-            <input type="number" id="calcExtras" value="10" min="0" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Requiere mantenimiento?</label>
-            <select id="calcMaint" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" onchange="updateCalc()">
-              <option value="0">No</option>
-              <option value="50">Básico ($50/mes)</option>
-              <option value="100">Intermedio ($100/mes)</option>
-              <option value="200">Avanzado ($200/mes)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Resultado -->
-        <div id="calcResult" class="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200">
-        </div>
-      </div>
+      <a href="/admin/presupuesto" class="flex-shrink-0 ml-4 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors">Ir a Presupuestos →</a>
     </div>
 
     <script>
-    function updateCalc(){
-      var hours=parseFloat(document.getElementById('calcHours').value)||0;
-      var rate=parseFloat(document.getElementById('calcRate').value)||0;
-      var type=document.getElementById('calcType').value;
-      var extras=parseFloat(document.getElementById('calcExtras').value)||0;
-      var maint=parseFloat(document.getElementById('calcMaint').value)||0;
-      var multipliers={web:1,app:1.3,ecommerce:1.4,bot:1.1,design:0.9,maintenance:0.8};
-      var mult=multipliers[type]||1;
-      var laborCost=hours*rate;
-      var totalCost=laborCost+(extras*Math.ceil(hours/160||1));
-      var suggestedPrice=Math.ceil((totalCost*mult*1.4)/100)*100; // 40% margen + redondeo
-      var margin=suggestedPrice-totalCost;
-      var marginPct=totalCost>0?Math.round(margin/suggestedPrice*100):0;
-      var maintNote=maint>0?'<div class="mt-3 pt-3 border-t border-slate-200"><div class="flex justify-between"><span class="text-xs text-slate-500">Mantenimiento mensual</span><span class="text-sm font-bold text-purple-600">$'+maint+'/mes</span></div><div class="flex justify-between mt-1"><span class="text-xs text-slate-500">Ingreso anual por mantenimiento</span><span class="text-sm font-bold text-purple-600">$'+(maint*12)+'</span></div></div>':'';
-      document.getElementById('calcResult').innerHTML=
-        '<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">'+
-        '<div><div class="text-[10px] text-slate-500 uppercase">Costo mano de obra</div><div class="text-lg font-bold text-slate-800">$'+laborCost.toLocaleString()+'</div></div>'+
-        '<div><div class="text-[10px] text-slate-500 uppercase">Costo total</div><div class="text-lg font-bold text-amber-600">$'+Math.round(totalCost).toLocaleString()+'</div></div>'+
-        '<div><div class="text-[10px] text-slate-500 uppercase">Precio sugerido</div><div class="text-lg font-bold text-emerald-600">$'+suggestedPrice.toLocaleString()+'</div></div>'+
-        '<div><div class="text-[10px] text-slate-500 uppercase">Margen</div><div class="text-lg font-bold text-blue-600">'+marginPct+'%</div><div class="text-[10px] text-slate-400">$'+Math.round(margin).toLocaleString()+'</div></div>'+
-        '</div>'+maintNote;
-    }
-    updateCalc();
-
     // Balance cards persistence & bars
     function updateBalanceBar(key){
       if(key==='anthropic'){
@@ -6319,12 +6254,28 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
         <p class="text-sm text-slate-400 mt-1">Cotizá proyectos en ARS y USD con detalle completo para el cliente</p>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="printQuote()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+        <button onclick="toggleHistory()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
+          🕐 Historial
+        </button>
+        <button onclick="printQuote()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
           🖨️ Imprimir
         </button>
         <button onclick="saveQuote()" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
           💾 Guardar
         </button>
+      </div>
+    </div>
+
+    <!-- Historial -->
+    <div id="history-panel" class="hidden mb-4">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700">🕐 Historial de cotizaciones</span>
+          <button onclick="clearHistory()" class="text-xs text-red-400 hover:text-red-600 transition-colors">Limpiar todo</button>
+        </div>
+        <div id="history-list" class="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+          <div class="px-5 py-4 text-xs text-slate-400 text-center">Sin historial guardado</div>
+        </div>
       </div>
     </div>
 
@@ -6343,28 +6294,43 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
             <span id="cfg-arrow" class="text-slate-400 text-xs transition-transform">▼</span>
           </button>
           <div id="cfg-body" class="px-5 pb-5 border-t border-slate-100">
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4">
+            <!-- Client type toggle -->
+            <div class="flex items-center gap-3 pt-4 mb-4">
+              <span class="text-[10px] font-bold text-slate-500 uppercase flex-shrink-0">Tipo de cliente:</span>
+              <div class="flex gap-1">
+                <button id="ct-ars" onclick="setClientType('ARS')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white transition-colors">🇦🇷 ARS</button>
+                <button id="ct-usd" onclick="setClientType('USD')" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors">🌍 USD</button>
+              </div>
+              <span id="ct-badge" class="text-[10px] text-slate-400">Cotizando en pesos · usa tarifa ARS</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de cambio</label>
                 <div class="flex items-center gap-1">
-                  <span class="text-xs text-slate-400">$1 USD =</span>
-                  <input id="cfg-rate" type="number" value="1000" min="1" step="1" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="calcUpdate()">
-                  <span class="text-xs text-slate-400">ARS</span>
+                  <span class="text-[10px] text-slate-400">$1=</span>
+                  <input id="cfg-rate" type="number" value="1000" min="1" step="10" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="autoSaveCfg();calcUpdate()">
+                  <span class="text-[10px] text-slate-400">ARS</span>
                 </div>
               </div>
               <div>
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tarifa base/hora</label>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">🇦🇷 Tarifa ARS/hora</label>
                 <div class="flex items-center gap-1">
-                  <span class="text-xs text-slate-400">$</span>
-                  <input id="cfg-hourly" type="number" value="25" min="1" step="1" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="calcUpdate()">
-                  <span class="text-xs text-slate-400">USD/h</span>
+                  <span class="text-[10px] text-slate-400">$</span>
+                  <input id="cfg-hourly-ars" type="number" value="25000" min="1" step="500" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="autoSaveCfg();calcUpdate()">
                 </div>
               </div>
               <div>
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Margen de ganancia</label>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">🌍 Tarifa USD/hora</label>
                 <div class="flex items-center gap-1">
-                  <input id="cfg-margin" type="number" value="40" min="0" max="200" step="5" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="calcUpdate()">
-                  <span class="text-xs text-slate-400">%</span>
+                  <span class="text-[10px] text-slate-400">$</span>
+                  <input id="cfg-hourly-usd" type="number" value="25" min="1" step="1" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="autoSaveCfg();calcUpdate()">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Margen</label>
+                <div class="flex items-center gap-1">
+                  <input id="cfg-margin" type="number" value="40" min="0" max="200" step="5" class="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" oninput="autoSaveCfg();calcUpdate()">
+                  <span class="text-[10px] text-slate-400">%</span>
                 </div>
               </div>
             </div>
@@ -6425,6 +6391,22 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
             <button onclick="addLaborRow()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Agregar ítem</button>
           </div>
           <div class="px-5 py-3">
+            <datalist id="labor-concepts">
+              <option value="Diseño UI/UX">
+              <option value="Diseño gráfico">
+              <option value="Desarrollo Frontend">
+              <option value="Desarrollo Backend">
+              <option value="Desarrollo fullstack">
+              <option value="Testing y QA">
+              <option value="Deploy y configuración">
+              <option value="Capacitación y onboarding">
+              <option value="Reuniones y coordinación">
+              <option value="Documentación técnica">
+              <option value="SEO / Optimización">
+              <option value="Soporte técnico">
+              <option value="Integración de APIs">
+              <option value="Base de datos y migraciones">
+            </datalist>
             <div class="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1">
               <div class="col-span-5">Concepto</div>
               <div class="col-span-2">Horas</div>
@@ -6482,6 +6464,35 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
                 </label>
               `).join('')}
             </div>
+            <div id="maint-rec" class="mt-3 px-3 py-2.5 rounded-xl text-xs border hidden"></div>
+          </div>
+        </div>
+
+        <!-- Guardar en proyecto -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">📎</span>
+              <span class="text-sm font-semibold text-slate-700">Asociar a proyecto / cliente</span>
+            </div>
+          </div>
+          <div class="px-5 py-4 space-y-3">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Proyecto al que pertenece este presupuesto</label>
+              <select id="quote-project-link" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600">
+                <option value="">— Sin asociar —</option>
+                ${projects.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title || p.client_name)} — ${escapeHtml(p.client_name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="saveToProject()" class="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+                💾 Guardar en documentos del proyecto
+              </button>
+              <button onclick="printQuote()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+                🖨️ PDF
+              </button>
+            </div>
+            <div id="save-status" class="hidden text-xs text-center py-1 rounded-lg"></div>
           </div>
         </div>
 
@@ -6742,9 +6753,75 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
       ],
     };
 
+    var clientType = 'ARS'; // 'ARS' | 'USD'
+
     function getRate(){ return parseFloat(document.getElementById('cfg-rate').value)||1000; }
-    function getHourly(){ return parseFloat(document.getElementById('cfg-hourly').value)||25; }
+    function getHourly(){
+      var rate=getRate();
+      if(clientType==='USD') return parseFloat(document.getElementById('cfg-hourly-usd').value)||25;
+      return (parseFloat(document.getElementById('cfg-hourly-ars').value)||25000)/rate;
+    }
     function getMargin(){ return parseFloat(document.getElementById('cfg-margin').value)||40; }
+
+    function setClientType(type){
+      clientType=type;
+      document.getElementById('ct-ars').className='px-3 py-1.5 rounded-lg text-xs font-bold transition-colors '+(type==='ARS'?'bg-blue-600 text-white':'text-slate-500 hover:bg-slate-100');
+      document.getElementById('ct-usd').className='px-3 py-1.5 rounded-lg text-xs font-bold transition-colors '+(type==='USD'?'bg-blue-600 text-white':'text-slate-500 hover:bg-slate-100');
+      document.getElementById('ct-badge').textContent=type==='ARS'?'Cotizando en pesos · usa tarifa ARS':'Cotizando en dólares · usa tarifa USD';
+      autoSaveCfg();
+      calcUpdate();
+    }
+
+    function autoSaveCfg(){
+      localStorage.setItem('dt-cfg-rate',document.getElementById('cfg-rate').value);
+      localStorage.setItem('dt-cfg-hourly-ars',document.getElementById('cfg-hourly-ars').value);
+      localStorage.setItem('dt-cfg-hourly-usd',document.getElementById('cfg-hourly-usd').value);
+      localStorage.setItem('dt-cfg-margin',document.getElementById('cfg-margin').value);
+      localStorage.setItem('dt-cfg-clienttype',clientType);
+    }
+    function loadCfg(){
+      var r=localStorage.getItem('dt-cfg-rate');if(r)document.getElementById('cfg-rate').value=r;
+      var ha=localStorage.getItem('dt-cfg-hourly-ars');if(ha)document.getElementById('cfg-hourly-ars').value=ha;
+      var hu=localStorage.getItem('dt-cfg-hourly-usd');if(hu)document.getElementById('cfg-hourly-usd').value=hu;
+      var m=localStorage.getItem('dt-cfg-margin');if(m)document.getElementById('cfg-margin').value=m;
+      var ct=localStorage.getItem('dt-cfg-clienttype');if(ct)clientType=ct;
+    }
+
+    var SERVICES_BY_TYPE = {
+      web:         ['hosting','domain_ar','ssl'],
+      ecommerce:   ['hosting','domain_ar','ssl','mercadopago'],
+      app:         ['hosting','domain_ar','ssl','email','gdrive'],
+      bot:         ['hosting','whatsapp','claude','ssl'],
+      design:      [],
+      maintenance: ['hosting'],
+      custom:      ['hosting','ssl'],
+    };
+
+    var MAINT_REC = {
+      web:         { level:'30',  msg:'Recomendado: Básico — actualizaciones de seguridad y contenidos', color:'bg-amber-50 border-amber-200 text-amber-800' },
+      ecommerce:   { level:'60',  msg:'Recomendado: Estándar — las tiendas requieren updates y soporte de pagos', color:'bg-amber-50 border-amber-200 text-amber-800' },
+      app:         { level:'60',  msg:'Recomendado: Estándar — apps requieren soporte y mejoras periódicas', color:'bg-amber-50 border-amber-200 text-amber-800' },
+      bot:         { level:'120', msg:'Recomendado: Premium — los bots requieren monitoreo y ajustes continuos', color:'bg-red-50 border-red-200 text-red-800' },
+      design:      { level:'0',   msg:'Sin mantenimiento requerido en general', color:'bg-emerald-50 border-emerald-200 text-emerald-800' },
+      maintenance: { level:'60',  msg:'Ya es un proyecto de mantenimiento — el costo mensual es el servicio en sí', color:'bg-blue-50 border-blue-200 text-blue-800' },
+      custom:      { level:'30',  msg:'Evaluá si el proyecto requiere actualizaciones periódicas', color:'bg-slate-50 border-slate-200 text-slate-600' },
+    };
+
+    function applyServicesByType(type){
+      var toCheck=SERVICES_BY_TYPE[type]||[];
+      Object.keys(servicesState).forEach(k=>{ servicesState[k].checked=toCheck.includes(k); });
+      renderServices();
+      calcUpdate();
+    }
+
+    function updateMaintRec(type){
+      var rec=MAINT_REC[type];
+      var el=document.getElementById('maint-rec');
+      if(!rec||!el)return;
+      el.className='mt-3 px-3 py-2.5 rounded-xl text-xs border '+rec.color;
+      el.textContent='💡 '+rec.msg;
+      el.classList.remove('hidden');
+    }
 
     function fmtARS(usd){ return '$'+(usd*getRate()).toLocaleString('es-AR',{maximumFractionDigits:0})+' ARS'; }
     function fmtUSD(usd){ return '$'+usd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USD'; }
@@ -6787,7 +6864,7 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
       var html=laborRows.map(r=>\`
         <div class="grid grid-cols-12 gap-2 items-center" id="lr-\${r.id}">
           <div class="col-span-5">
-            <input type="text" value="\${r.concept}" placeholder="Concepto" class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs" oninput="updateLaborRow(\${r.id},'concept',this.value)">
+            <input type="text" value="\${escVal(r.concept)}" list="labor-concepts" placeholder="Buscar concepto..." class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs" oninput="updateLaborRow(\${r.id},'concept',this.value)">
           </div>
           <div class="col-span-2">
             <input type="number" value="\${r.hours}" min="0" step="0.5" class="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center" oninput="updateLaborRow(\${r.id},'hours',parseFloat(this.value)||0)">
@@ -6972,11 +7049,16 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
       document.getElementById('cv-date').textContent='Fecha: '+new Date().toLocaleDateString('es-AR');
       document.getElementById('cv-total').textContent=fmt(clientPrice);
 
-      // Breakdown
+      // Breakdown — distribute margin proportionally across items
+      var totalCost=labor+services+maint;
+      var marginFactor=totalCost>0?clientPrice/totalCost:1;
+      var laborClient=labor*marginFactor;
+      var servicesClient=services*marginFactor;
+      var maintClient=maint*marginFactor;
       var breakdown='';
-      if(labor>0)breakdown+=\`<div class="flex justify-between text-sm"><span class="text-slate-600">Diseño y desarrollo</span><span class="font-medium text-slate-800">\${fmt(labor)}</span></div>\`;
-      if(services>0)breakdown+=\`<div class="flex justify-between text-sm mt-1"><span class="text-slate-600">Servicios y hosting</span><span class="font-medium text-slate-800">\${fmt(services)}</span></div>\`;
-      if(maint>0)breakdown+=\`<div class="flex justify-between text-sm mt-1"><span class="text-slate-600">Mantenimiento (anual)</span><span class="font-medium text-slate-800">\${fmt(maint)}</span></div>\`;
+      if(labor>0)breakdown+=\`<div class="flex justify-between text-sm"><span class="text-slate-600">Diseño y desarrollo</span><span class="font-medium text-slate-800">\${fmt(laborClient)}</span></div>\`;
+      if(services>0)breakdown+=\`<div class="flex justify-between text-sm mt-1"><span class="text-slate-600">Servicios y hosting</span><span class="font-medium text-slate-800">\${fmt(servicesClient)}</span></div>\`;
+      if(maint>0)breakdown+=\`<div class="flex justify-between text-sm mt-1"><span class="text-slate-600">Mantenimiento (anual)</span><span class="font-medium text-slate-800">\${fmt(maintClient)}</span></div>\`;
       document.getElementById('cv-breakdown').innerHTML=breakdown;
 
       // Monthly row
@@ -7007,8 +7089,9 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
     }
 
     function onTypeChange(){
-      calcUpdate();
-      // Update client view benefits if visible
+      var type=document.getElementById('proj-type').value;
+      applyServicesByType(type);
+      updateMaintRec(type);
       if(!document.getElementById('client-view').classList.contains('hidden')){
         var t=getCurrentTotals();
         updateClientView(t.clientPrice,t.labor,t.services,t.maint);
@@ -7024,52 +7107,153 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
       document.getElementById('proj-name').value=p.title||'';
       document.getElementById('proj-client').value=p.client||'';
       document.getElementById('proj-desc').value=p.description||'';
-      // Map category to type
+      // Auto-link quote to this project
+      document.getElementById('quote-project-link').value=id;
       var catMap={wordpress:'web',landing:'web',ecommerce:'ecommerce',app:'app',bot:'bot',design:'design',maintenance:'maintenance'};
       var type=catMap[p.category]||'web';
       document.getElementById('proj-type').value=type;
+      applyServicesByType(type);
+      updateMaintRec(type);
       calcUpdate();
     }
 
-    function saveQuote(){
-      var data={
-        rate:document.getElementById('cfg-rate').value,
-        hourly:document.getElementById('cfg-hourly').value,
-        margin:document.getElementById('cfg-margin').value,
-        name:document.getElementById('proj-name').value,
-        client:document.getElementById('proj-client').value,
-        type:document.getElementById('proj-type').value,
-        desc:document.getElementById('proj-desc').value,
+    function escVal(s){ return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+    function getQuoteData(){
+      var t=getCurrentTotals();
+      return {
+        id: Date.now(),
+        date: new Date().toISOString(),
+        rate: document.getElementById('cfg-rate').value,
+        hourlyArs: document.getElementById('cfg-hourly-ars').value,
+        hourlyUsd: document.getElementById('cfg-hourly-usd').value,
+        clientType,
+        margin: document.getElementById('cfg-margin').value,
+        name: document.getElementById('proj-name').value,
+        client: document.getElementById('proj-client').value,
+        type: document.getElementById('proj-type').value,
+        desc: document.getElementById('proj-desc').value,
+        projectId: document.getElementById('quote-project-link').value,
         laborRows,
-        services:servicesState,
+        services: servicesState,
         maintUSD,
         customBenefits,
         customOpportunities,
-        currency:primaryCurrency,
+        currency: primaryCurrency,
+        priceUSD: t.clientPrice,
+        priceARS: t.clientPrice * parseFloat(document.getElementById('cfg-rate').value||1000),
       };
+    }
+
+    function saveQuote(){
+      var data=getQuoteData();
       localStorage.setItem('dt-quote-last',JSON.stringify(data));
-      if(typeof showToast==='function')showToast('Cotización guardada localmente');
+      // Push to history (max 20)
+      var hist=JSON.parse(localStorage.getItem('dt-quote-history')||'[]');
+      hist.unshift({id:data.id,date:data.date,name:data.name,client:data.client,type:data.type,priceARS:data.priceARS,priceUSD:data.priceUSD,projectId:data.projectId,data});
+      if(hist.length>20)hist=hist.slice(0,20);
+      localStorage.setItem('dt-quote-history',JSON.stringify(hist));
+      if(typeof showToast==='function')showToast('Cotización guardada');
+      renderHistory();
     }
 
     function loadSavedQuote(){
+      loadCfg();
       var saved=localStorage.getItem('dt-quote-last');
       if(!saved)return;
       try{
         var d=JSON.parse(saved);
         document.getElementById('cfg-rate').value=d.rate||1000;
-        document.getElementById('cfg-hourly').value=d.hourly||25;
+        document.getElementById('cfg-hourly-ars').value=d.hourlyArs||25000;
+        document.getElementById('cfg-hourly-usd').value=d.hourlyUsd||25;
         document.getElementById('cfg-margin').value=d.margin||40;
         document.getElementById('proj-name').value=d.name||'';
         document.getElementById('proj-client').value=d.client||'';
         document.getElementById('proj-type').value=d.type||'web';
         document.getElementById('proj-desc').value=d.desc||'';
+        if(d.projectId)document.getElementById('quote-project-link').value=d.projectId;
+        if(d.clientType)clientType=d.clientType;
         if(d.laborRows&&d.laborRows.length){laborRows=d.laborRows;laborRowId=Math.max(...d.laborRows.map(r=>r.id));}
         if(d.services)Object.assign(servicesState,d.services);
-        if(d.maintUSD)maintUSD=d.maintUSD;
+        if(d.maintUSD!=null)maintUSD=d.maintUSD;
         if(d.customBenefits)customBenefits=d.customBenefits;
         if(d.customOpportunities)customOpportunities=d.customOpportunities;
         if(d.currency)primaryCurrency=d.currency;
       }catch(e){}
+    }
+
+    // History
+    function toggleHistory(){
+      var p=document.getElementById('history-panel');
+      p.classList.toggle('hidden');
+      if(!p.classList.contains('hidden'))renderHistory();
+    }
+    function renderHistory(){
+      var hist=JSON.parse(localStorage.getItem('dt-quote-history')||'[]');
+      var el=document.getElementById('history-list');
+      if(!hist.length){el.innerHTML='<div class="px-5 py-4 text-xs text-slate-400 text-center">Sin historial guardado</div>';return;}
+      el.innerHTML=hist.map((h,i)=>{
+        var d=new Date(h.date).toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'2-digit'});
+        var price=h.priceARS>0?'$'+(h.priceARS).toLocaleString('es-AR',{maximumFractionDigits:0})+' ARS':'—';
+        return \`<div class="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 cursor-pointer" onclick="loadHistoryQuote(\${i})">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-slate-700 truncate">\${h.name||'Sin nombre'}</div>
+            <div class="text-[10px] text-slate-400">\${h.client||''} · \${d}</div>
+          </div>
+          <div class="text-sm font-bold text-blue-600 flex-shrink-0">\${price}</div>
+          <button onclick="event.stopPropagation();deleteHistory(\${i})" class="text-slate-300 hover:text-red-400 text-xs flex-shrink-0">✕</button>
+        </div>\`;
+      }).join('');
+    }
+    function loadHistoryQuote(i){
+      var hist=JSON.parse(localStorage.getItem('dt-quote-history')||'[]');
+      if(!hist[i])return;
+      var d=hist[i].data;
+      localStorage.setItem('dt-quote-last',JSON.stringify(d));
+      location.reload();
+    }
+    function deleteHistory(i){
+      var hist=JSON.parse(localStorage.getItem('dt-quote-history')||'[]');
+      hist.splice(i,1);
+      localStorage.setItem('dt-quote-history',JSON.stringify(hist));
+      renderHistory();
+    }
+    function clearHistory(){
+      if(!confirm('¿Limpiar todo el historial?'))return;
+      localStorage.removeItem('dt-quote-history');
+      renderHistory();
+    }
+
+    // Save to project documents
+    async function saveToProject(){
+      var projectId=document.getElementById('quote-project-link').value;
+      if(!projectId){ if(typeof showToast==='function')showToast('Seleccioná un proyecto primero','error');return; }
+      var data=getQuoteData();
+      var t=getCurrentTotals();
+      var btn=event.currentTarget;
+      btn.textContent='Guardando...';
+      btn.disabled=true;
+      try{
+        var r=await fetch('/admin/api/save-quote',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({projectId,quoteData:data,priceARS:data.priceARS,priceUSD:t.clientPrice})
+        });
+        var j=await r.json();
+        if(j.ok){
+          document.getElementById('save-status').className='text-xs text-center py-1 rounded-lg bg-emerald-50 text-emerald-700 mt-1';
+          document.getElementById('save-status').textContent='✅ Guardado en el proyecto · '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+          document.getElementById('save-status').classList.remove('hidden');
+          if(typeof showToast==='function')showToast('Presupuesto guardado en el proyecto');
+          saveQuote();
+        }else{
+          if(typeof showToast==='function')showToast(j.error||'Error al guardar','error');
+        }
+      }catch(e){
+        if(typeof showToast==='function')showToast('Error de red','error');
+      }
+      btn.textContent='💾 Guardar en documentos del proyecto';
+      btn.disabled=false;
     }
 
     function printQuote(){
@@ -7087,6 +7271,8 @@ router.get('/presupuesto', requireAuth, async (req, res) => {
     loadSavedQuote();
     renderLaborRows();
     renderServices();
+    setClientType(clientType);
+    updateMaintRec(document.getElementById('proj-type').value);
     calcUpdate();
     </script>`;
 
@@ -7254,6 +7440,30 @@ router.post('/api/client-stage', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[api/client-stage] Error:', err.message);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/api/save-quote', requireAuth, async (req, res) => {
+  try {
+    const { projectId, quoteData, priceARS, priceUSD } = req.body;
+    const project = await db.getProject(projectId);
+    if (!project) return res.json({ ok: false, error: 'Proyecto no encontrado' });
+    const docs = Array.isArray(project.documents) ? [...project.documents] : [];
+    const quoteDoc = {
+      id: Date.now(),
+      type: 'presupuesto',
+      name: `Presupuesto — ${quoteData?.name || 'Sin nombre'} (${new Date().toLocaleDateString('es-AR')})`,
+      date: new Date().toISOString(),
+      priceARS: priceARS || 0,
+      priceUSD: priceUSD || 0,
+      data: quoteData || {},
+    };
+    docs.push(quoteDoc);
+    await db.updateProject(projectId, { ...project, documents: docs });
+    res.json({ ok: true, docId: quoteDoc.id });
+  } catch (err) {
+    console.error('[api/save-quote] Error:', err.message);
     res.json({ ok: false, error: err.message });
   }
 });
