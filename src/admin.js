@@ -7,9 +7,24 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '3.1.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '3.2.0'; // Actualizar con cada deploy relevante
 
 const CHANGELOG = [
+  {
+    version: '3.2.0',
+    date: '2026-04-22',
+    title: 'Sidebar Rediseñado + Presupuestos Mejorados',
+    changes: [
+      'Sidebar: íconos SVG minimalistas (Heroicons) reemplazan todos los emojis — se adaptan al tema claro/oscuro',
+      'Sidebar: fix definitivo del desplazamiento de íconos al expandir — las secciones mantienen altura fija, los íconos no se mueven',
+      'Sidebar: 72px de ancho colapsado, animación más fluida con easing ease-out',
+      'Sidebar: JS previene clics accidentales durante la animación de expansión',
+      'Sidebar: ícono de logout SVG (flecha de salida) reemplaza al emoji 🚪',
+      'Presupuestos: se puede asociar un presupuesto a un proyecto y guardarlo como documento',
+      'Presupuestos: nuevo endpoint POST /api/save-quote guarda el presupuesto en documentos del proyecto',
+      'Finanzas: calculadora básica reemplazada por banner con link al módulo de Presupuestos',
+    ],
+  },
   {
     version: '3.1.0',
     date: '2026-04-12',
