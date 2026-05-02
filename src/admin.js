@@ -7647,24 +7647,22 @@ router.get('/changelog', requireAuth, (req, res) => {
     const isLatest = idx === 0;
     const dateFormatted = new Date(release.date + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
     return `
-    <div class="relative pl-8 pb-8 ${idx < CHANGELOG.length - 1 ? 'border-l-2 border-slate-200' : ''} ml-3">
-      <div class="absolute -left-[9px] top-1 w-[18px] h-[18px] rounded-full ${isLatest ? 'bg-blue-500 ring-4 ring-blue-100' : 'bg-slate-300'} flex items-center justify-center">
-        ${isLatest ? '<div class="w-2 h-2 bg-white rounded-full"></div>' : ''}
-      </div>
-      <div class="bg-white rounded-xl border ${isLatest ? 'border-blue-200 ring-1 ring-blue-100' : 'border-slate-200'} overflow-hidden">
-        <div class="px-5 py-4 ${isLatest ? 'bg-gradient-to-r from-blue-50 to-indigo-50' : ''}">
+    <div class="relative pl-7 pb-7 ml-3" style="${idx < CHANGELOG.length - 1 ? 'border-left:1px solid var(--border)' : ''}">
+      <div class="absolute -left-[6px] top-1 w-3 h-3 rounded-full" style="background:${isLatest ? 'var(--accent)' : 'var(--text-3)'};${isLatest ? 'box-shadow:0 0 0 4px var(--accent-dim),0 0 16px var(--accent-glow)' : ''}"></div>
+      <div class="rounded-xl overflow-hidden" style="background:var(--bg-card);border:1px solid ${isLatest ? 'var(--accent-dim)' : 'var(--border)'};box-shadow:var(--shadow-sm)">
+        <div class="px-5 py-4">
           <div class="flex items-center gap-3 flex-wrap">
-            <span class="px-2.5 py-1 rounded-lg text-xs font-bold ${isLatest ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}">v${release.version}</span>
-            <span class="text-xs text-slate-400">${dateFormatted}</span>
-            ${isLatest ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase">Actual</span>' : ''}
+            <span class="px-2.5 py-1 rounded-md text-xs font-semibold mono" style="background:${isLatest ? 'var(--accent)' : 'var(--bg-inset)'};color:${isLatest ? '#fff' : 'var(--text-2)'};border:1px solid ${isLatest ? 'var(--accent)' : 'var(--border)'}">v${release.version}</span>
+            <span class="text-xs mono" style="color:var(--text-3)">${dateFormatted}</span>
+            ${isLatest ? `<span class="px-2 py-0.5 text-[10px] font-bold rounded uppercase" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green);letter-spacing:.06em">Actual</span>` : ''}
           </div>
-          <h3 class="text-sm font-semibold text-slate-800 mt-2">${escapeHtml(release.title)}</h3>
+          <h3 class="text-sm font-semibold mt-2.5" style="color:var(--text-1)">${escapeHtml(release.title)}</h3>
         </div>
-        <div class="px-5 py-3 border-t border-slate-100">
+        <div class="px-5 py-3" style="border-top:1px solid var(--border);background:var(--bg-inset)">
           <ul class="space-y-1.5">
             ${release.changes.map(c => `
-              <li class="flex items-start gap-2 text-sm text-slate-600">
-                <span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
+              <li class="flex items-start gap-2 text-[13px]" style="color:var(--text-2)">
+                <svg width="14" height="14" style="color:var(--accent);margin-top:3px;flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 <span>${escapeHtml(c)}</span>
               </li>
             `).join('')}
@@ -7677,12 +7675,10 @@ router.get('/changelog', requireAuth, (req, res) => {
   const body = `
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-bold text-slate-900">Historial de actualizaciones</h1>
-        <p class="text-sm text-slate-400 mt-1">Todas las mejoras y correcciones de DT Systems</p>
+        <h1 class="text-xl font-semibold" style="color:var(--text-1);letter-spacing:-.01em">Historial de actualizaciones</h1>
+        <p class="text-sm mt-1" style="color:var(--text-3)">Todas las mejoras y correcciones de DT Systems</p>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg">v${APP_VERSION}</span>
-      </div>
+      <span class="px-3 py-1.5 text-xs font-semibold rounded-md mono" style="background:var(--accent);color:#fff;box-shadow:0 0 0 3px var(--accent-dim)">v${APP_VERSION}</span>
     </div>
     <div class="max-w-2xl">
       ${changelogHtml}
