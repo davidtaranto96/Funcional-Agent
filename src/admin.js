@@ -650,8 +650,10 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     }
     /* Headings inside cards (font-weight tightening) */
     html.dark h1,html.dark h2,html.dark h3{letter-spacing:-.01em}
-    /* Numbers inside cards: mono Geist if they use font-bold + text-2xl/text-3xl */
-    html.dark .text-3xl.font-bold,html.dark .text-2xl.font-bold{font-family:var(--mono);font-weight:600;letter-spacing:-.01em}
+    /* Numbers inside cards: mono Geist if they use font-bold + text-2xl/text-3xl, but NOT headings */
+    html.dark div.text-3xl.font-bold,html.dark div.text-2xl.font-bold,html.dark span.text-3xl.font-bold,html.dark span.text-2xl.font-bold{font-family:var(--mono);font-weight:600;letter-spacing:-.01em}
+    /* Page H1: tightening only */
+    html.dark h1.font-bold,html.dark h2.font-bold{font-weight:600;letter-spacing:-.01em}
     /* Buttons: tweak common Tailwind blue/orange/red/emerald/amber with accent palette glow on hover */
     html.dark .bg-blue-500,html.dark .bg-blue-600{background-color:var(--accent)!important}
     html.dark .bg-blue-500:hover,html.dark .bg-blue-600:hover,html.dark .hover\\:bg-blue-600:hover,html.dark .hover\\:bg-blue-700:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--accent-dim)}
