@@ -1643,38 +1643,48 @@ router.get('/clients', requireAuth, async (req, res) => {
       </tr>`;
   }).join('');
 
-  // Kanban view: group clients by stage — with drag-and-drop
+  // Kanban view: group clients by stage — with drag-and-drop (Precision Dark)
   const kanbanHtml = (() => {
     const kanbanStages = STAGES.slice(0, 7); // exclude 'dormant' for space
+    const initial = (n) => (n || '?').charAt(0).toUpperCase();
+    const avatarColor = (s) => { let h=0; for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0; const hues=[210,160,290,30,340,250,180]; return hues[h%hues.length]; };
     return `
       <div class="overflow-x-auto pb-4">
       <div class="flex gap-4" style="min-height:60vh;min-width:max-content">
         ${kanbanStages.map(s => {
           const stageClients = clients.filter(c => c.client_stage === s.key);
           return `
-            <div class="flex-shrink-0" style="width:260px">
+            <div class="flex-shrink-0" style="width:280px">
               <div class="flex items-center gap-2 mb-3 px-1">
-                <div class="w-2.5 h-2.5 rounded-full" style="background:${s.dot}"></div>
-                <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">${s.label}</span>
-                <span class="ml-auto text-xs font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">${stageClients.length}</span>
+                <div class="pd-dot" style="background:${s.dot};box-shadow:0 0 8px ${s.dot}"></div>
+                <span class="text-[11px] font-semibold uppercase" style="color:var(--text-2);letter-spacing:.08em">${s.label}</span>
+                <span class="ml-auto text-[10px] font-semibold mono px-1.5 py-0.5 rounded" style="background:var(--bg-inset);color:var(--text-2);border:1px solid var(--border)">${stageClients.length}</span>
               </div>
-              <div class="pipeline-kanban-col kanban-col bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 p-2" data-stage="${s.key}" style="min-height:200px">
+              <div class="pipeline-kanban-col kanban-col p-2" data-stage="${s.key}" style="min-height:200px;background:var(--bg-inset);border:1.5px dashed var(--border-s);border-radius:14px">
                 ${stageClients.length > 0 ? stageClients.map(c => {
                   const nombre = c.report?.cliente?.nombre || c.context?.nombre || '—';
                   const tipo = c.report?.proyecto?.tipo || '';
+                  const isPending = c.demo_status === 'pending_review';
+                  const hue = avatarColor(c.phone || nombre);
                   return `
-                    <div class="kanban-card bg-white rounded-xl border border-slate-200 p-3 mb-2 cursor-grab active:cursor-grabbing"
+                    <div class="kanban-card p-3 mb-2 cursor-grab active:cursor-grabbing"
                          data-phone="${escapeHtml(c.phone)}"
+                         style="background:var(--bg-card2);border:1px solid ${isPending ? 'var(--amber)' : 'var(--border)'};border-radius:10px${isPending ? ';box-shadow:0 0 0 1px var(--amber-dim)' : ''}"
                          onclick="if(!window._pipelineDragging)location.href='/admin/client/${encodeURIComponent(c.phone)}'">
-                      <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(nombre)}</div>
-                      ${tipo ? `<div class="text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(tipo)}</div>` : ''}
-                      <div class="flex items-center justify-between mt-2">
+                      <div class="flex items-start gap-2.5">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold" style="background:oklch(62% 0.16 ${hue} / 0.18);color:oklch(75% 0.16 ${hue});border:1px solid oklch(62% 0.16 ${hue} / 0.3)">${initial(nombre)}</div>
+                        <div class="flex-1 min-w-0">
+                          <div class="text-[13px] font-medium truncate" style="color:var(--text-1)">${escapeHtml(nombre)}</div>
+                          ${tipo ? `<div class="text-[11px] mt-0.5 truncate" style="color:var(--text-3)">${escapeHtml(tipo)}</div>` : ''}
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between mt-2.5 gap-2">
                         ${demoStatusBadge(c.demo_status)}
-                        <span class="text-[10px] text-slate-300">${timeAgo(c.updated_at)}</span>
+                        <span class="text-[10px] mono" style="color:var(--text-3)">${timeAgo(c.updated_at)}</span>
                       </div>
                     </div>`;
                 }).join('')
-                : '<div class="kanban-empty">Arrastra contactos aqu&iacute;</div>'}
+                : '<div class="kanban-empty">Arrastrá contactos aquí</div>'}
               </div>
             </div>`;
         }).join('')}
