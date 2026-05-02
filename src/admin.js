@@ -547,6 +547,18 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .pd-check.on{background:var(--accent);border-color:var(--accent);color:#fff}
     /* Stage / status colored dots */
     .pd-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    /* KPI Card (Precision Dark — count-up + glow + mono + bar) */
+    .pd-kpi{display:block;position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 18px 16px;text-decoration:none;color:var(--text-1);overflow:hidden;transition:transform .2s,box-shadow .2s,border-color .2s;animation:count-up .5s ease both;cursor:pointer}
+    .pd-kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-s)}
+    .pd-kpi-glow{position:absolute;top:0;right:0;width:140px;height:140px;opacity:.35;pointer-events:none}
+    .pd-kpi-head{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+    .pd-kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3)}
+    .pd-kpi-alert{display:inline-block;width:7px;height:7px;border-radius:50%;animation:pulse-dot 1.6s ease-in-out infinite;box-shadow:0 0 0 4px rgba(0,0,0,.15)}
+    @keyframes pulse-dot{0%,100%{opacity:.6;transform:scale(.95)}50%{opacity:1;transform:scale(1.1)}}
+    .pd-kpi-value{font-size:32px;font-weight:600;line-height:1;margin-top:10px;color:var(--text-1);letter-spacing:-.01em;position:relative;z-index:1}
+    .pd-kpi-sub{font-size:11px;color:var(--text-2);margin-top:6px;position:relative;z-index:1}
+    .pd-kpi-bar{height:2px;background:var(--bg-inset);border-radius:2px;overflow:hidden;margin-top:12px;position:relative;z-index:1}
+    .pd-kpi-bar-fill{height:100%;border-radius:2px;transition:width 1.2s cubic-bezier(.25,.46,.45,.94)}
     /* Sidebar nav hover (subtle, only inactive items) */
     .sb-nav-hover:hover{background:var(--bg-inset);color:var(--text-1)!important}
     .sb-nav-hover:hover span:not(.sidebar-badge){color:var(--text-1)!important}
@@ -995,6 +1007,32 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   var cmdInp=document.getElementById('cmdInput');
   if(cmdInp)cmdInp.addEventListener('input',function(){_cmdIdx=-1;renderCmdResults(this.value);});
 
+  // ── Count-up + KPI bar fill (Precision Dark KPI cards) ──
+  (function(){
+    function countUp(el){
+      var target=parseFloat(el.getAttribute('data-count-to'))||0;
+      if(target===0){el.textContent='0';return;}
+      var start=performance.now(), dur=700;
+      function step(t){
+        var p=Math.min(1,(t-start)/dur);
+        var eased=1-Math.pow(1-p,3); // cubic-out
+        var val=Math.round(target*eased);
+        el.textContent=val;
+        if(p<1)requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    function init(){
+      document.querySelectorAll('[data-count-to]').forEach(countUp);
+      document.querySelectorAll('[data-bar-pct]').forEach(function(el){
+        var pct=parseFloat(el.getAttribute('data-bar-pct'))||0;
+        setTimeout(function(){el.style.width=pct+'%';},120);
+      });
+    }
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+    else init();
+  })();
+
   // ── FAB ──
   function toggleFab(){
     document.getElementById('fabMenu').classList.toggle('open');
@@ -1181,22 +1219,26 @@ router.get('/', requireAuth, async (req, res) => {
   const activeProjects = projects.filter(p => ['planning','in_progress','waiting_client','waiting_payment','review'].includes(p.status)).length;
   const pendingTasks = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done).length, 0);
 
-  const metricCards = [
-    { label: 'Pipeline WA',     value: clients.length,        icon: '💬', grad: 'from-blue-500 to-blue-600',      sub: `${clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length} activos`, href: '/admin/clients' },
-    { label: 'Demos pendientes', value: pendingReview.length,  icon: '⏳', grad: pendingReview.length > 0 ? 'from-orange-400 to-orange-500' : 'from-slate-400 to-slate-500', sub: 'para revisar', alert: pendingReview.length > 0, href: '/admin/clients' },
-    { label: 'Proyectos activos',value: activeProjects,        icon: '📁', grad: 'from-purple-500 to-purple-600',  sub: `${projects.length} en total`, href: '/admin/projects' },
-    { label: 'Tareas pendientes',value: pendingTasks,          icon: '✅', grad: pendingTasks > 0 ? 'from-amber-400 to-amber-500' : 'from-emerald-500 to-emerald-600', sub: 'en proyectos', href: '/admin/tasks' },
-  ].map(m => `
-    <a href="${m.href || '#'}" class="bg-gradient-to-br ${m.grad} rounded-2xl p-5 text-white relative overflow-hidden block hover:opacity-95 hover:scale-[1.01] transition-all cursor-pointer no-underline">
-      <div class="flex items-start justify-between">
-        <div>
-          <div class="text-xs font-medium opacity-75 uppercase tracking-wide">${m.label}</div>
-          <div class="text-3xl md:text-4xl font-bold mt-1">${m.value}</div>
-          <div class="text-xs opacity-60 mt-1">${m.sub}</div>
-        </div>
-        <div class="text-3xl opacity-50">${m.icon}</div>
+  // Precision Dark KPI cards (count-up animado + glow radial + mono number + barra inferior)
+  const kpiActiveClients = clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length;
+  const kpiTotalClients = Math.max(clients.length, 1);
+  const kpiTasksTotal = projects.reduce((n, p) => n + (p.tasks || []).length, 0) || 1;
+  const kpis = [
+    { label: 'Pipeline WA',      value: clients.length,       sub: `${kpiActiveClients} activos`,     color: 'var(--accent)', pct: Math.round(kpiActiveClients/kpiTotalClients*100), href: '/admin/clients',   delay: 0   },
+    { label: 'Demos pendientes', value: pendingReview.length, sub: 'para revisar',                    color: pendingReview.length>0?'var(--amber)':'var(--text-3)', pct: pendingReview.length>0?100:0, href: '/admin/clients',   delay: 80,  alert: pendingReview.length>0 },
+    { label: 'Proyectos activos',value: activeProjects,       sub: `${projects.length} en total`,     color: 'var(--purple)', pct: projects.length?Math.round(activeProjects/projects.length*100):0, href: '/admin/projects',  delay: 160 },
+    { label: 'Tareas pendientes',value: pendingTasks,         sub: pendingTasks>0?'en proyectos':'al día', color: pendingTasks>0?'var(--amber)':'var(--green)', pct: kpiTasksTotal?Math.round(pendingTasks/kpiTasksTotal*100):0, href: '/admin/tasks',     delay: 240 },
+  ];
+  const metricCards = kpis.map((m, i) => `
+    <a href="${m.href || '#'}" class="pd-kpi" style="animation-delay:${m.delay}ms">
+      <div class="pd-kpi-glow" style="background:radial-gradient(circle at 100% 0%, ${m.color}, transparent 70%)"></div>
+      <div class="pd-kpi-head">
+        <span class="pd-kpi-label">${m.label}</span>
+        ${m.alert ? `<span class="pd-kpi-alert" style="background:${m.color}"></span>` : ''}
       </div>
-      ${m.alert ? '<div class="absolute top-3 right-3 w-2 h-2 bg-white rounded-full animate-pulse opacity-80"></div>' : ''}
+      <div class="pd-kpi-value mono" data-count-to="${m.value}" style="--kpi-color:${m.color}">0</div>
+      <div class="pd-kpi-sub">${m.sub}</div>
+      <div class="pd-kpi-bar"><div class="pd-kpi-bar-fill" style="background:${m.color};width:0" data-bar-pct="${m.pct}"></div></div>
     </a>`).join('');
 
   // Alert strip
