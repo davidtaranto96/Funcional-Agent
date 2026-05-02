@@ -636,6 +636,67 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     html.dark .toast-error{background:oklch(28% .15 20);border:1px solid oklch(38% .17 20)}
     html.dark #sidebar{background:var(--bg-card)!important;border-color:var(--border)!important}
     html.dark .card-hover:hover{box-shadow:var(--shadow-md)}
+
+    /* ──────────────────────────────────────────────────────────────
+       Global polish — upgrades legacy white card patterns to Precision Dark
+       (without requiring per-view markup changes)
+       ────────────────────────────────────────────────────────────── */
+    /* Surface cards: bg-white + rounded-2xl + border-slate-200 → Precision Dark surface */
+    html.dark .bg-white.rounded-2xl,
+    html.dark .bg-white.rounded-xl{
+      background:var(--bg-card)!important;
+      border-color:var(--border)!important;
+      box-shadow:var(--shadow-sm);
+    }
+    /* Headings inside cards (font-weight tightening) */
+    html.dark h1,html.dark h2,html.dark h3{letter-spacing:-.01em}
+    /* Numbers inside cards: mono Geist if they use font-bold + text-2xl/text-3xl */
+    html.dark .text-3xl.font-bold,html.dark .text-2xl.font-bold{font-family:var(--mono);font-weight:600;letter-spacing:-.01em}
+    /* Buttons: tweak common Tailwind blue/orange/red/emerald/amber with accent palette glow on hover */
+    html.dark .bg-blue-500,html.dark .bg-blue-600{background-color:var(--accent)!important}
+    html.dark .bg-blue-500:hover,html.dark .bg-blue-600:hover,html.dark .hover\\:bg-blue-600:hover,html.dark .hover\\:bg-blue-700:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--accent-dim)}
+    html.dark .bg-orange-500,html.dark .bg-orange-600{background-color:var(--amber)!important;color:#0a1628!important}
+    html.dark .bg-orange-500:hover,html.dark .bg-orange-600:hover,html.dark .hover\\:bg-orange-600:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--amber-dim)}
+    html.dark .bg-red-500,html.dark .bg-red-600{background-color:var(--red)!important}
+    html.dark .bg-red-500:hover,html.dark .bg-red-600:hover,html.dark .hover\\:bg-red-600:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--red-dim)}
+    html.dark .bg-emerald-500,html.dark .bg-emerald-600,html.dark .bg-green-500,html.dark .bg-green-600{background-color:var(--green)!important}
+    html.dark .bg-emerald-500:hover,html.dark .bg-emerald-600:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--green-dim)}
+    html.dark .bg-amber-500,html.dark .bg-amber-600,html.dark .bg-yellow-500{background-color:var(--amber)!important;color:#0a1628!important}
+    html.dark .bg-purple-500,html.dark .bg-purple-600,html.dark .bg-violet-500,html.dark .bg-indigo-500,html.dark .bg-indigo-600{background-color:var(--purple)!important}
+    /* Text colors: blue-600 link → accent */
+    html.dark .text-blue-600,html.dark .text-blue-500,html.dark .hover\\:text-blue-600:hover,html.dark .hover\\:text-blue-700:hover{color:var(--accent)!important}
+    html.dark .text-orange-600,html.dark .text-orange-500{color:var(--amber)!important}
+    html.dark .text-red-600,html.dark .text-red-500,html.dark .text-red-400{color:var(--red)!important}
+    html.dark .text-emerald-600,html.dark .text-emerald-500,html.dark .text-green-600,html.dark .text-green-500{color:var(--green)!important}
+    html.dark .text-amber-600,html.dark .text-amber-500{color:var(--amber)!important}
+    html.dark .text-purple-600,html.dark .text-purple-500,html.dark .text-violet-600{color:var(--purple)!important}
+    /* Badges (bg-X-100 + text-X-700/600 patterns): use dim+full color */
+    html.dark .bg-blue-100{background-color:var(--accent-dim)!important}
+    html.dark .bg-blue-100.text-blue-600,html.dark .bg-blue-100.text-blue-700,html.dark .bg-blue-100.text-blue-800{color:var(--accent)!important}
+    html.dark .bg-orange-100,html.dark .bg-amber-100,html.dark .bg-yellow-100{background-color:var(--amber-dim)!important}
+    html.dark .bg-orange-100.text-orange-600,html.dark .bg-orange-100.text-orange-700,html.dark .bg-orange-100.text-orange-800,html.dark .bg-amber-100.text-amber-600,html.dark .bg-amber-100.text-amber-700{color:var(--amber)!important}
+    html.dark .bg-red-100{background-color:var(--red-dim)!important}
+    html.dark .bg-red-100.text-red-600,html.dark .bg-red-100.text-red-700,html.dark .bg-red-100.text-red-800{color:var(--red)!important}
+    html.dark .bg-emerald-100,html.dark .bg-green-100{background-color:var(--green-dim)!important}
+    html.dark .bg-emerald-100.text-emerald-600,html.dark .bg-emerald-100.text-emerald-700,html.dark .bg-green-100.text-green-700{color:var(--green)!important}
+    html.dark .bg-purple-100,html.dark .bg-violet-100,html.dark .bg-indigo-100{background-color:var(--purple-dim)!important}
+    html.dark .bg-purple-100.text-purple-600,html.dark .bg-purple-100.text-purple-700{color:var(--purple)!important}
+    /* Small accent strips (border-l) */
+    html.dark .border-l-4.border-blue-500{border-left-color:var(--accent)!important}
+    html.dark .border-l-4.border-orange-500{border-left-color:var(--amber)!important}
+    html.dark .border-l-4.border-red-500{border-left-color:var(--red)!important}
+    html.dark .border-l-4.border-emerald-500,html.dark .border-l-4.border-green-500{border-left-color:var(--green)!important}
+    /* Inputs focus ring uses accent */
+    html.dark .focus\\:ring-blue-500:focus,html.dark .focus\\:ring-2:focus{box-shadow:0 0 0 3px var(--accent-dim)!important;border-color:var(--accent)!important}
+    /* Page enter animation for main content */
+    main{animation:page-in .25s ease-out}
+    /* Selection */
+    ::selection{background:var(--accent-dim);color:var(--text-1)}
+    /* Hover bg-slate-50 mappings keep working but darker */
+    html.dark .hover\\:bg-blue-50:hover{background-color:var(--accent-dim)!important}
+    html.dark .hover\\:bg-orange-50:hover{background-color:var(--amber-dim)!important}
+    html.dark .hover\\:bg-emerald-50:hover{background-color:var(--green-dim)!important}
+    html.dark .hover\\:bg-red-50:hover{background-color:var(--red-dim)!important}
     /* ── Command Palette ── */
     .cmd-palette{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-start;justify-content:center;padding-top:min(20vh,160px)}
     .cmd-palette.open{display:flex}
