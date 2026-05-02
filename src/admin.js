@@ -7,9 +7,29 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '3.2.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '4.0.0'; // Actualizar con cada deploy relevante
 
 const CHANGELOG = [
+  {
+    version: '4.0.0',
+    date: '2026-05-02',
+    title: 'Rediseño Visual Completo — Precision Dark',
+    changes: [
+      'Sistema de diseño "Precision Dark": paleta OKLCH (azul accent + verde/ámbar/rojo/púrpura semánticos), shadows multi-capa, radii consistentes',
+      'Tipografía: fuente Geist (sans + mono) en todo el panel, números grandes en monospace',
+      'Modo oscuro fijo (Precision Dark) — el toggle claro/oscuro fue removido',
+      'Body con textura de noise SVG sutil signature de Precision Dark',
+      'Animaciones: page-in en cada navegación, count-up en KPIs del dashboard, modal-in con bounce, toast-in suave',
+      'Login rediseñado: card centrado con radial glow accent, spinner inline al enviar, fuente Geist',
+      'Sidebar: active state con barra lateral 3px accent (estilo Linear), badges semánticos, paleta tokens, logout en rojo',
+      'Dashboard: KPI cards con count-up animado + glow radial + barra de progreso + delays escalonados',
+      'Pipeline kanban: avatares circulares colorimétricos, borde ámbar para demos pendientes, dot con glow por etapa, drop zones con dashed border accent',
+      'Centro de Control: pill de estado del agente con servicios (Twilio · Claude · Resend · Drive)',
+      'Changelog: estilo Linear con timeline accent, versiones en mono, badge "Actual" verde con borde',
+      'Toast system: 3 variantes (ok/err/info) con OKLCH backgrounds, posición centro inferior, stacked',
+      'Polish global: ~30 reglas CSS que mapean toda la paleta Tailwind (bg-blue/orange/red/emerald/amber/purple) a tokens Precision Dark sin tocar markup',
+    ],
+  },
   {
     version: '3.2.0',
     date: '2026-04-22',
