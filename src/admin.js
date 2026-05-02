@@ -370,18 +370,23 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   // Section label: ALWAYS same height (20px). Collapsed shows divider line, expanded shows text.
   // This keeps icon Y-positions identical in both states → no shift on hover expand.
   const sectionLabel = (name) =>
-    `<div class="sidebar-section-label flex items-center" style="height:20px;margin-bottom:4px;padding:0 4px">
-      <span class="sidebar-section-text text-[10px] font-semibold text-slate-600 uppercase tracking-widest leading-none">${name}</span>
-      <div class="sidebar-section-divider" style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:none"></div>
+    `<div class="sidebar-section-label flex items-center" style="height:20px;margin-bottom:4px;padding:0 6px">
+      <span class="sidebar-section-text text-[10px] font-semibold uppercase leading-none" style="color:var(--text-3);letter-spacing:.12em">${name}</span>
+      <div class="sidebar-section-divider" style="flex:1;height:1px;background:var(--border);display:none"></div>
     </div>`;
 
   const navItem = (href, icon, label, page) => {
     const active = activePage === page;
     let badge = '';
-    if (page === 'clients' && pendingCount > 0) badge = `<span class="sidebar-badge bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>`;
-    if (page === 'control' && notifCount > 0) badge = `<span class="sidebar-badge bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
-    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 ${active ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'}">
-      <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center ${active ? 'text-white' : 'text-slate-400'}">${icon}</span>
+    if (page === 'clients' && pendingCount > 0) badge = `<span class="sidebar-badge text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse" style="background:var(--amber);color:#0a1628">${pendingCount}</span>`;
+    if (page === 'control' && notifCount > 0) badge = `<span class="sidebar-badge text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center" style="background:var(--red);color:#fff">${notifCount}</span>`;
+    const baseStyle = active
+      ? 'background:var(--accent-dim);color:var(--accent)'
+      : 'color:var(--text-2)';
+    const hoverClass = active ? '' : 'sb-nav-hover';
+    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${hoverClass}" style="${baseStyle};position:relative">
+      ${active ? `<span aria-hidden="true" style="position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)"></span>` : ''}
+      <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center" style="color:${active ? 'var(--accent)' : 'var(--text-2)'}">${icon}</span>
       <span class="flex-1 sidebar-label whitespace-nowrap overflow-hidden">${label}</span>
       ${badge}
     </a>`;
@@ -393,14 +398,14 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   const userInitial = (userName || userEmail || 'D')[0].toUpperCase();
 
   const userBlock = `
-    <div class="mx-3 mb-2 p-2.5 bg-white/5 rounded-xl border border-white/5 hover:bg-white/8 transition-colors cursor-default">
+    <div class="mx-3 mb-2 p-2.5 rounded-lg transition-colors cursor-default" style="background:var(--bg-inset);border:1px solid var(--border)">
       <div class="flex items-center gap-2.5">
         ${userPhoto
-          ? `<img src="${userPhoto}" class="w-7 h-7 rounded-full flex-shrink-0 ring-2 ring-blue-500/30" alt="">`
-          : `<div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${userInitial}</div>`}
+          ? `<img src="${userPhoto}" class="w-7 h-7 rounded-full flex-shrink-0" style="border:2px solid var(--accent-dim)" alt="">`
+          : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)">${userInitial}</div>`}
         <div class="min-w-0 flex-1 sidebar-user-info">
-          <div class="text-xs font-semibold text-slate-200 truncate leading-tight">${escapeHtml(userName || 'David Taranto')}</div>
-          ${userEmail ? `<div class="text-[10px] text-slate-500 truncate leading-tight">${escapeHtml(userEmail)}</div>` : '<div class="text-[10px] text-slate-500 leading-tight">Admin</div>'}
+          <div class="text-xs font-semibold truncate leading-tight" style="color:var(--text-1)">${escapeHtml(userName || 'David Taranto')}</div>
+          <div class="text-[10px] truncate leading-tight" style="color:var(--text-3)">${userEmail ? escapeHtml(userEmail) : 'Admin · Salta'}</div>
         </div>
       </div>
     </div>`;
@@ -542,6 +547,12 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .pd-check.on{background:var(--accent);border-color:var(--accent);color:#fff}
     /* Stage / status colored dots */
     .pd-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    /* Sidebar nav hover (subtle, only inactive items) */
+    .sb-nav-hover:hover{background:var(--bg-inset);color:var(--text-1)!important}
+    .sb-nav-hover:hover span:not(.sidebar-badge){color:var(--text-1)!important}
+    /* Sidebar logout hover */
+    .sb-logout-btn:hover{background:var(--red-dim);color:var(--red)!important}
+    .sb-logout-btn:hover span{color:var(--red)!important}
     /* Toast (Precision Dark — bottom-center stacked) */
     .pd-toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
     .pd-toast{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border-radius:var(--r-md);font-size:13px;font-weight:500;color:var(--text-1);box-shadow:var(--shadow-md);animation:toast-in .22s cubic-bezier(.34,1.56,.64,1);pointer-events:auto;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
@@ -685,27 +696,24 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
 <body class="min-h-screen" style="display:flex;background:var(--bg-app);color:var(--text-1)">
   <aside id="sidebar" style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20;background:var(--bg-card);border-right:1px solid var(--border)" class="flex flex-col">
     <!-- Brand -->
-    <div class="px-4 py-4 border-b border-white/5 sidebar-brand">
+    <div class="px-4 py-4 sidebar-brand" style="border-bottom:1px solid var(--border)">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-900/40">
+        <button onclick="toggleSidebarCollapse()" class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all" style="background:var(--accent);box-shadow:0 0 24px var(--accent-glow)" title="Colapsar/expandir sidebar">
           <span class="text-white text-[11px] font-black tracking-tight">DT</span>
-        </div>
-        <div class="flex-1 min-w-0 sidebar-brand-text">
-          <div class="text-sm font-bold text-white tracking-tight leading-tight">DT Systems</div>
-          <div class="text-[10px] text-slate-500 leading-none mt-0.5">CRM & Proyectos · <span class="text-slate-600">v${APP_VERSION}</span></div>
-        </div>
-        <button onclick="toggleDarkMode()" id="darkToggle" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0" title="Tema claro/oscuro">
-          <svg id="darkIcon" class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
         </button>
+        <div class="flex-1 min-w-0 sidebar-brand-text">
+          <div class="text-sm font-semibold tracking-tight leading-tight" style="color:var(--text-1)">DT Systems</div>
+          <div class="text-[10px] leading-none mt-1 mono" style="color:var(--text-3)">CRM & Proyectos · v${APP_VERSION}</div>
+        </div>
       </div>
     </div>
 
     <!-- Search trigger -->
     <div class="px-3 pt-3 pb-1 sidebar-search">
-      <button onclick="openCmdPalette()" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-colors cursor-pointer group">
-        <svg class="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <span class="text-xs text-slate-500 flex-1 text-left">Buscar...</span>
-        <kbd class="text-[9px] text-slate-600 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-mono">⌘K</kbd>
+      <button onclick="openCmdPalette()" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors cursor-pointer" style="background:var(--bg-inset);border:1px solid var(--border)">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <span class="text-xs flex-1 text-left" style="color:var(--text-3)">Buscar...</span>
+        <kbd class="text-[9px] px-1.5 py-0.5 rounded mono" style="background:var(--bg-card2);border:1px solid var(--border-s);color:var(--text-2)">⌘K</kbd>
       </button>
     </div>
     <!-- Navigation -->
@@ -748,11 +756,11 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     </nav>
 
     <!-- User + Logout -->
-    <div class="pb-3 border-t border-slate-700/40 pt-3 sidebar-bottom">
+    <div class="pb-3 pt-3 sidebar-bottom" style="border-top:1px solid var(--border)">
       ${userBlock}
       <form method="POST" action="/admin/logout" class="px-3">
-        <button class="flex items-center gap-2 text-xs text-slate-500 hover:text-red-400 transition-colors w-full px-3 py-2 rounded-xl hover:bg-slate-800">
-          <span class="flex-shrink-0 text-slate-500">${LOGOUT_ICON}</span>
+        <button class="flex items-center gap-2 text-xs transition-colors w-full px-3 py-2 rounded-lg sb-logout-btn" style="color:var(--text-3)">
+          <span class="flex-shrink-0">${LOGOUT_ICON}</span>
           <span class="sidebar-label">Cerrar sesión</span>
         </button>
       </form>
@@ -869,30 +877,24 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     });
   })();
 
-  // ── Dark Mode ──
-  function initDarkMode(){
-    var pref=localStorage.getItem('dt-theme');
-    if(pref==='dark'||(pref===null&&window.matchMedia('(prefers-color-scheme:dark)').matches)){
-      document.documentElement.classList.add('dark');
-    }
-    updateDarkIcon();
-  }
-  function toggleDarkMode(){
-    document.documentElement.classList.toggle('dark');
-    var isDark=document.documentElement.classList.contains('dark');
-    localStorage.setItem('dt-theme',isDark?'dark':'light');
-    updateDarkIcon();
-    showToast(isDark?'Modo oscuro activado':'Modo claro activado');
-  }
-  function updateDarkIcon(){
-    var icon=document.getElementById('darkIcon');
-    if(!icon)return;
-    var isDark=document.documentElement.classList.contains('dark');
-    icon.innerHTML=isDark
-      ?'<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>'
-      :'<path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>';
-  }
+  // ── Dark Mode (Precision Dark = always dark; legacy stubs for back-compat) ──
+  function initDarkMode(){ document.documentElement.classList.add('dark'); }
+  function toggleDarkMode(){ /* no-op: Precision Dark is always dark */ }
+  function updateDarkIcon(){ /* no-op */ }
   initDarkMode();
+  // ── Sidebar collapse (desktop) ──
+  function toggleSidebarCollapse(){
+    if(window.innerWidth<768){ toggleSidebar(); return; }
+    var collapsed=document.body.classList.toggle('sidebar-collapsed');
+    try{localStorage.setItem('dt-sidebar',collapsed?'collapsed':'expanded');}catch(e){}
+  }
+  (function(){
+    try{
+      if(localStorage.getItem('dt-sidebar')==='collapsed'&&window.innerWidth>=768){
+        document.body.classList.add('sidebar-collapsed');
+      }
+    }catch(e){}
+  })();
 
   // ── Toast (Precision Dark — bottom-center stacked) ──
   function showToast(msg,type){
