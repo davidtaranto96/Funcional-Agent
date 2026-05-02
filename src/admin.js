@@ -3316,9 +3316,18 @@ router.get('/control', requireAuth, async (req, res) => {
   const isToday = nextMeeting ? new Date(nextMeeting.start).toDateString() === new Date().toDateString() : false;
 
   const body = `
-    <div class="mb-5">
-      <h1 class="text-xl font-bold text-slate-900">Centro de Control</h1>
-      <p class="text-xs text-slate-400 mt-1">Estado del agente y acciones pendientes</p>
+    <div class="flex items-start justify-between mb-5 gap-4 flex-wrap">
+      <div>
+        <h1 class="text-xl font-semibold" style="color:var(--text-1);letter-spacing:-.01em">Centro de Control</h1>
+        <p class="text-xs mt-1" style="color:var(--text-3)">Estado del agente y acciones pendientes</p>
+      </div>
+      <!-- System health pill -->
+      <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border)">
+        <span class="pd-dot" style="background:var(--green);box-shadow:0 0 12px var(--green);animation:pulse-dot 1.6s infinite"></span>
+        <span class="text-xs font-medium" style="color:var(--text-1)">Agente activo</span>
+        <span class="text-[10px] mono" style="color:var(--text-3)">·</span>
+        <span class="text-[10px] mono" style="color:var(--text-2)" title="Servicios">Twilio · Claude · Resend · Drive</span>
+      </div>
     </div>
 
     <!-- Status bar -->
