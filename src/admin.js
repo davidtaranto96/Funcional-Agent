@@ -542,6 +542,12 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .pd-check.on{background:var(--accent);border-color:var(--accent);color:#fff}
     /* Stage / status colored dots */
     .pd-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    /* Toast (Precision Dark — bottom-center stacked) */
+    .pd-toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+    .pd-toast{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border-radius:var(--r-md);font-size:13px;font-weight:500;color:var(--text-1);box-shadow:var(--shadow-md);animation:toast-in .22s cubic-bezier(.34,1.56,.64,1);pointer-events:auto;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+    .pd-toast-ok{background:oklch(30% .12 160 / .95);border:1px solid oklch(45% .14 160 / .6);color:#d1fae5}
+    .pd-toast-err{background:oklch(28% .15 20 / .95);border:1px solid oklch(45% .17 20 / .6);color:#fecaca}
+    .pd-toast-info{background:rgba(13,27,46,.95);border:1px solid var(--border-s);color:var(--text-1)}
 
     /* ──────────────────────────────────────────────────────────────
        Legacy classes (kept for backward compat during migration)
@@ -888,16 +894,38 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   }
   initDarkMode();
 
-  // ── Toast ──
+  // ── Toast (Precision Dark — bottom-center stacked) ──
   function showToast(msg,type){
     type=type||'success';
+    // Normalize legacy aliases
+    var variant=({success:'ok',error:'err',info:'info',ok:'ok',err:'err'})[type]||'ok';
+    var wrap=document.querySelector('.pd-toast-wrap');
+    if(!wrap){
+      wrap=document.createElement('div');
+      wrap.className='pd-toast-wrap';
+      document.body.appendChild(wrap);
+    }
     var t=document.createElement('div');
-    t.className='toast toast-'+type;
-    t.textContent=msg;
-    document.body.appendChild(t);
-    requestAnimationFrame(function(){t.classList.add('show');});
-    setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},300);},3000);
+    t.className='pd-toast pd-toast-'+variant;
+    var icon=variant==='err'
+      ? '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+      : variant==='info'
+        ? '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+        : '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+    t.innerHTML=icon+'<span>'+msg.replace(/[<>&]/g,function(c){return{'<':'&lt;','>':'&gt;','&':'&amp;'}[c];})+'</span>';
+    wrap.appendChild(t);
+    setTimeout(function(){
+      t.style.transition='opacity .25s ease, transform .25s ease';
+      t.style.opacity='0';
+      t.style.transform='translateY(8px)';
+      setTimeout(function(){
+        if(t.parentNode)t.parentNode.removeChild(t);
+        if(wrap.children.length===0)wrap.remove();
+      },260);
+    },3200);
   }
+  // Expose globally so server-rendered pages can call it
+  window.showToast=showToast;
 
   // ── Command Palette ──
   var _cmdData=null;
