@@ -50,3 +50,15 @@ export function normalizeARPhone(num: string): string {
   n = n.replace(/^(54\d{3,4})15(\d{6,7})$/, '$1$2');
   return n;
 }
+
+/**
+ * Construye URL absoluta respetando los headers de proxy (Railway/Vercel/etc).
+ * Resuelve el bug de `new URL('/admin', req.url)` que en runtime detrás de proxy
+ * usa la URL interna del container (ej. http://0.0.0.0:3000) en lugar de la pública.
+ */
+export function publicUrl(req: Request, pathname: string): URL {
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  const proto = req.headers.get('x-forwarded-proto') || (host?.startsWith('localhost') ? 'http' : 'https');
+  if (host) return new URL(pathname, `${proto}://${host}`);
+  return new URL(pathname, req.url);
+}

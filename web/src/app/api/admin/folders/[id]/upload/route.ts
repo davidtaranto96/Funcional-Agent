@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { requireAuth } from '@/lib/session';
 import * as db from '@/lib/db';
+import { publicUrl } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const formData = await req.formData();
   const files = formData.getAll('files') as File[];
   if (files.length === 0) {
-    return NextResponse.redirect(new URL(`/admin/documentos/${id}`, req.url), { status: 303 });
+    return NextResponse.redirect(publicUrl(req, `/admin/documentos/${id}`), { status: 303 });
   }
 
   let saved = 0;
@@ -54,5 +55,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     saved++;
   }
 
-  return NextResponse.redirect(new URL(`/admin/documentos/${id}?uploaded=${saved}`, req.url), { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/admin/documentos/${id}?uploaded=${saved}`), { status: 303 });
 }

@@ -160,8 +160,59 @@ html, body {
   to { background-position: 200% 0; }
 }
 
+@keyframes pd-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pd-slide-in-right {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pd-count-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .pd-page-in {
   animation: pd-page-in 0.3s ease-out;
+}
+
+.pd-fade-in {
+  animation: pd-fade-in 0.18s ease-out;
+}
+
+.pd-modal-in {
+  animation: pd-modal-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pd-drawer-in {
+  animation: pd-slide-in-right 0.24s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.pd-shimmer {
+  background: linear-gradient(90deg, var(--bg-inset) 25%, var(--border) 50%, var(--bg-inset) 75%);
+  background-size: 800px 100%;
+  animation: pd-shimmer 1.6s infinite;
+  border-radius: var(--r-sm);
+}
+
+/* kbd inline tokens */
+kbd.pd-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {

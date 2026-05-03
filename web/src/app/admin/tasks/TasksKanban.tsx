@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { User, Calendar } from 'lucide-react';
 import { TASK_STATUS, type TaskStatusKey } from '@/lib/constants';
 import { showToast } from '@/components/ui/toast';
 
@@ -18,7 +19,13 @@ export interface TaskWithMeta {
   taskIdx: number;
 }
 
-interface Props { tasks: TaskWithMeta[]; }
+const PRIORITY_COLOR: Record<string, string> = {
+  high:   'oklch(0.62 0.22 27)',
+  medium: 'oklch(0.74 0.16 75)',
+  low:    'oklch(0.5 0.05 250)',
+};
+
+interface Props { tasks: TaskWithMeta[] }
 
 export function TasksKanban({ tasks }: Props) {
   const router = useRouter();
@@ -43,7 +50,8 @@ export function TasksKanban({ tasks }: Props) {
             if (!projectId || !newStatus) return;
             try {
               const r = await fetch('/api/admin/task-move', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ projectId, taskIdx, newStatus }),
               });
               const d = await r.json();
@@ -75,40 +83,66 @@ export function TasksKanban({ tasks }: Props) {
         const items = byStatus.get(status.key) || [];
         return (
           <div key={status.key}>
-            <div className="flex items-center justify-between px-2 mb-2">
+            <div className="flex items-center justify-between px-1 mb-2">
               <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: status.color, boxShadow: `0 0 6px ${status.color}` }} />
-                <span className="text-xs font-semibold text-foreground">{status.label}</span>
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: status.color, boxShadow: `0 0 8px ${status.color}` }}
+                />
+                <span className="text-[12px] font-semibold text-foreground">{status.label}</span>
               </div>
-              <span className="text-[10px] text-muted-foreground mono">{items.length}</span>
+              <span
+                className="mono text-[10px] font-semibold text-muted-foreground rounded-full px-1.5 py-0.5"
+                style={{ background: 'color-mix(in oklch, var(--bg-inset) 80%, transparent)' }}
+              >
+                {items.length}
+              </span>
             </div>
-            <div data-status={status.key} ref={el => { if (el) cols.current.set(status.key, el); }}
-              className="bg-[var(--bg-inset)] rounded-lg p-2 min-h-[400px] space-y-2">
+            <div
+              data-status={status.key}
+              ref={el => { if (el) cols.current.set(status.key, el); }}
+              className="bg-[var(--bg-inset)] rounded-[var(--r-md)] p-2 min-h-[400px] space-y-2 border border-dashed border-transparent hover:border-[var(--border-strong)] transition-colors"
+            >
               {items.map(t => (
-                <Link key={`${t.projectId}-${t.taskIdx}`}
+                <Link
+                  key={`${t.projectId}-${t.taskIdx}`}
                   href={`/admin/projects/${t.projectId}`}
                   data-project-id={t.projectId}
                   data-task-idx={t.taskIdx}
-                  className="block bg-card rounded-lg p-3 cursor-grab active:cursor-grabbing border border-[var(--border)] hover:border-[var(--border-strong)]">
+                  className="block bg-card rounded-[var(--r-md)] p-3 cursor-grab active:cursor-grabbing border border-[var(--border)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)] hover:border-[var(--border-strong)]"
+                >
                   <div className="flex items-start gap-2">
                     {t.priority && (
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${
-                        t.priority === 'high' ? 'bg-[var(--red)]' :
-                        t.priority === 'medium' ? 'bg-[var(--amber)]' : 'bg-[var(--text-3)]'
-                      }`} />
+                      <span
+                        className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5"
+                        style={{ background: PRIORITY_COLOR[t.priority] }}
+                      />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-foreground">{t.text}</div>
-                      <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground">
+                      <div className={`text-[12px] leading-snug ${t.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                        {t.text}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                         <span className="truncate">{t.projectTitle}</span>
-                        {t.assignee && <span>· {t.assignee}</span>}
-                        {t.due_date && <span>· {new Date(t.due_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}</span>}
+                        {t.assignee && (
+                          <span className="inline-flex items-center gap-0.5 capitalize">
+                            <User className="w-2.5 h-2.5" /> {t.assignee}
+                          </span>
+                        )}
+                        {t.due_date && (
+                          <span className="mono inline-flex items-center gap-0.5">
+                            <Calendar className="w-2.5 h-2.5" />
+                            {t.due_date.split('-').reverse().slice(0, 2).join('/')}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
                 </Link>
               ))}
-              {items.length === 0 && <div className="text-center text-[10px] text-muted-foreground py-8">Arrastrá tareas acá</div>}
+              {items.length === 0 && (
+                <div className="text-center text-[10px] text-muted-foreground py-8 px-2">Arrastrá tareas acá</div>
+              )}
             </div>
           </div>
         );

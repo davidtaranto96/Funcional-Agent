@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, FolderKanban, ListTodo, Activity, Wallet,
-  Calculator, Folder, FileText, History, LogOut, ChevronLeft,
+  Calculator, Folder, History, LogOut, ChevronLeft, Search,
+  ContactRound, Receipt,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -13,20 +14,50 @@ interface NavItem {
   href: string;
   label: string;
   Icon: React.ComponentType<{ className?: string }>;
-  group?: 'work' | 'crm' | 'finance' | 'config';
 }
 
-const NAV: NavItem[] = [
-  { href: '/admin',           label: 'Dashboard',     Icon: LayoutDashboard, group: 'work' },
-  { href: '/admin/control',   label: 'Centro',        Icon: Activity,        group: 'work' },
-  { href: '/admin/clients',   label: 'Pipeline WA',   Icon: Users,           group: 'crm' },
-  { href: '/admin/clientes',  label: 'Clientes',      Icon: Users,           group: 'crm' },
-  { href: '/admin/projects',  label: 'Proyectos',     Icon: FolderKanban,    group: 'crm' },
-  { href: '/admin/tasks',     label: 'Tareas',        Icon: ListTodo,        group: 'crm' },
-  { href: '/admin/finanzas',  label: 'Finanzas',      Icon: Wallet,          group: 'finance' },
-  { href: '/admin/presupuesto', label: 'Presupuesto', Icon: Calculator,      group: 'finance' },
-  { href: '/admin/documentos', label: 'Documentos',   Icon: Folder,          group: 'finance' },
-  { href: '/admin/changelog', label: 'Changelog',     Icon: History,         group: 'config' },
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+const NAV: NavSection[] = [
+  {
+    label: 'General',
+    items: [
+      { href: '/admin', label: 'Dashboard', Icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: 'Clientes',
+    items: [
+      { href: '/admin/clients',  label: 'Pipeline',          Icon: Users },
+      { href: '/admin/control',  label: 'Centro de Control', Icon: Activity },
+      { href: '/admin/clientes', label: 'Clientes',          Icon: ContactRound },
+    ],
+  },
+  {
+    label: 'Trabajo',
+    items: [
+      { href: '/admin/projects', label: 'Proyectos', Icon: FolderKanban },
+      { href: '/admin/tasks',    label: 'Tareas',    Icon: ListTodo },
+    ],
+  },
+  {
+    label: 'Finanzas',
+    items: [
+      { href: '/admin/finanzas',     label: 'Finanzas',     Icon: Wallet },
+      { href: '/admin/presupuesto',  label: 'Presupuestos', Icon: Calculator },
+      { href: '/admin/facturas',     label: 'Facturas',     Icon: Receipt },
+    ],
+  },
+  {
+    label: 'Recursos',
+    items: [
+      { href: '/admin/documentos', label: 'Documentos',     Icon: Folder },
+      { href: '/admin/changelog',  label: 'Actualizaciones', Icon: History },
+    ],
+  },
 ];
 
 export function Sidebar({ user }: { user?: { name?: string; email?: string; photo?: string } }) {
@@ -83,89 +114,135 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
         className={cn(
           'fixed md:sticky top-0 left-0 z-50 h-[100dvh] flex flex-col',
           'bg-card border-r border-[var(--border)]',
-          'transition-transform md:transition-none',
+          'transition-[width,transform] duration-200 ease-out',
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-          collapsed ? 'md:w-[72px]' : 'md:w-[240px]',
+          collapsed ? 'md:w-[72px]' : 'md:w-[232px]',
           'w-[260px]',
         )}
       >
         {/* Brand */}
-        <div className="flex items-center justify-between h-14 px-4 border-b border-[var(--border)] flex-shrink-0">
-          <Link href="/admin" className="flex items-center gap-2 text-foreground font-semibold tracking-tight">
-            <span className="w-7 h-7 rounded-md bg-primary text-primary-foreground grid place-items-center text-xs font-bold">DT</span>
-            {!collapsed && <span className="text-sm">DT Systems</span>}
-          </Link>
+        <div className="flex items-center justify-between gap-2 px-3.5 py-3 border-b border-[var(--border)] flex-shrink-0">
           <button
             type="button"
-            aria-label="Colapsar sidebar"
             onClick={toggleCollapse}
-            className="hidden md:grid place-items-center w-7 h-7 rounded-md hover:bg-secondary text-muted-foreground"
+            className="flex items-center gap-2.5 group min-w-0"
+            title={collapsed ? 'Expandir' : 'Colapsar'}
           >
-            <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
+            <span
+              className="grid place-items-center w-[30px] h-[30px] rounded-[9px] bg-primary text-white text-[10px] font-extrabold flex-shrink-0"
+              style={{ boxShadow: '0 4px 12px var(--accent-glow)' }}
+            >
+              DT
+            </span>
+            {!collapsed && (
+              <span className="min-w-0 text-left">
+                <span className="block text-[13px] font-bold text-foreground tracking-tight truncate">DT Systems</span>
+                <span className="block mono text-[9.5px] text-muted-foreground truncate mt-0.5">CRM &amp; Proyectos · v4.0.0</span>
+              </span>
+            )}
           </button>
+          {!collapsed && (
+            <button
+              type="button"
+              aria-label="Colapsar sidebar"
+              onClick={toggleCollapse}
+              className="hidden md:grid place-items-center w-7 h-7 rounded-md hover:bg-[var(--bg-inset)] text-muted-foreground flex-shrink-0"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
+        {/* Search trigger */}
+        {!collapsed && (
+          <div className="px-3 pt-2.5 pb-1">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('pd-cmdk-open'))}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[var(--border)] text-left hover:border-[var(--border-strong)] transition-colors"
+            >
+              <Search className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs text-muted-foreground flex-1 truncate">Buscar…</span>
+              <kbd className="mono text-[9px] text-muted-foreground bg-[rgba(255,255,255,0.03)] border border-[var(--border)] px-1.5 py-px rounded">⌘K</kbd>
+            </button>
+          </div>
+        )}
+
         {/* Nav */}
-        <nav aria-label="Secciones del panel" className="flex-1 overflow-y-auto py-3 px-2">
-          <ul className="space-y-0.5">
-            {NAV.map(({ href, label, Icon }) => {
-              const active = isActive(href);
-              return (
-                <li key={href}>
-                  <Link
-                    href={href}
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => setMobileOpen(false)}
-                    data-label={label}
-                    className={cn(
-                      'group relative flex items-center gap-3 rounded-md px-3 h-9 text-sm transition-colors',
-                      active
-                        ? 'text-foreground bg-[var(--accent-dim)]'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                    )}
-                  >
-                    {active && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r bg-primary" />
-                    )}
-                    <Icon className="w-4 h-4 flex-shrink-0" />
-                    {!collapsed && <span className="truncate">{label}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        <nav aria-label="Secciones del panel" className="flex-1 overflow-y-auto py-2 px-2.5">
+          {NAV.map((section) => (
+            <div key={section.label} className="mb-3 last:mb-0">
+              {!collapsed && (
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground px-2 mb-1">
+                  {section.label}
+                </div>
+              )}
+              <ul className="space-y-0.5">
+                {section.items.map(({ href, label, Icon }) => {
+                  const active = isActive(href);
+                  return (
+                    <li key={href}>
+                      <Link
+                        href={href}
+                        aria-current={active ? 'page' : undefined}
+                        onClick={() => setMobileOpen(false)}
+                        title={collapsed ? label : undefined}
+                        className={cn(
+                          'group relative flex items-center rounded-lg text-[13px] font-medium transition-colors',
+                          collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2 px-2.5 h-8',
+                          active
+                            ? 'text-[var(--accent)] bg-[var(--accent-dim)]'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)]',
+                        )}
+                      >
+                        {active && !collapsed && (
+                          <span className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-[3px] h-[18px] rounded-r bg-[var(--accent)]" />
+                        )}
+                        <Icon className="w-[15px] h-[15px] flex-shrink-0" />
+                        {!collapsed && <span className="truncate">{label}</span>}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
 
         {/* User + logout */}
-        <div className="border-t border-[var(--border)] p-3 flex-shrink-0">
-          <div className={cn('flex items-center gap-2 mb-2', collapsed && 'justify-center')}>
+        <div className="border-t border-[var(--border)] p-2.5 flex-shrink-0">
+          <div className={cn('flex items-center gap-2 px-2 py-1.5 rounded-md', collapsed && 'justify-center')}>
             {user?.photo ? (
               <img
                 src={user.photo}
                 alt=""
-                className="w-7 h-7 rounded-full object-cover"
+                className="w-[26px] h-[26px] rounded-full object-cover flex-shrink-0"
               />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground grid place-items-center text-xs font-bold">{initial}</div>
+              <div
+                className="w-[26px] h-[26px] rounded-full bg-primary text-white grid place-items-center text-[10px] font-bold flex-shrink-0"
+              >
+                {initial}
+              </div>
             )}
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-medium text-foreground truncate">{user?.name || 'David'}</div>
-                {user?.email && <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>}
+                <div className="text-[12px] font-semibold text-foreground truncate leading-tight">{user?.name || 'David Taranto'}</div>
+                <div className="text-[10px] text-muted-foreground truncate mt-0.5">Admin · Salta</div>
               </div>
             )}
           </div>
-          <form method="POST" action="/api/logout">
+          <form method="POST" action="/api/logout" className="mt-1">
             <button
               type="submit"
               className={cn(
-                'w-full flex items-center gap-2 rounded-md px-3 h-8 text-xs',
-                'text-[var(--red)] hover:bg-[oklch(0.62_0.22_27_/_0.10)] transition-colors',
+                'w-full flex items-center gap-2 rounded-md px-2.5 h-8 text-xs',
+                'text-muted-foreground hover:text-[oklch(70%_0.18_25)] hover:bg-[oklch(0.62_0.22_27_/_0.10)] transition-colors',
                 collapsed && 'justify-center',
               )}
               title="Cerrar sesión"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-3.5 h-3.5 flex-shrink-0" />
               {!collapsed && <span>Cerrar sesión</span>}
             </button>
           </form>

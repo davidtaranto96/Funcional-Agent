@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { requireAuth } from '@/lib/session';
+import { publicUrl } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -74,5 +75,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
   }
 
-  return NextResponse.redirect(new URL(`/admin/documentos/${id}`, req.url), { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/admin/documentos/${id}`), { status: 303 });
 }

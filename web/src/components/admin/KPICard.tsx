@@ -39,38 +39,68 @@ export function KPICard({ label, value, sub, href, color = 'var(--accent)', pct 
       const t = Math.min(1, elapsed / dur);
       const eased = 1 - Math.pow(1 - t, 3);
       setDisplay(Math.round(value * eased));
-      setBarW(Math.round(pct * eased));
       if (t < 1) frame = requestAnimationFrame(tick);
     }
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    // bar: pequeño retraso, anim larga (1.2s) via CSS transition
+    const barTimer = setTimeout(() => setBarW(pct), 200 + delay);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(barTimer);
+    };
   }, [value, pct, delay]);
 
   const baseClass = cn(
-    'relative block bg-card rounded-xl border border-[var(--border)] p-4 overflow-hidden',
-    'shadow-[var(--shadow-soft)] transition-transform',
-    href && 'hover:-translate-y-0.5 hover:shadow-[var(--shadow-elev)]',
+    'relative block bg-card rounded-[var(--r-lg)] border border-[var(--border)] overflow-hidden',
+    'shadow-[var(--shadow-soft)] transition-[transform,box-shadow] duration-200',
+    'px-[18px] pt-[18px] pb-[15px]',
+    href && 'hover:-translate-y-0.5 hover:shadow-[var(--shadow-elev)] cursor-pointer',
   );
 
   const inner = (
     <>
+      {/* Glow radial sólo en esquina sup-der, sutil */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-50"
-        style={{ background: `radial-gradient(circle at 100% 0%, ${color}, transparent 70%)` }}
+        className="pointer-events-none absolute top-0 right-0 w-[70px] h-[70px] rounded-full"
+        style={{
+          background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${color} 18%, transparent), transparent 70%)`,
+        }}
         aria-hidden
       />
-      <div className="relative flex items-start justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">{label}</span>
-        {alert && <span className="w-1.5 h-1.5 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }} />}
+      {/* Header: label + dot indicator */}
+      <div className="relative flex items-center justify-between mb-2.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {label}
+        </span>
+        <div
+          className="w-[22px] h-[22px] rounded-md grid place-items-center"
+          style={{ background: `color-mix(in oklch, ${color} 13%, transparent)` }}
+        >
+          <span
+            className="block w-1.5 h-1.5 rounded-full"
+            style={{
+              background: color,
+              boxShadow: alert ? `0 0 8px ${color}` : 'none',
+            }}
+          />
+        </div>
       </div>
-      <div className="relative mono text-3xl md:text-4xl font-semibold leading-none" style={{ color }}>
+      {/* Number — mono, white, big */}
+      <div
+        className="relative mono text-[32px] font-bold leading-none text-foreground"
+        style={{ letterSpacing: '-1.5px' }}
+      >
         {display}
       </div>
-      <div className="relative mt-1.5 text-xs text-muted-foreground">{sub}</div>
-      <div className="relative mt-3 h-1 rounded-full bg-[var(--bg-inset)] overflow-hidden">
+      <div className="relative mt-[7px] text-[11px] text-muted-foreground">{sub}</div>
+      <div className="relative mt-3 h-0.5 rounded-sm bg-[var(--bg-inset)] overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${barW}%`, background: color }}
+          className="h-full rounded-sm"
+          style={{
+            width: `${barW}%`,
+            background: color,
+            transition: 'width 1.2s cubic-bezier(.25,.46,.45,.94)',
+          }}
         />
       </div>
     </>

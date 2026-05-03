@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as db from '@/lib/db';
 import { requireAuth } from '@/lib/session';
+import { publicUrl } from '@/lib/utils';
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ phone: string }> }) {
   await requireAuth();
@@ -12,5 +13,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ phone: str
   await db.setDemoNotes(decoded, notes);
   await db.appendTimelineEvent(decoded, { event: 'changes_requested', note: notes });
 
-  return NextResponse.redirect(new URL(`/admin/client/${phone}`, req.url), { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/admin/client/${phone}`), { status: 303 });
 }

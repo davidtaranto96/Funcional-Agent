@@ -1,10 +1,9 @@
 import * as db from '@/lib/db';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Plus, LayoutGrid, List } from 'lucide-react';
+import { Plus, LayoutGrid, List, FolderKanban } from 'lucide-react';
 import { ProjectsKanban } from './ProjectsKanban';
-import { ProjectStatusBadge } from '@/components/admin/ProjectStatusBadge';
-import { timeAgo } from '@/lib/utils';
+import { ProjectsList } from './ProjectsList';
+import { formatARS } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,73 +14,72 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
 
   const active = projects.filter(p => ['planning', 'in_progress', 'waiting_client', 'waiting_payment', 'review'].includes(p.status));
   const delivered = projects.filter(p => p.status === 'delivered');
+  const totalBudget = projects
+    .map(p => Number(String(p.budget || '').replace(/[^\d.-]/g, '')))
+    .filter(n => Number.isFinite(n))
+    .reduce((s, n) => s + n, 0);
 
   return (
-    <div className="max-w-[1600px] mx-auto">
-      <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
+    <div className="max-w-[1400px] mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div>
-          <h1 className="text-[length:var(--h1-size)] font-semibold tracking-tight">Proyectos</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{projects.length} total · {active.length} activos · {delivered.length} entregados</p>
+          <h1 className="text-[22px] font-bold tracking-tight text-foreground">Proyectos</h1>
+          <p className="text-[13px] text-muted-foreground mt-1">
+            <span className="mono">{projects.length}</span> total · <span className="mono text-[var(--accent-strong)]">{active.length}</span> activos · <span className="mono text-[var(--green)]">{delivered.length}</span> entregados
+            {totalBudget > 0 && <> · <span className="mono">{formatARS(totalBudget)}</span> en cartera</>}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[var(--bg-inset)] rounded-md p-0.5 gap-0.5">
-            <Link href="/admin/projects?view=list"
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs ${view === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}>
-              <List className="w-3.5 h-3.5" /> Lista
+          <div className="flex items-center bg-[var(--bg-card-2)] border border-[var(--border)] rounded-md p-0.5">
+            <Link
+              href="/admin/projects?view=kanban"
+              className={`flex items-center gap-1.5 h-7 px-2.5 rounded text-[11px] font-medium transition-colors ${
+                view === 'kanban' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <LayoutGrid className="w-3 h-3" /> Kanban
             </Link>
-            <Link href="/admin/projects?view=kanban"
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs ${view === 'kanban' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}>
-              <LayoutGrid className="w-3.5 h-3.5" /> Kanban
+            <Link
+              href="/admin/projects?view=list"
+              className={`flex items-center gap-1.5 h-7 px-2.5 rounded text-[11px] font-medium transition-colors ${
+                view === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <List className="w-3 h-3" /> Lista
             </Link>
           </div>
-          <Button asChild size="sm"><Link href="/admin/projects/nuevo"><Plus className="w-4 h-4" /> Nuevo</Link></Button>
+          <Link
+            href="/admin/projects/nuevo"
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
+            style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
+          >
+            <Plus className="w-3.5 h-3.5" /> Nuevo
+          </Link>
         </div>
       </div>
 
       {projects.length === 0 ? (
-        <div className="bg-card border border-dashed border-[var(--border-strong)] rounded-xl p-12 text-center">
-          <p className="text-sm text-muted-foreground mb-4">Sin proyectos todavía.</p>
-          <Button asChild size="sm"><Link href="/admin/projects/nuevo">Crear el primero</Link></Button>
+        <div className="bg-card border border-dashed border-[var(--border-strong)] rounded-[var(--r-lg)] p-12 text-center">
+          <div className="inline-grid place-items-center w-12 h-12 rounded-xl bg-[var(--bg-inset)] mb-4">
+            <FolderKanban className="w-6 h-6 text-muted-foreground" />
+          </div>
+          <h2 className="text-[15px] font-semibold text-foreground mb-1">Sin proyectos todavía</h2>
+          <p className="text-[12px] text-muted-foreground max-w-md mx-auto mb-4">
+            Convertí un lead del pipeline en proyecto, o creá uno desde cero.
+          </p>
+          <Link
+            href="/admin/projects/nuevo"
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
+            style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
+          >
+            <Plus className="w-3.5 h-3.5" /> Crear el primero
+          </Link>
         </div>
       ) : view === 'kanban' ? (
         <ProjectsKanban projects={projects} />
       ) : (
-        <div className="bg-card border border-[var(--border)] rounded-xl shadow-[var(--shadow-soft)] overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-[var(--border)]">
-                <th className="text-left p-3 font-medium">Proyecto</th>
-                <th className="text-left p-3 font-medium hidden sm:table-cell">Cliente</th>
-                <th className="text-left p-3 font-medium">Estado</th>
-                <th className="text-left p-3 font-medium hidden md:table-cell">Tareas</th>
-                <th className="text-right p-3 font-medium">Actualizado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.map(p => {
-                const tasks = (p.tasks || []) as { done?: boolean }[];
-                const total = tasks.length;
-                const done = tasks.filter(t => t.done).length;
-                return (
-                  <tr key={p.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-inset)]">
-                    <td className="p-3">
-                      <Link href={`/admin/projects/${p.id}`} className="text-sm font-medium text-foreground hover:underline">
-                        {p.title || 'Sin título'}
-                      </Link>
-                      {p.type && <div className="text-[10px] text-muted-foreground">{p.type}</div>}
-                    </td>
-                    <td className="p-3 hidden sm:table-cell text-xs text-muted-foreground">{p.client_name || '—'}</td>
-                    <td className="p-3"><ProjectStatusBadge status={p.status} /></td>
-                    <td className="p-3 hidden md:table-cell text-xs text-muted-foreground">
-                      {total > 0 ? <span className="mono">{done}/{total}</span> : '—'}
-                    </td>
-                    <td className="p-3 text-xs text-muted-foreground text-right">{timeAgo(p.updated_at)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ProjectsList projects={projects} />
       )}
     </div>
   );

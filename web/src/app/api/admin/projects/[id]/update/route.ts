@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as db from '@/lib/db';
 import { requireAuth } from '@/lib/session';
+import { publicUrl } from '@/lib/utils';
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   await requireAuth();
@@ -22,5 +23,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     budget_status: String(formData.get('budget_status') || 'not_quoted'),
     notes: String(formData.get('notes') || ''),
   });
-  return NextResponse.redirect(new URL(`/admin/projects/${id}`, req.url), { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/admin/projects/${id}`), { status: 303 });
 }

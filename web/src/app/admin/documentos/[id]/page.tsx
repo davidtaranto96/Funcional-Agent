@@ -6,6 +6,7 @@ import * as db from '@/lib/db';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Folder, Upload, Trash2, Download, FileText, Image as ImageIcon, FileArchive, Video, Music, File as FileIcon } from 'lucide-react';
+import { ConfirmForm } from '@/components/admin/ConfirmForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,13 +132,21 @@ export default async function FolderDetailPage({ params, searchParams }: {
                   <a href={downloadUrl} download={f.name} className="text-muted-foreground hover:text-foreground p-1 opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Descargar">
                     <Download className="w-3.5 h-3.5" />
                   </a>
-                  <form method="POST" action={`/api/admin/folders/${id}/files/${encodeURIComponent(f.name)}`}
-                    onSubmit={e => { if (!confirm(`¿Borrar "${f.name}"?`)) e.preventDefault(); }}>
+                  <ConfirmForm
+                    method="POST"
+                    action={`/api/admin/folders/${id}/files/${encodeURIComponent(f.name)}`}
+                    confirm={{
+                      title: `¿Borrar "${f.name}"?`,
+                      description: 'Esta acción no se puede deshacer.',
+                      confirmLabel: 'Sí, borrar',
+                      variant: 'danger',
+                    }}
+                  >
                     <input type="hidden" name="action" value="delete" />
                     <button type="submit" className="text-muted-foreground hover:text-[var(--red)] p-1 opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Borrar">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                  </form>
+                  </ConfirmForm>
                 </li>
               );
             })}

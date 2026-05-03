@@ -1,64 +1,68 @@
 import * as db from '@/lib/db';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Mail, Phone, Building2 } from 'lucide-react';
+import { Plus, ContactRound } from 'lucide-react';
+import { ClientesView } from './ClientesView';
 
 export const dynamic = 'force-dynamic';
 
-const CATEGORIES = ['cliente', 'lead', 'proveedor', 'colaborador', 'otro'] as const;
-
 export default async function ClientesPage() {
-  const clientes = await db.listClientRecords();
+  const [clientes, projects] = await Promise.all([
+    db.listClientRecords(),
+    db.listProjects(),
+  ]);
+
+  // Map de cuántos proyectos tiene cada cliente
+  const projectsByClient = new Map<string, number>();
+  for (const p of projects) {
+    if (p.client_id) projectsByClient.set(p.client_id, (projectsByClient.get(p.client_id) || 0) + 1);
+  }
+  const clientesWithCount = clientes.map(c => ({ ...c, _projects: projectsByClient.get(c.id) || 0 }));
 
   return (
-    <div className="max-w-[1200px] mx-auto">
-      <div className="flex items-end justify-between mb-6">
+    <div className="max-w-[1280px] mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div>
-          <h1 className="text-[length:var(--h1-size)] font-semibold tracking-tight">Clientes</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{clientes.length} registros · CRM general (separado del pipeline de WhatsApp)</p>
+          <h1 className="text-[22px] font-bold tracking-tight text-foreground">Clientes</h1>
+          <p className="text-[13px] text-muted-foreground mt-1">
+            {clientes.length} registros · base de contactos del CRM
+          </p>
         </div>
-        <Button asChild size="sm">
-          <Link href="/admin/clientes/nuevo"><Plus className="w-4 h-4" /> Nuevo</Link>
-        </Button>
+        <Link
+          href="/admin/clientes/nuevo"
+          className="flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
+          style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
+        >
+          <Plus className="w-3.5 h-3.5" /> Nuevo cliente
+        </Link>
       </div>
 
-      {clientes.length === 0 ? (
-        <div className="bg-card border border-dashed border-[var(--border-strong)] rounded-xl p-12 text-center">
-          <p className="text-sm text-muted-foreground mb-4">Sin clientes en el CRM todavía.</p>
-          <Button asChild size="sm">
-            <Link href="/admin/clientes/nuevo">Agregar el primero</Link>
-          </Button>
-        </div>
+      {clientesWithCount.length === 0 ? (
+        <EmptyState />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {clientes.map(c => (
-            <Link
-              key={c.id}
-              href={`/admin/clientes/${c.id}`}
-              className="bg-card border border-[var(--border)] rounded-xl p-4 shadow-[var(--shadow-soft)] hover:border-[var(--border-strong)] transition-colors"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="w-9 h-9 rounded-full grid place-items-center text-xs font-semibold flex-shrink-0" style={{ background: 'var(--bg-card-2)', color: 'var(--text-1)' }}>
-                    {(c.name || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold truncate">{c.name || 'Sin nombre'}</div>
-                    {c.company && <div className="text-[10px] text-muted-foreground truncate">{c.company}</div>}
-                  </div>
-                </div>
-                <Badge variant="outline" className="text-[10px] flex-shrink-0">{c.category}</Badge>
-              </div>
-              <div className="space-y-1 text-[10px] text-muted-foreground">
-                {c.phone && <div className="flex items-center gap-1.5 truncate"><Phone className="w-3 h-3" /> {c.phone}</div>}
-                {c.email && <div className="flex items-center gap-1.5 truncate"><Mail className="w-3 h-3" /> {c.email}</div>}
-                {c.company && <div className="flex items-center gap-1.5 truncate"><Building2 className="w-3 h-3" /> {c.company}</div>}
-              </div>
-            </Link>
-          ))}
-        </div>
+        <ClientesView clientes={clientesWithCount} />
       )}
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="bg-card border border-dashed border-[var(--border-strong)] rounded-[var(--r-lg)] p-12 text-center">
+      <div className="inline-grid place-items-center w-12 h-12 rounded-xl bg-[var(--bg-inset)] mb-4">
+        <ContactRound className="w-6 h-6 text-muted-foreground" />
+      </div>
+      <h2 className="text-[15px] font-semibold text-foreground mb-1">Sin clientes todavía</h2>
+      <p className="text-[12px] text-muted-foreground max-w-md mx-auto mb-4">
+        Agregá tu primer contacto para empezar a llevar el CRM general (separado del pipeline de WhatsApp).
+      </p>
+      <Link
+        href="/admin/clientes/nuevo"
+        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
+        style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
+      >
+        <Plus className="w-3.5 h-3.5" /> Agregar el primero
+      </Link>
     </div>
   );
 }

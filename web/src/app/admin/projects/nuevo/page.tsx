@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { ArrowLeft, FolderKanban } from 'lucide-react';
 import { PROJECT_STATUS } from '@/lib/constants';
 import * as db from '@/lib/db';
+import { Field, inputCls, textareaCls, selectCls, PrimaryButton } from '@/components/admin/FormPrimitives';
 
 const CATEGORIES = ['cliente', 'personal', 'ventas', 'desarrollo', 'diseño', 'otro'];
 
@@ -13,86 +12,101 @@ export default async function NewProjectPage() {
   const clientes = await db.listClientRecords();
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Link href="/admin/projects" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3">
-        ← Volver a proyectos
+    <div className="max-w-[720px] mx-auto">
+      <Link
+        href="/admin/projects"
+        className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground mb-3"
+      >
+        <ArrowLeft className="w-3 h-3" /> Volver a proyectos
       </Link>
-      <h1 className="text-[length:var(--h1-size)] font-semibold tracking-tight mb-6">Nuevo proyecto</h1>
 
-      <form method="POST" action="/api/admin/projects/create" className="bg-card border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-[var(--shadow-soft)]">
-        <div className="space-y-1.5">
-          <Label htmlFor="title">Título</Label>
-          <Input id="title" name="title" required autoFocus />
+      <div className="flex items-start gap-3.5 mb-5">
+        <div
+          className="grid place-items-center w-10 h-10 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] flex-shrink-0"
+          style={{ boxShadow: '0 4px 14px var(--accent-glow)' }}
+        >
+          <FolderKanban className="w-5 h-5" />
         </div>
+        <div>
+          <h1 className="text-[22px] font-bold tracking-tight text-foreground">Nuevo proyecto</h1>
+          <p className="text-[13px] text-muted-foreground mt-1">Definí los datos básicos · podés agregar tareas después</p>
+        </div>
+      </div>
+
+      <form
+        method="POST"
+        action="/api/admin/projects/create"
+        className="bg-card border border-[var(--border)] rounded-[var(--r-lg)] p-5 space-y-4 shadow-[var(--shadow-soft)]"
+      >
+        <Field label="Título" required>
+          <input name="title" required autoFocus className={inputCls} placeholder="Ej. App de gestión clínica" />
+        </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="type">Tipo</Label>
-            <Input id="type" name="type" placeholder="ej: Landing, App móvil" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="status">Estado</Label>
-            <select id="status" name="status" defaultValue="planning"
-              className="flex h-10 w-full rounded-md border border-[var(--border-strong)] bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Field label="Tipo">
+            <input name="type" className={inputCls} placeholder="Web, app, landing…" />
+          </Field>
+          <Field label="Estado">
+            <select name="status" defaultValue="planning" className={selectCls}>
               {PROJECT_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
-          </div>
+          </Field>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="category">Categoría</Label>
-            <select id="category" name="category" defaultValue="cliente"
-              className="flex h-10 w-full rounded-md border border-[var(--border-strong)] bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          <Field label="Categoría">
+            <select name="category" defaultValue="cliente" className={selectCls}>
+              {CATEGORIES.map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
             </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="deadline">Deadline</Label>
-            <Input id="deadline" name="deadline" type="date" />
-          </div>
+          </Field>
+          <Field label="Deadline">
+            <input name="deadline" type="date" className={inputCls} />
+          </Field>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="client_id">Cliente vinculado</Label>
-          <select id="client_id" name="client_id"
-            className="flex h-10 w-full rounded-md border border-[var(--border-strong)] bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Field label="Cliente vinculado" hint="Si no aparece, agregá el cliente desde Clientes y volvé acá">
+          <select name="client_id" defaultValue="" className={selectCls}>
             <option value="">— Ninguno —</option>
-            {clientes.map(c => <option key={c.id} value={c.id}>{c.name} {c.company ? `(${c.company})` : ''}</option>)}
+            {clientes.map(c => (
+              <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ''}</option>
+            ))}
           </select>
-        </div>
+        </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="client_name">Cliente (texto libre)</Label>
-            <Input id="client_name" name="client_name" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="budget">Presupuesto</Label>
-            <Input id="budget" name="budget" placeholder="ej: 200000" />
-          </div>
+          <Field label="Cliente (texto libre)" hint="Si no querés vincular un cliente del CRM">
+            <input name="client_name" className={inputCls} />
+          </Field>
+          <Field label="Presupuesto (ARS)">
+            <input name="budget" className={inputCls} placeholder="$ 0" />
+          </Field>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="description">Descripción</Label>
-          <textarea id="description" name="description" rows={3}
-            className="flex w-full rounded-md border border-[var(--border-strong)] bg-input px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-        </div>
+        <Field label="Descripción">
+          <textarea name="description" rows={3} className={textareaCls} />
+        </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="notes">Notas internas</Label>
-          <textarea id="notes" name="notes" rows={3}
-            className="flex w-full rounded-md border border-[var(--border-strong)] bg-input px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-        </div>
+        <Field label="Notas internas">
+          <textarea name="notes" rows={3} className={textareaCls} />
+        </Field>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="is_personal" />
+        <label className="flex items-center gap-2 text-[12px] text-foreground cursor-pointer pt-1">
+          <input
+            type="checkbox"
+            name="is_personal"
+            className="w-4 h-4 rounded border border-[var(--border-strong)] bg-[var(--bg-input)] text-[var(--accent)] cursor-pointer"
+          />
           <span>Proyecto personal (no de cliente)</span>
         </label>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button asChild variant="outline" size="sm"><Link href="/admin/projects">Cancelar</Link></Button>
-          <Button type="submit" size="sm">Crear</Button>
+        <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)] mt-2">
+          <Link
+            href="/admin/projects"
+            className="inline-flex items-center justify-center h-9 px-3.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Cancelar
+          </Link>
+          <PrimaryButton type="submit">Crear proyecto</PrimaryButton>
         </div>
       </form>
     </div>

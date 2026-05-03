@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as db from '@/lib/db';
 import { requireAuth } from '@/lib/session';
 import type { Task } from '@/lib/constants';
+import { publicUrl } from '@/lib/utils';
 
 // POST: agrega o updatea tasks (form-based redirect, JSON-based for live updates)
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -41,5 +42,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     tasks.push({ text, done: false, status: 'todo', priority, assignee });
     await db.updateProject(id, { ...project, tasks });
   }
-  return NextResponse.redirect(new URL(`/admin/projects/${id}`, req.url), { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/admin/projects/${id}`), { status: 303 });
 }

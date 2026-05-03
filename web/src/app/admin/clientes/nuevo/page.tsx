@@ -1,54 +1,74 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { ArrowLeft, ContactRound } from 'lucide-react';
+import { Field, inputCls, textareaCls, selectCls, PrimaryButton, SecondaryButton } from '@/components/admin/FormPrimitives';
 
 const CATEGORIES = ['cliente', 'lead', 'proveedor', 'colaborador', 'otro'];
 
 export default function NewClientePage() {
   return (
-    <div className="max-w-2xl mx-auto">
-      <Link href="/admin/clientes" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3">
-        ← Volver a clientes
+    <div className="max-w-[640px] mx-auto">
+      <Link
+        href="/admin/clientes"
+        className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground mb-3"
+      >
+        <ArrowLeft className="w-3 h-3" /> Volver a clientes
       </Link>
-      <h1 className="text-[length:var(--h1-size)] font-semibold tracking-tight mb-6">Nuevo cliente</h1>
 
-      <form method="POST" action="/api/admin/clientes/create" className="bg-card border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-[var(--shadow-soft)]">
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Nombre</Label>
-          <Input id="name" name="name" required autoFocus />
+      <div className="flex items-start gap-3.5 mb-5">
+        <div
+          className="grid place-items-center w-10 h-10 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] flex-shrink-0"
+          style={{ boxShadow: '0 4px 14px var(--accent-glow)' }}
+        >
+          <ContactRound className="w-5 h-5" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="phone">Teléfono</Label>
-            <Input id="phone" name="phone" type="tel" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" />
-          </div>
+        <div>
+          <h1 className="text-[22px] font-bold tracking-tight text-foreground">Nuevo cliente</h1>
+          <p className="text-[13px] text-muted-foreground mt-1">Agregar un contacto al CRM general</p>
         </div>
+      </div>
+
+      <form
+        method="POST"
+        action="/api/admin/clientes/create"
+        className="bg-card border border-[var(--border)] rounded-[var(--r-lg)] p-5 space-y-4 shadow-[var(--shadow-soft)]"
+      >
+        <Field label="Nombre" required>
+          <input name="name" required autoFocus className={inputCls} placeholder="Juan García" />
+        </Field>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="company">Empresa</Label>
-            <Input id="company" name="company" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="category">Categoría</Label>
-            <select id="category" name="category" defaultValue="cliente"
-              className="flex h-10 w-full rounded-md border border-[var(--border-strong)] bg-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          <Field label="Teléfono">
+            <input name="phone" type="tel" className={inputCls} placeholder="0387 422-1234" />
+          </Field>
+          <Field label="Email">
+            <input name="email" type="email" className={inputCls} placeholder="juan@empresa.com" />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Empresa">
+            <input name="company" className={inputCls} placeholder="Clínica San Martín" />
+          </Field>
+          <Field label="Categoría">
+            <select name="category" defaultValue="cliente" className={selectCls}>
+              {CATEGORIES.map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
             </select>
-          </div>
+          </Field>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="notes">Notas</Label>
-          <textarea id="notes" name="notes" rows={4}
-            className="flex w-full rounded-md border border-[var(--border-strong)] bg-input px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-        </div>
+
+        <Field label="Notas" hint="Contexto, historial breve, lo que sea útil recordar">
+          <textarea name="notes" rows={4} className={textareaCls} />
+        </Field>
+
         <div className="flex justify-end gap-2 pt-2">
-          <Button asChild variant="outline" size="sm"><Link href="/admin/clientes">Cancelar</Link></Button>
-          <Button type="submit" size="sm">Crear</Button>
+          <Link
+            href="/admin/clientes"
+            className="inline-flex items-center justify-center h-9 px-3.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Cancelar
+          </Link>
+          <SecondaryButton type="reset">Limpiar</SecondaryButton>
+          <PrimaryButton type="submit">Crear cliente</PrimaryButton>
         </div>
       </form>
     </div>

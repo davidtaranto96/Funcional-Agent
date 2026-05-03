@@ -1,0 +1,369 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Folder, Plus, Home, MessageCircle, FolderKanban, Search } from 'lucide-react';
+import { confirmDialog } from '@/components/admin/ConfirmModal';
+
+interface Folder {
+  id: string;
+  name: string;
+  color: string;
+  description?: string;
+  _count: number;
+}
+
+interface ProjectFolder { id: string; name: string; sub: string; color: string }
+interface DemoFolder { id: string; name: string; sub: string; initials: string }
+
+interface Stats {
+  totalFiles: number;
+  totalFolders: number;
+  usedLabel: string;
+  capLabel: string;
+  usedPct: number;
+}
+
+interface Props {
+  folders: Folder[];
+  projectFolders: ProjectFolder[];
+  demoFolders: DemoFolder[];
+  stats: Stats;
+}
+
+export function DocumentosView({ folders, projectFolders, demoFolders, stats }: Props) {
+  const [showNew, setShowNew] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const filteredMy = useMemo(() => {
+    if (!query.trim()) return folders;
+    const q = query.toLowerCase();
+    return folders.filter(f => f.name.toLowerCase().includes(q));
+  }, [folders, query]);
+
+  return (
+    <div className="flex gap-4 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
+      {/* Sidebar interna 220px */}
+      <aside className="hidden md:flex w-[220px] flex-shrink-0 flex-col bg-card border border-[var(--border)] rounded-[var(--r-lg)] shadow-[var(--shadow-soft)] sticky top-5 self-start max-h-[calc(100vh-3rem)]">
+        <div className="px-4 pt-4 pb-2.5 border-b border-[var(--border)]">
+          <Link href="/admin/documentos" className="flex items-center gap-2 text-[12px] font-semibold text-foreground hover:text-[var(--accent-strong)] transition-colors">
+            <Home className="w-3.5 h-3.5" /> Mi Drive
+          </Link>
+        </div>
+
+        <div className="flex-1 overflow-y-auto py-2 px-2">
+          {/* Mis carpetas */}
+          <SidebarGroup label="Mis carpetas">
+            {folders.length === 0 ? (
+              <div className="text-[10px] text-muted-foreground px-2 py-1.5 italic">Sin carpetas</div>
+            ) : (
+              folders.map(f => (
+                <Link
+                  key={f.id}
+                  href={`/admin/documentos/${f.id}`}
+                  className="flex items-center gap-2 px-2 h-7 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)] transition-colors"
+                >
+                  <Folder className="w-3 h-3 flex-shrink-0" style={{ color: f.color }} />
+                  <span className="truncate flex-1">{f.name}</span>
+                  {f._count > 0 && (
+                    <span className="mono text-[10px] opacity-70">{f._count}</span>
+                  )}
+                </Link>
+              ))
+            )}
+          </SidebarGroup>
+
+          {/* Proyectos */}
+          {projectFolders.length > 0 && (
+            <SidebarGroup label="Proyectos">
+              {projectFolders.map(p => (
+                <Link
+                  key={p.id}
+                  href={`/admin/projects/${p.id}`}
+                  className="flex items-center gap-2 px-2 h-7 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)] transition-colors"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
+                  <span className="truncate">{p.name}</span>
+                </Link>
+              ))}
+            </SidebarGroup>
+          )}
+
+          {/* Demos WA */}
+          {demoFolders.length > 0 && (
+            <SidebarGroup label="Demos WA">
+              {demoFolders.map(d => (
+                <Link
+                  key={d.id}
+                  href={`/admin/client/${encodeURIComponent(d.id)}`}
+                  className="flex items-center gap-2 px-2 h-7 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)] transition-colors"
+                >
+                  <span className="grid place-items-center w-4 h-4 rounded text-[8px] font-bold text-white bg-[var(--green)] flex-shrink-0">
+                    {d.initials}
+                  </span>
+                  <span className="truncate">{d.name}</span>
+                </Link>
+              ))}
+            </SidebarGroup>
+          )}
+        </div>
+
+        {/* Storage bar */}
+        <div className="px-3.5 py-3 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between text-[10px] mb-1">
+            <span className="mono uppercase tracking-wider text-muted-foreground font-semibold">Almacenamiento</span>
+            <span className="mono text-muted-foreground">{stats.usedLabel}</span>
+          </div>
+          <div className="h-1 rounded-sm bg-[var(--bg-inset)] overflow-hidden mb-1.5">
+            <div
+              className="h-full rounded-sm bg-[var(--accent)]"
+              style={{ width: `${Math.max(2, stats.usedPct)}%` }}
+            />
+          </div>
+          <p className="mono text-[9px] text-muted-foreground">{stats.usedLabel} de {stats.capLabel}</p>
+        </div>
+
+        {/* Nueva carpeta CTA */}
+        <div className="border-t border-[var(--border)] p-2.5">
+          <button
+            type="button"
+            onClick={() => setShowNew(true)}
+            className="w-full flex items-center justify-center gap-1.5 h-8 rounded-md bg-[var(--accent-dim)] text-[var(--accent-strong)] text-[12px] font-semibold hover:bg-[var(--accent)] hover:text-white transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Nueva carpeta
+          </button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div className="flex-1 min-w-0">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+          <div>
+            <h1 className="text-[22px] font-bold tracking-tight text-foreground">Mi Drive</h1>
+            <p className="text-[13px] text-muted-foreground mt-1">
+              <span className="mono">{stats.totalFiles}</span> archivos · <span className="mono">{stats.usedLabel}</span> usados
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowNew(true)}
+            className="md:hidden flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
+            style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
+          >
+            <Plus className="w-3.5 h-3.5" /> Nueva carpeta
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative mb-5 max-w-[400px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Buscar carpetas…"
+            className="w-full h-9 pl-9 pr-3 rounded-md bg-[var(--bg-input)] border border-[var(--border)] text-[12px] text-foreground placeholder:text-muted-foreground outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)] transition-colors"
+          />
+        </div>
+
+        {/* New folder form (collapsable) */}
+        {showNew && (
+          <div className="bg-card border border-[var(--accent)] rounded-[var(--r-lg)] p-5 mb-5 shadow-[var(--shadow-soft)] pd-fade-in">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[14px] font-semibold text-foreground">Nueva carpeta</h2>
+              <button
+                type="button"
+                onClick={() => setShowNew(false)}
+                className="text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Cancelar
+              </button>
+            </div>
+            <form
+              method="POST"
+              action="/api/admin/folders/create"
+              className="grid grid-cols-1 md:grid-cols-[1fr_80px_1fr_auto] gap-3 items-end"
+            >
+              <Field label="Nombre">
+                <input name="name" required className={inputCls} placeholder="Ej. Contratos" />
+              </Field>
+              <Field label="Color">
+                <input
+                  name="color"
+                  type="color"
+                  defaultValue="#3b82f6"
+                  className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-input)] cursor-pointer"
+                />
+              </Field>
+              <Field label="Descripción (opcional)">
+                <input name="description" className={inputCls} />
+              </Field>
+              <button
+                type="submit"
+                className="h-9 px-4 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
+                style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
+              >
+                <Plus className="inline w-3.5 h-3.5 mr-1" /> Crear
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Mis carpetas */}
+        <Section title="Mis carpetas" icon={<Home className="w-3.5 h-3.5" />} count={filteredMy.length}>
+          {filteredMy.length === 0 ? (
+            <p className="text-[12px] text-muted-foreground px-1">
+              {query ? 'Sin resultados.' : 'Sin carpetas todavía. Creá una desde el panel lateral.'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {filteredMy.map(f => (
+                <FolderCard
+                  key={f.id}
+                  href={`/admin/documentos/${f.id}`}
+                  color={f.color}
+                  name={f.name}
+                  sub={`${f._count} archivo${f._count === 1 ? '' : 's'}`}
+                  description={f.description}
+                  deleteAction={`/api/admin/folders/${f.id}/delete`}
+                />
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* Proyectos con archivos */}
+        {projectFolders.length > 0 && (
+          <Section title="Proyectos con archivos" icon={<FolderKanban className="w-3.5 h-3.5" />} count={projectFolders.length}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {projectFolders.map(p => (
+                <FolderCard
+                  key={p.id}
+                  href={`/admin/projects/${p.id}`}
+                  color={p.color}
+                  name={p.name}
+                  sub="Proyecto"
+                  description={p.sub}
+                />
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* Demos WA */}
+        {demoFolders.length > 0 && (
+          <Section title="Demos WA" icon={<MessageCircle className="w-3.5 h-3.5" />} count={demoFolders.length}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {demoFolders.map(d => (
+                <FolderCard
+                  key={d.id}
+                  href={`/admin/client/${encodeURIComponent(d.id)}`}
+                  color="oklch(0.62 0.16 160)"
+                  name={d.name}
+                  sub={d.sub}
+                />
+              ))}
+            </div>
+          </Section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SidebarGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-3 last:mb-0">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground px-2 mb-1">{label}</div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function Section({ title, icon, count, children }: { title: string; icon: React.ReactNode; count: number; children: React.ReactNode }) {
+  return (
+    <section className="mb-6 last:mb-0">
+      <div className="flex items-center gap-2 mb-3 px-1">
+        <div
+          className="grid place-items-center w-5 h-5 rounded bg-[var(--accent-dim)] text-[var(--accent-strong)]"
+        >
+          {icon}
+        </div>
+        <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
+        <span className="mono text-[10px] text-muted-foreground">{count}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FolderCard({
+  href, color, name, sub, description, deleteAction,
+}: {
+  href: string; color: string; name: string; sub: string; description?: string; deleteAction?: string;
+}) {
+  return (
+    <div className="relative group">
+      <Link
+        href={href}
+        className="block bg-card border border-[var(--border)] rounded-[var(--r-lg)] p-4 transition-all hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-soft)]"
+      >
+        <div className="relative mb-3">
+          {/* Stack effect — 3 layers */}
+          <div
+            className="absolute top-1 left-1 right-2 h-7 rounded-md opacity-30"
+            style={{ background: color }}
+          />
+          <div
+            className="absolute top-0.5 left-0.5 right-1.5 h-7 rounded-md opacity-50"
+            style={{ background: color }}
+          />
+          <Folder className="relative w-9 h-9" style={{ color }} fill={color} fillOpacity={0.18} />
+        </div>
+        <div className="text-[13px] font-semibold text-foreground truncate">{name}</div>
+        <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>
+        {description && (
+          <div className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{description}</div>
+        )}
+      </Link>
+      {deleteAction && (
+        <form
+          method="POST"
+          action={deleteAction}
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <button
+            type="submit"
+            onClick={async e => {
+              e.preventDefault();
+              const ok = await confirmDialog({
+                title: '¿Borrar esta carpeta?',
+                description: 'Los archivos dentro también se borrarán. Esta acción no se puede deshacer.',
+                confirmLabel: 'Sí, borrar',
+                variant: 'danger',
+              });
+              if (ok) (e.currentTarget.closest('form') as HTMLFormElement)?.submit();
+            }}
+            className="grid place-items-center w-6 h-6 rounded text-muted-foreground hover:text-[var(--red)] hover:bg-[oklch(0.62_0.22_27_/_0.10)] transition-colors"
+            aria-label="Borrar"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            </svg>
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+const inputCls = 'flex h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 text-[12px] text-foreground placeholder:text-muted-foreground outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)] transition-colors';
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-1.5">{label}</span>
+      {children}
+    </label>
+  );
+}

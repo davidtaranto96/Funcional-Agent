@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { Sidebar } from '@/components/admin/Sidebar';
 import { Toaster } from '@/components/ui/toast';
+import { CommandPalette } from '@/components/admin/CommandPalette';
+import { ConfirmModal } from '@/components/admin/ConfirmModal';
+import { Fab } from '@/components/admin/Fab';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -14,6 +17,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         {children}
       </main>
       <Toaster />
+      <CommandPalette />
+      <ConfirmModal />
+      <Fab />
     </div>
   );
 }
