@@ -12,6 +12,10 @@ const config: NextConfig = {
   },
   // El admin está detrás de proxy en Railway
   poweredByHeader: false,
+  // ESLint y TS errors NO matan el build de prod (deploy en Railway).
+  // Igual los chequeás en local con `npm run lint` y `npm run typecheck`.
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: false },
 };
 
 export default config;

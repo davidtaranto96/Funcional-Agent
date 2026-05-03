@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import path from 'path';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -38,7 +39,6 @@ export function formatARS(n: number | string | null | undefined): string {
 }
 
 export function safePath(base: string, ...parts: string[]): string {
-  const path = require('path') as typeof import('path');
   const resolved = path.resolve(path.join(base, ...parts));
   if (!resolved.startsWith(path.resolve(base))) throw new Error('Path traversal blocked');
   return resolved;

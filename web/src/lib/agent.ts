@@ -119,7 +119,7 @@ export async function handleMessage(phone: string, userText: string): Promise<Ag
   locks.set(phone, promise);
 
   try {
-    let conv = await db.getConversation(phone);
+    const conv = await db.getConversation(phone);
     const stage = conv?.stage || 'greeting';
     const context = conv?.context || {};
     const report = conv?.report || null;
