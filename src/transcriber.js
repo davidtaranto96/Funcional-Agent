@@ -37,13 +37,21 @@ function isTwilioMediaUrl(rawUrl) {
   }
 }
 
-// Twilio: recibe la URL directa del audio (con auth básica Account SID + Auth Token)
-// y transcribe con Groq Whisper (gratis)
-async function transcribe(mediaUrl) {
+// Transcribe audio con Groq Whisper.
+// Acepta:
+//  - Buffer (ej. Baileys downloadMediaMessage) + mime opcional
+//  - URL pública (ej. legacy Twilio) — solo permite allowlist twilio.com por defensa
+async function transcribe(input, opts = {}) {
   try {
     const client = getClient();
     if (!client) return '[No pude procesar el audio en este momento]';
 
+    // Si es buffer, vamos directo a la transcripción (atajo para Baileys)
+    if (Buffer.isBuffer(input)) {
+      return await transcribeBuffer(client, input, opts.mime || 'audio/ogg');
+    }
+
+    const mediaUrl = input;
     if (!isTwilioMediaUrl(mediaUrl)) {
       console.error(`[transcriber] mediaUrl rechazada por allowlist: ${(mediaUrl||'').substring(0,80)}`);
       return '[No pude procesar el audio en este momento]';
@@ -154,6 +162,47 @@ async function transcribe(mediaUrl) {
       return '[El audio tardó mucho en procesarse, ¿podrías escribirlo?]';
     }
     return '[No pude entender el audio, ¿podrías escribirlo?]';
+  }
+}
+
+// Helper interno: transcribe directamente desde buffer (camino rápido para Baileys)
+async function transcribeBuffer(client, buffer, mime) {
+  if (!buffer || buffer.length < 100) {
+    return '[El audio parece estar vacío, ¿podrías grabarlo de nuevo?]';
+  }
+  // Detectar extensión del mime
+  const ext = mime.includes('opus') ? '.opus'
+    : mime.includes('ogg') ? '.ogg'
+    : mime.includes('mp4') || mime.includes('m4a') ? '.m4a'
+    : mime.includes('mpeg') || mime.includes('mp3') ? '.mp3'
+    : mime.includes('webm') ? '.webm'
+    : mime.includes('amr') ? '.amr'
+    : mime.includes('wav') ? '.wav'
+    : '.ogg'; // default WhatsApp
+
+  const tmpFile = path.join(os.tmpdir(), `wa_audio_${Date.now()}${ext}`);
+  fs.writeFileSync(tmpFile, buffer);
+  console.log(`[transcriber] Audio buffer (${buffer.length}b, ${mime}) → ${tmpFile}`);
+  try {
+    const result = await withTimeout(
+      client.audio.transcriptions.create({
+        file: fs.createReadStream(tmpFile),
+        model: 'whisper-large-v3',
+        language: 'es',
+      }),
+      12000,
+      'transcripción Groq Whisper'
+    );
+    const text = (result.text || '').trim();
+    console.log(`[transcriber] Transcripción exitosa: "${text.substring(0, 100)}"`);
+    if (!text) return '[No pude entender el audio, ¿podrías escribirlo?]';
+    return text;
+  } catch (err) {
+    console.error('[transcriber] Error transcribiendo buffer:', err.message);
+    if (err.message.includes('Timeout')) return '[El audio tardó mucho en procesarse, ¿podrías escribirlo?]';
+    return '[No pude entender el audio, ¿podrías escribirlo?]';
+  } finally {
+    fs.unlink(tmpFile, () => {});
   }
 }
 
