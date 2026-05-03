@@ -87,8 +87,8 @@ export function KPICard({ label, value, sub, href, color = 'var(--accent)', pct 
       </div>
       {/* Number — mono, white, big */}
       <div
-        className="relative mono text-[32px] font-bold leading-none text-foreground"
-        style={{ letterSpacing: '-1.5px' }}
+        className="relative mono text-[24px] font-bold leading-none text-foreground"
+        style={{ letterSpacing: '-1px' }}
       >
         {display}
       </div>

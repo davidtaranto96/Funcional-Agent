@@ -106,7 +106,7 @@ function KpiCard({ label, value, sub, color, pct }: { label: string; value: stri
           <span className="block w-1.5 h-1.5 rounded-full" style={{ background: color }} />
         </div>
       </div>
-      <div className="relative mono text-[20px] font-bold leading-none text-foreground" style={{ letterSpacing: '-1px' }}>
+      <div className="relative mono text-[22px] font-bold leading-none text-foreground" style={{ letterSpacing: '-0.8px' }}>
         {value}
       </div>
       <div className="relative mt-[7px] text-[11px] text-muted-foreground">{sub}</div>

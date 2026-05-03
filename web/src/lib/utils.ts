@@ -32,10 +32,14 @@ export function timeAgo(dateStr: string | null | undefined): string {
   return `hace ${days}d`;
 }
 
-export function formatARS(n: number | string | null | undefined): string {
+export function formatARS(n: number | string | null | undefined, opts: { zeroAsDash?: boolean } = {}): string {
+  const { zeroAsDash = true } = opts;
   const num = typeof n === 'number' ? n : Number(String(n || '').replace(/[^\d.-]/g, ''));
   if (!Number.isFinite(num)) return '—';
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(num);
+  if (num === 0 && zeroAsDash) return '—';
+  // Intl pone "$ 1.000" con espacio. Sacamos el espacio non-breaking (U+00A0) entre símbolo y número.
+  const s = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(num);
+  return s.replace(/ /g, '').replace('$ ', '$');
 }
 
 export function safePath(base: string, ...parts: string[]): string {
