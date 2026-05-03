@@ -1,0 +1,18 @@
+import { NextRequest, NextResponse } from 'next/server';
+import * as db from '@/lib/db';
+import { requireAuth } from '@/lib/session';
+
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  await requireAuth();
+  const { id } = await ctx.params;
+  const formData = await req.formData();
+  await db.updateClientRecord(id, {
+    name: String(formData.get('name') || ''),
+    phone: String(formData.get('phone') || ''),
+    email: String(formData.get('email') || ''),
+    company: String(formData.get('company') || ''),
+    category: String(formData.get('category') || 'cliente'),
+    notes: String(formData.get('notes') || ''),
+  });
+  return NextResponse.redirect(new URL(`/admin/clientes/${id}`, req.url), { status: 303 });
+}

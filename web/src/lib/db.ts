@@ -42,7 +42,16 @@ export interface Conversation {
 }
 
 export interface ConversationReport {
-  cliente?: { nombre?: string; rubro?: string; nivel_tecnico?: string; email?: string };
+  cliente?: {
+    nombre?: string;
+    telefono?: string;
+    email?: string;
+    contacto_extra?: string;
+    rubro?: string;
+    ubicacion?: string;
+    tiene_negocio_existente?: boolean;
+    nivel_tecnico?: string;
+  };
   proyecto?: {
     tipo?: string;
     descripcion?: string;
@@ -52,8 +61,17 @@ export interface ConversationReport {
     modelo_negocio?: string;
     integraciones_necesarias?: string[];
     estado_actual?: string;
+    competencia_mencionada?: string;
+    requisitos_seguridad?: string;
+    volumen_esperado?: string;
   };
-  requisitos?: { plazo?: string; presupuesto?: string; urgencia?: string; stack_sugerido?: string };
+  requisitos?: {
+    plazo?: string;
+    presupuesto?: string;
+    urgencia?: string;
+    stack_sugerido?: string;
+    notas_adicionales?: string;
+  };
   resumen_ejecutivo?: string;
   analisis?: {
     complejidad_estimada?: string;
