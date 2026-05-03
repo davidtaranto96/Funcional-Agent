@@ -19,6 +19,8 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   downloadMediaMessage,
+  fetchLatestBaileysVersion,
+  Browsers,
 } = require('@whiskeysockets/baileys');
 
 // Path donde Baileys persiste credenciales. Override por env (BAILEYS_AUTH_DIR)
@@ -174,20 +176,58 @@ function ensureAuthDir() {
   throw new Error('Ningun directorio escribible disponible para Baileys auth state');
 }
 
+// Limpia el directorio de auth state. Se llama cuando WhatsApp rechaza la sesion.
+function clearAuthDir(dir) {
+  try {
+    if (!fs.existsSync(dir)) return;
+    for (const f of fs.readdirSync(dir)) {
+      try { fs.unlinkSync(path.join(dir, f)); } catch { /* skip */ }
+    }
+    console.warn(`[whatsapp] 🧹 Auth state limpiado en ${dir}`);
+  } catch (err) {
+    console.error('[whatsapp] Error limpiando auth dir:', err.message);
+  }
+}
+
+let consecutive405 = 0;
+
 async function startWhatsApp(onIncomingMessage) {
   if (connecting || sock) return;
   connecting = true;
 
   const authDir = ensureAuthDir();
+
+  // Si tuvimos varios 405 seguidos, las creds estan corruptas o sesion vieja.
+  // Limpiamos el auth state para forzar QR fresco.
+  if (consecutive405 >= 3) {
+    console.warn('[whatsapp] 3+ codigos 405 consecutivos — limpiando auth state para forzar QR fresco');
+    clearAuthDir(authDir);
+    consecutive405 = 0;
+  }
+
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
+
+  // Bajar la version del protocolo de WhatsApp Web actual desde GitHub.
+  // Si no hacemos esto, Baileys usa una version hardcoded que puede estar desactualizada
+  // y WhatsApp rechaza con 405.
+  let version;
+  try {
+    const fetched = await fetchLatestBaileysVersion();
+    version = fetched.version;
+    console.log(`[whatsapp] WA Web version: ${version.join('.')} (isLatest: ${fetched.isLatest})`);
+  } catch (err) {
+    console.warn('[whatsapp] No pude fetchear ultima version, usando default de Baileys:', err.message);
+  }
 
   sock = makeWASocket({
     auth: state,
     logger,
+    version,
     printQRInTerminal: false, // lo pintamos nosotros para mejor formato
-    browser: ['WPanalista', 'Chrome', '1.0'],
+    browser: Browsers.ubuntu('Chrome'), // identifica como Chrome en Ubuntu (mejor compat que custom)
     markOnlineOnConnect: true,
     syncFullHistory: false,
+    generateHighQualityLinkPreview: false,
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -196,6 +236,7 @@ async function startWhatsApp(onIncomingMessage) {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      consecutive405 = 0; // si llego QR, las creds estan limpias
       console.log('\n┌─────────────────────────────────────────────────────────┐');
       console.log('│  WHATSAPP NO CONECTADO — escaneá este QR desde tu cel  │');
       console.log('│  WhatsApp → Config → Dispositivos vinculados →         │');
@@ -207,19 +248,23 @@ async function startWhatsApp(onIncomingMessage) {
     if (connection === 'open') {
       lastConnectedAt = new Date();
       connecting = false;
+      consecutive405 = 0;
       console.log(`[whatsapp] ✅ Conectado a WhatsApp como ${sock.user?.id || '?'} a las ${lastConnectedAt.toISOString()}`);
     }
 
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
-      console.warn(`[whatsapp] ⚠️ Conexión cerrada (code=${code}, reconnect=${shouldReconnect})`);
+      if (code === 405) consecutive405++;
+      console.warn(`[whatsapp] ⚠️ Conexión cerrada (code=${code}, reconnect=${shouldReconnect}, 405streak=${consecutive405})`);
       sock = null;
       connecting = false;
       if (shouldReconnect) {
+        // Backoff exponencial cortito (3s, 5s, 8s...)
+        const delay = Math.min(15000, 3000 + consecutive405 * 2000);
         setTimeout(() => startWhatsApp(onIncomingMessage).catch(err => {
           console.error('[whatsapp] Error en reconexión:', err.message);
-        }), 3000);
+        }), delay);
       } else {
         console.error('[whatsapp] ❌ Sesión inválida (loggedOut). Borrá data/baileys-auth/ y reescaneá el QR.');
       }
