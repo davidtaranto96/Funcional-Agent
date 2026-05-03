@@ -25,6 +25,15 @@ function getSecret(): string {
     return cachedSecret;
   }
 
+  // Build phase de Next.js: nunca corre requests reales, solo prerender.
+  // Devolvemos dummy para que el build no rompa. En runtime real (server start)
+  // la var DEBE estar seteada — si no, el primer request va a fallar.
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    console.warn('[session] build phase sin ADMIN_SESSION_SECRET — usando dummy. Asegurate de setearla en runtime.');
+    cachedSecret = crypto.randomBytes(32).toString('hex');
+    return cachedSecret;
+  }
+
   if (process.env.NODE_ENV === 'production') {
     throw new Error('FATAL: ADMIN_SESSION_SECRET es requerido en producción (mínimo 32 chars)');
   }

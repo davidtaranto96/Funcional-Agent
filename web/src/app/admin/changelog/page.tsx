@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { APP_VERSION } from '@/lib/constants';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 interface ChangelogEntry {
   version: string;
