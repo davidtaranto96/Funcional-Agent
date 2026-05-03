@@ -1,14 +1,31 @@
 import * as db from '@/lib/db';
+import Link from 'next/link';
+import fs from 'fs';
+import path from 'path';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Folder, Plus, Trash2 } from 'lucide-react';
 
+const DOCUMENTS_DIR = path.resolve(process.cwd(), '..', 'data', 'documents');
+
+function countFiles(folderId: string): number {
+  const dir = path.resolve(DOCUMENTS_DIR, folderId);
+  if (!dir.startsWith(path.resolve(DOCUMENTS_DIR))) return 0;
+  if (!fs.existsSync(dir)) return 0;
+  try {
+    return fs.readdirSync(dir).filter(f => {
+      try { return fs.statSync(path.join(dir, f)).isFile() && !f.startsWith('.'); } catch { return false; }
+    }).length;
+  } catch { return 0; }
+}
+
 export const dynamic = 'force-dynamic';
 
 export default async function DocumentosPage() {
   const folders = await db.listDocumentFolders();
+  const fileCounts = Object.fromEntries(folders.map(f => [f.id, countFiles(f.id)]));
 
   return (
     <div className="max-w-[1200px] mx-auto">
@@ -48,28 +65,28 @@ export default async function DocumentosPage() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {folders.map(f => (
-            <Card key={f.id} className="p-4 group hover:border-[var(--border-strong)] transition-colors">
-              <div className="flex items-start justify-between mb-2">
-                <Folder className="w-8 h-8" style={{ color: f.color }} />
-                <form method="POST" action={`/api/admin/folders/${f.id}/delete`}
-                  onSubmit={e => { if (!confirm('¿Borrar esta carpeta?')) e.preventDefault(); }}>
-                  <button type="submit" className="text-muted-foreground hover:text-[var(--red)] opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Borrar">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              </div>
-              <div className="text-sm font-medium text-foreground truncate">{f.name}</div>
-              {f.description && <div className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{f.description}</div>}
-            </Card>
+            <div key={f.id} className="relative group">
+              <Link href={`/admin/documentos/${f.id}`} className="block">
+                <Card className="p-4 hover:border-[var(--border-strong)] transition-colors">
+                  <div className="flex items-start justify-between mb-2">
+                    <Folder className="w-8 h-8" style={{ color: f.color }} />
+                    <span className="text-[10px] text-muted-foreground mono">{fileCounts[f.id] || 0}</span>
+                  </div>
+                  <div className="text-sm font-medium text-foreground truncate">{f.name}</div>
+                  {f.description && <div className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{f.description}</div>}
+                </Card>
+              </Link>
+              <form method="POST" action={`/api/admin/folders/${f.id}/delete`}
+                onSubmit={e => { if (!confirm('¿Borrar esta carpeta? Los archivos también se borran.')) e.preventDefault(); }}
+                className="absolute top-3 right-9">
+                <button type="submit" className="text-muted-foreground hover:text-[var(--red)] opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Borrar">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            </div>
           ))}
         </div>
       )}
-
-      <Card className="p-5 mt-5 bg-[var(--bg-inset)] border-dashed">
-        <p className="text-xs text-muted-foreground">
-          <strong className="text-foreground">Migración Wave 4 — file uploads pendientes:</strong> el upload de archivos a carpetas (multer en el legacy) se port&aacute; en próxima sesi&oacute;n. Por ahora podés crear y borrar carpetas. Los archivos legacy siguen disponibles via <code className="bg-[var(--bg-card-2)] px-1.5 rounded text-[10px]">/project-files/</code> del Express viejo.
-        </p>
-      </Card>
     </div>
   );
 }
