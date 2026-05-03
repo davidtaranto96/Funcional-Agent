@@ -1,17 +1,45 @@
 import { getIronSession, type SessionOptions } from 'iron-session';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
 
 export interface SessionData {
   authed?: boolean;
   user?: { name: string; email: string; photo?: string };
 }
 
+let cachedSecret: string | null = null;
+
+function getSecret(): string {
+  if (cachedSecret) return cachedSecret;
+
+  const env = process.env.ADMIN_SESSION_SECRET;
+  if (env && env.length > 0) {
+    if (env.length < 32) {
+      throw new Error(
+        `ADMIN_SESSION_SECRET es de ${env.length} chars pero iron-session pide mínimo 32. ` +
+        `Generá uno nuevo con:  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"  ` +
+        `y reemplazalo en web/.env.local`,
+      );
+    }
+    cachedSecret = env;
+    return cachedSecret;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: ADMIN_SESSION_SECRET es requerido en producción (mínimo 32 chars)');
+  }
+
+  // Dev fallback: secret efímero per process. Las sesiones se invalidan al reiniciar.
+  console.warn('[session] ADMIN_SESSION_SECRET no seteado — usando secret efímero. Sesiones se invalidan al reiniciar el dev server.');
+  cachedSecret = crypto.randomBytes(32).toString('hex');
+  return cachedSecret;
+}
+
 export const sessionOptions: SessionOptions = {
   cookieName: 'wpanalista_admin',
-  password: process.env.ADMIN_SESSION_SECRET
-    || (process.env.NODE_ENV === 'production'
-        ? (() => { throw new Error('FATAL: ADMIN_SESSION_SECRET is required in production') })()
-        : 'dev-only-fallback-secret-do-not-use-in-prod-please-set-ADMIN_SESSION_SECRET-32+chars'),
+  // Lazy getter: resuelve cuando iron-session lee la prop, no al cargar el módulo.
+  // Esto permite mensajes de error claros en el primer request, no al boot.
+  get password() { return getSecret(); },
   cookieOptions: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
