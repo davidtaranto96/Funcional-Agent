@@ -7,8 +7,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(publicUrl(req, '/login?error=google_disabled'), { status: 303 });
   }
 
-  // El callback usa la URL pública (respeta x-forwarded-host)
-  const callback = publicUrl(req, '/api/auth/google/callback').toString();
+  // Permitir override por env GOOGLE_REDIRECT_URI (útil cuando el proxy reescribe
+  // el host y el redirect_uri computado no matchea exactamente al de la consola).
+  const callback = (process.env.GOOGLE_REDIRECT_URI || publicUrl(req, '/api/auth/google/callback').toString()).trim();
+
+  console.log('[google-oauth] starting flow', {
+    client_id_prefix: clientId.slice(0, 20) + '…',
+    redirect_uri: callback,
+  });
 
   const params = new URLSearchParams({
     client_id: clientId,

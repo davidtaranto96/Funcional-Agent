@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(publicUrl(req, '/login?error=google_disabled'), { status: 303 });
   }
 
-  const callback = publicUrl(req, '/api/auth/google/callback').toString();
+  // Misma lógica que en /api/auth/google: respeta override por env
+  const callback = (process.env.GOOGLE_REDIRECT_URI || publicUrl(req, '/api/auth/google/callback').toString()).trim();
 
   // 1) Intercambiar code por access_token
   let tokenData: GoogleTokenResponse;
