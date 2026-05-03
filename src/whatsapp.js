@@ -21,7 +21,11 @@ const {
   downloadMediaMessage,
 } = require('@whiskeysockets/baileys');
 
-const AUTH_DIR = path.resolve(__dirname, '..', 'data', 'baileys-auth');
+// Path donde Baileys persiste credenciales. Override por env (BAILEYS_AUTH_DIR)
+// si el default no es escribible (ej. volume root-owned en Railway).
+const AUTH_DIR = process.env.BAILEYS_AUTH_DIR
+  ? path.resolve(process.env.BAILEYS_AUTH_DIR)
+  : path.resolve(__dirname, '..', 'data', 'baileys-auth');
 const logger = pino({ level: 'warn' }); // baileys es ruidoso por default
 
 let sock = null;
@@ -145,13 +149,37 @@ async function sendMediaMessage(to, body, mediaUrlOrPath) {
 
 // ── Lifecycle: conectar a WhatsApp y registrar handler ───────────────────────
 
+// Asegura un dir escribible para Baileys auth state. Si el path preferido falla
+// con EACCES (volume root-owned), prueba fallbacks en orden:
+//   1) AUTH_DIR (env override o default data/baileys-auth)
+//   2) /tmp/baileys-auth (siempre escribible, pero no persiste entre restarts)
+function ensureAuthDir() {
+  const candidates = [AUTH_DIR, path.join(require('os').tmpdir(), 'baileys-auth')];
+  for (const dir of candidates) {
+    try {
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      // Test de escritura real
+      const testFile = path.join(dir, '.write-test');
+      fs.writeFileSync(testFile, 'ok');
+      fs.unlinkSync(testFile);
+      if (dir !== AUTH_DIR) {
+        console.warn(`[whatsapp] ⚠️ AUTH_DIR (${AUTH_DIR}) no escribible. Usando fallback: ${dir}`);
+        console.warn('[whatsapp] ⚠️ Las credenciales NO van a persistir entre reinicios. Vas a tener que reescanear el QR.');
+      }
+      return dir;
+    } catch (err) {
+      console.warn(`[whatsapp] No pude usar ${dir}: ${err.code || err.message}`);
+    }
+  }
+  throw new Error('Ningun directorio escribible disponible para Baileys auth state');
+}
+
 async function startWhatsApp(onIncomingMessage) {
   if (connecting || sock) return;
   connecting = true;
 
-  if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
-
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  const authDir = ensureAuthDir();
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
   sock = makeWASocket({
     auth: state,

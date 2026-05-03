@@ -10,18 +10,19 @@ WORKDIR /app
 # Copiar solo package files primero (cache de layers)
 COPY package*.json ./
 
-# Instalar solo dependencias de producción
+# Instalar solo dependencias de produccion
 RUN npm ci --omit=dev
 
-# Copiar el resto del código
+# Copiar el resto del codigo (incluye entrypoint.sh)
 COPY . .
 
-# Crear data dir y dar ownership al usuario node (existente en node:20-slim)
-RUN mkdir -p /app/data && chown -R node:node /app
-
-# Drop root para no correr Node como UID 0
-USER node
+# Crear data dir + subdirs (best-effort en build; el entrypoint los reasegura
+# en runtime DESPUES del volume mount de Railway)
+RUN mkdir -p /app/data/baileys-auth /app/data/demos /app/data/documents /app/data/project-files \
+    && chown -R node:node /app \
+    && chmod +x /app/entrypoint.sh
 
 EXPOSE 3000
 
-CMD ["node", "src/index.js"]
+# Entrypoint corre como root, prepara dirs, y drop a usuario node antes de arrancar
+ENTRYPOINT ["/app/entrypoint.sh"]
