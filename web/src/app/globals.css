@@ -1,0 +1,188 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Precision Dark v4.0.0 — portado del legacy admin.js */
+@theme {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --bg: oklch(0.18 0.02 250);
+  --bg-card: rgb(13, 27, 46);
+  --bg-card-2: rgb(26, 34, 54);
+  --bg-inset: rgb(9, 21, 37);
+  --bg-elevated: rgb(20, 32, 50);
+
+  --border: rgba(255, 255, 255, 0.067);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  --text-1: rgb(245, 247, 250);
+  --text-2: rgb(180, 195, 215);
+  --text-3: rgb(106, 130, 168);
+  --text-4: rgb(70, 90, 125);
+
+  --accent: oklch(0.62 0.20 250);
+  --accent-strong: oklch(0.68 0.22 250);
+  --accent-dim: oklch(0.62 0.18 250 / 0.13);
+  --accent-glow: oklch(0.62 0.20 250 / 0.30);
+
+  --green: oklch(0.62 0.16 160);
+  --amber: oklch(0.74 0.16 75);
+  --red: oklch(0.62 0.22 27);
+  --purple: oklch(0.62 0.18 290);
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  --h1-size: 22px;
+  --h2-size: 16px;
+  --h3-size: 13px;
+
+  --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.4);
+  --shadow-elev: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 12px 32px -8px rgba(0, 0, 0, 0.5);
+
+  /* shadcn tokens mapeados a Precision Dark */
+  --background: var(--bg);
+  --foreground: var(--text-1);
+  --card: var(--bg-card);
+  --card-foreground: var(--text-1);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-1);
+  --primary: var(--accent);
+  --primary-foreground: rgb(245, 247, 250);
+  --secondary: var(--bg-card-2);
+  --secondary-foreground: var(--text-2);
+  --muted: var(--bg-inset);
+  --muted-foreground: var(--text-3);
+  --destructive: var(--red);
+  --destructive-foreground: rgb(245, 247, 250);
+  --input: var(--bg-card-2);
+  --ring: var(--accent);
+  --radius: var(--r-md);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html, body {
+  background-color: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Skip link a11y */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 12px;
+  background: var(--accent);
+  color: white;
+  padding: 8px 16px;
+  border-radius: var(--r-md);
+  z-index: 100;
+  transition: top 0.2s ease;
+}
+.skip-link:focus {
+  top: 12px;
+  outline: 2px solid var(--text-1);
+  outline-offset: 2px;
+}
+
+/* Focus visible global */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Mono font para números */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Animations */
+@keyframes pd-page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pd-glow-breathe {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes pd-modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes pd-toast-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pd-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+.pd-page-in {
+  animation: pd-page-in 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Inputs sin auto-zoom en iOS */
+@media (max-width: 640px) {
+  input, textarea, select { font-size: 16px !important; }
+}
+
+/* Scrollbar consistente con dark */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--bg-card-2);
+  border-radius: var(--r-sm);
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
