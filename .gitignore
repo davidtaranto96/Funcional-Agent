@@ -3,3 +3,5 @@ data/
 .env
 google-creds.json
 src/admin.BACKUP.js
+.gstack/
+graphify-out/

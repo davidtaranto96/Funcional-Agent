@@ -2801,7 +2801,7 @@ router.get('/review/:phone', requireAuth, async (req, res) => {
         <a href="${url}" target="_blank" class="text-xs text-blue-600 hover:underline">Abrir ↗</a>
       </div>
       ${type === 'iframe'
-        ? `<iframe src="${url}" class="w-full rounded-xl border border-slate-100" style="height:560px"></iframe>`
+        ? `<iframe src="${url}" sandbox="allow-scripts" class="w-full rounded-xl border border-slate-100" style="height:560px"></iframe>`
         : `<object data="${url}" type="application/pdf" class="w-full rounded-xl border border-slate-100" style="height:560px"><a href="${url}" class="text-blue-600 text-sm hover:underline">Descargar PDF</a></object>`}
     </div>`).join('');
 

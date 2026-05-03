@@ -15,6 +15,7 @@ process.on('uncaughtException', (err) => {
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const twilio = require('twilio');
 const { handleMessage } = require('./agent');
 const { transcribe } = require('./transcriber');
 const { sendMessage } = require('./whatsapp');
@@ -28,16 +29,42 @@ const adminRouter = require('./admin');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
+// Fail closed si falta el secret en producción
+if (!process.env.ADMIN_SESSION_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: ADMIN_SESSION_SECRET is required in production');
+  }
+  console.warn('[WARN] ADMIN_SESSION_SECRET no seteado — generando secret efímero (sesiones se invalidan al reiniciar)');
+}
+const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || require('crypto').randomBytes(32).toString('hex');
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Token compartido para los endpoints administrativos no-browser (/start, /context, /reset, /webhook/debug, etc.)
+function requireAdminToken(req, res, next) {
+  const token = req.get('x-admin-token') || req.query.admin_token;
+  if (!process.env.ADMIN_API_TOKEN || token !== process.env.ADMIN_API_TOKEN) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  next();
+}
+
 const app = express();
+// Railway corre detrás de un proxy — necesario para que req.protocol sea https y twilio.webhook valide bien
+app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // Sesiones para el panel admin
 app.use(session({
-  secret: process.env.ADMIN_SESSION_SECRET || 'change-me-in-env',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+  cookie: {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  },
 }));
 
 // Google OAuth — solo si está configurado
@@ -72,7 +99,7 @@ app.get('/health', (req, res) => {
 });
 
 // Diagnóstico de config (sin revelar valores)
-app.get('/webhook/debug', (req, res) => {
+app.get('/webhook/debug', requireAdminToken, (req, res) => {
   const check = (v) => process.env[v] ? '✅' : '❌ FALTA';
   res.json({
     version: '2.1.0',
@@ -90,12 +117,12 @@ app.get('/webhook/debug', (req, res) => {
 
 // Diagnóstico: muestra exactamente qué manda Twilio (para debug de audio)
 const lastWebhooks = [];
-app.get('/webhook/last', (req, res) => {
+app.get('/webhook/last', requireAdminToken, (req, res) => {
   res.json(lastWebhooks);
 });
 
 // Test de Groq: verifica que la API key funcione
-app.get('/webhook/test-groq', async (req, res) => {
+app.get('/webhook/test-groq', requireAdminToken, async (req, res) => {
   try {
     const Groq = require('groq-sdk');
     const apiKey = process.env.GROQ_API_KEY;
@@ -119,7 +146,8 @@ function twimlReply(res, text) {
 }
 
 // ── Webhook de Twilio (POST) ──────────────────────────────────────────────
-app.post('/webhook', async (req, res) => {
+// twilio.webhook valida X-Twilio-Signature contra TWILIO_AUTH_TOKEN — bloquea spoofers
+app.post('/webhook', twilio.webhook({ validate: IS_PROD }), async (req, res) => {
   try {
     const From = req.body?.From || '';
     const Body = req.body?.Body || '';
@@ -481,7 +509,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // Endpoint para setear contexto previo de un cliente
-app.post('/context', async (req, res) => {
+app.post('/context', requireAdminToken, async (req, res) => {
   const { phone, context } = req.body;
 
   if (!phone || !context) {
@@ -496,7 +524,7 @@ app.post('/context', async (req, res) => {
 });
 
 // Resetear conversación de un cliente
-app.post('/reset', async (req, res) => {
+app.post('/reset', requireAdminToken, async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: 'Se requiere phone' });
 
@@ -512,7 +540,7 @@ app.post('/reset', async (req, res) => {
 });
 
 // Mensaje proactivo: David dispara el primer contacto al cliente
-app.post('/start', async (req, res) => {
+app.post('/start', requireAdminToken, async (req, res) => {
   const { phone, context } = req.body;
   if (!phone) return res.status(400).json({ error: 'Se requiere phone' });
 

@@ -24,12 +24,30 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+// Validar que mediaUrl sea efectivamente de Twilio antes de filtrarle creds
+function isTwilioMediaUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    // api.twilio.com, mcs.us1.twilio.com, etc. — siempre subdominios de twilio.com
+    return host === 'twilio.com' || host.endsWith('.twilio.com');
+  } catch {
+    return false;
+  }
+}
+
 // Twilio: recibe la URL directa del audio (con auth básica Account SID + Auth Token)
 // y transcribe con Groq Whisper (gratis)
 async function transcribe(mediaUrl) {
   try {
     const client = getClient();
     if (!client) return '[No pude procesar el audio en este momento]';
+
+    if (!isTwilioMediaUrl(mediaUrl)) {
+      console.error(`[transcriber] mediaUrl rechazada por allowlist: ${(mediaUrl||'').substring(0,80)}`);
+      return '[No pude procesar el audio en este momento]';
+    }
 
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -40,16 +58,43 @@ async function transcribe(mediaUrl) {
     }
 
     // Descargar el audio con Basic Auth de Twilio (timeout 10s)
+    // redirect: 'manual' — defensa en profundidad: si Twilio responde con 30x, no seguimos a un dominio externo
     console.log(`[transcriber] Descargando audio: ${mediaUrl.substring(0, 80)}...`);
     const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
     const audioRes = await withTimeout(
       fetch(mediaUrl, {
         headers: { Authorization: `Basic ${credentials}` },
-        redirect: 'follow',
+        redirect: 'manual',
       }),
       10000,
       'descarga audio Twilio'
     );
+
+    // Twilio sirve audios via redirect 307 a un bucket S3. Hay que seguirlo manualmente — pero SIN el Authorization header.
+    if (audioRes.status >= 300 && audioRes.status < 400) {
+      const location = audioRes.headers.get('location');
+      if (!location) {
+        console.error('[transcriber] Redirect sin Location');
+        return '[No pude descargar el audio, ¿podrías escribirlo?]';
+      }
+      console.log(`[transcriber] Siguiendo redirect (sin creds): ${location.substring(0, 80)}...`);
+      // Sí permitimos cualquier host acá (es donde Twilio aloja el archivo, típicamente S3) — pero SIN auth header.
+      const followRes = await withTimeout(
+        fetch(location, { redirect: 'follow' }),
+        10000,
+        'descarga audio (redirect)'
+      );
+      if (!followRes.ok) {
+        console.error(`[transcriber] Error HTTP en redirect: ${followRes.status}`);
+        return '[No pude descargar el audio, ¿podrías escribirlo?]';
+      }
+      // Reasignar a audioRes para que el resto del código funcione
+      var redirectedAudioRes = followRes;
+      Object.defineProperty(audioRes, 'ok', { value: followRes.ok, writable: true });
+      Object.defineProperty(audioRes, 'status', { value: followRes.status, writable: true });
+      Object.defineProperty(audioRes, 'headers', { value: followRes.headers, writable: true });
+      Object.defineProperty(audioRes, 'arrayBuffer', { value: () => followRes.arrayBuffer(), writable: true });
+    }
 
     if (!audioRes.ok) {
       console.error(`[transcriber] Error HTTP descargando audio: ${audioRes.status} ${audioRes.statusText}`);
