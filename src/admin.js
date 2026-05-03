@@ -404,9 +404,9 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       ? 'background:var(--accent-dim);color:var(--accent)'
       : 'color:var(--text-2)';
     const hoverClass = active ? '' : 'sb-nav-hover';
-    return `<a href="${href}" data-label="${escapeHtml(label)}" title="${escapeHtml(label)}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${hoverClass}" style="${baseStyle};position:relative">
+    return `<a href="${href}" data-label="${escapeHtml(label)}" title="${escapeHtml(label)}"${active ? ' aria-current="page"' : ''} class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${hoverClass}" style="${baseStyle};position:relative">
       ${active ? `<span aria-hidden="true" style="position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)"></span>` : ''}
-      <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center" style="color:${active ? 'var(--accent)' : 'var(--text-2)'}">${icon}</span>
+      <span aria-hidden="true" class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center" style="color:${active ? 'var(--accent)' : 'var(--text-2)'}">${icon}</span>
       <span class="flex-1 sidebar-label whitespace-nowrap overflow-hidden">${label}</span>
       ${badge}
     </a>`;
@@ -469,8 +469,8 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       --border-s:    rgba(255,255,255,0.11);
       /* Text */
       --text-1:      #eef2ff;
-      --text-2:      #8b9ab5;
-      --text-3:      #3d5070;
+      --text-2:      #a3b2cc;   /* lightened for ~7:1 on bg-card (was #8b9ab5) */
+      --text-3:      #6a82a8;   /* lightened for ~4.6:1 on bg-card AA (was #3d5070) */
       /* Shadows */
       --shadow-sm:   0 1px 3px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.25);
       --shadow-md:   0 4px 16px rgba(0,0,0,.5), 0 8px 32px rgba(0,0,0,.3);
@@ -490,11 +490,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     html,body{font-family:var(--font)}
     body{font-feature-settings:'cv02','cv03','cv04','cv11','ss01','ss02';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:var(--text-1)}
     .font-mono,.mono{font-family:var(--mono)!important}
-    /* Subtle noise texture (Precision Dark signature) */
-    body::before{
-      content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;
-      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' seed='2'/><feColorMatrix values='0 0 0 0 .55 0 0 0 0 .65 0 0 0 0 .85 0 0 0 .025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-    }
+    /* Noise texture removed — feTurbulence was causing paint cost on mid-range GPUs */
     /* Scrollbars */
     ::-webkit-scrollbar{width:5px;height:5px}
     ::-webkit-scrollbar-track{background:transparent}
@@ -557,19 +553,21 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     /* Skeleton */
     .pd-skeleton{background:linear-gradient(90deg,var(--bg-inset) 25%,var(--border) 50%,var(--bg-inset) 75%);background-size:800px 100%;animation:shimmer 1.6s infinite;border-radius:var(--r-sm)}
     /* Modal */
-    .pd-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px;animation:fade-in .15s ease}
+    .pd-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px;animation:fade-in .15s ease}
     .pd-modal{background:var(--bg-card);border:1px solid var(--border-s);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);max-width:600px;width:100%;padding:28px;animation:modal-in .22s cubic-bezier(.34,1.56,.64,1)}
     /* Drawer (right slide-in) */
-    .pd-drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:80;animation:fade-in .15s ease}
+    .pd-drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;animation:fade-in .15s ease}
     .pd-drawer{position:fixed;top:0;right:0;bottom:0;width:560px;max-width:96vw;background:var(--bg-card);border-left:1px solid var(--border-s);box-shadow:var(--shadow-lg);z-index:81;animation:slide-in .25s cubic-bezier(.4,0,.2,1);overflow-y:auto}
     /* Checkbox */
     .pd-check{width:16px;height:16px;border:1.5px solid var(--border-s);border-radius:4px;background:var(--bg-input);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
     .pd-check.on{background:var(--accent);border-color:var(--accent);color:#fff}
     /* Stage / status colored dots */
     .pd-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
-    /* KPI Card (Precision Dark — count-up + glow + mono + bar) */
-    .pd-kpi{display:block;position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 18px 16px;text-decoration:none;color:var(--text-1);overflow:hidden;transition:transform .2s,box-shadow .2s,border-color .2s;animation:count-up .5s ease both;cursor:pointer}
-    .pd-kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-s)}
+    /* KPI Card — hover usa pseudo-element opacity (cheap) en lugar de animar box-shadow */
+    .pd-kpi{display:block;position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 18px 16px;text-decoration:none;color:var(--text-1);overflow:hidden;transition:transform .2s ease,border-color .2s ease;animation:count-up .5s ease both;cursor:pointer;will-change:transform}
+    .pd-kpi::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:var(--shadow-md);opacity:0;transition:opacity .2s ease;pointer-events:none}
+    .pd-kpi:hover{transform:translateY(-2px);border-color:var(--border-s)}
+    .pd-kpi:hover::after{opacity:1}
     .pd-kpi-glow{position:absolute;top:0;right:0;width:140px;height:140px;opacity:.35;pointer-events:none}
     .pd-kpi-head{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
     .pd-kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3)}
@@ -578,7 +576,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .pd-kpi-value{font-size:32px;font-weight:600;line-height:1;margin-top:10px;color:var(--text-1);letter-spacing:-.01em;position:relative;z-index:1}
     .pd-kpi-sub{font-size:11px;color:var(--text-2);margin-top:6px;position:relative;z-index:1}
     .pd-kpi-bar{height:2px;background:var(--bg-inset);border-radius:2px;overflow:hidden;margin-top:12px;position:relative;z-index:1}
-    .pd-kpi-bar-fill{height:100%;border-radius:2px;transition:width 1.2s cubic-bezier(.25,.46,.45,.94)}
+    .pd-kpi-bar-fill{height:100%;width:100%;border-radius:2px;transform:scaleX(0);transform-origin:left center;transition:transform 1.2s cubic-bezier(.25,.46,.45,.94);will-change:transform}
     /* Sidebar nav hover (subtle, only inactive items) */
     .sb-nav-hover:hover{background:var(--bg-inset);color:var(--text-1)!important}
     .sb-nav-hover:hover span:not(.sidebar-badge){color:var(--text-1)!important}
@@ -587,7 +585,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .sb-logout-btn:hover span{color:var(--red)!important}
     /* Toast (Precision Dark — bottom-center stacked) */
     .pd-toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
-    .pd-toast{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border-radius:var(--r-md);font-size:13px;font-weight:500;color:var(--text-1);box-shadow:var(--shadow-md);animation:toast-in .22s cubic-bezier(.34,1.56,.64,1);pointer-events:auto;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+    .pd-toast{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border-radius:var(--r-md);font-size:13px;font-weight:500;color:var(--text-1);box-shadow:var(--shadow-md);animation:toast-in .22s cubic-bezier(.34,1.56,.64,1);pointer-events:auto}
     .pd-toast-ok{background:oklch(30% .12 160 / .95);border:1px solid oklch(45% .14 160 / .6);color:#d1fae5}
     .pd-toast-err{background:oklch(28% .15 20 / .95);border:1px solid oklch(45% .17 20 / .6);color:#fecaca}
     .pd-toast-info{background:rgba(13,27,46,.95);border:1px solid var(--border-s);color:var(--text-1)}
@@ -596,8 +594,10 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
        Legacy classes (kept for backward compat during migration)
        ────────────────────────────────────────────────────────────── */
     .nav-active{background:rgba(59,130,246,0.15)!important}
-    .card-hover{transition:box-shadow 0.2s,transform 0.2s}
-    .card-hover:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+    .card-hover{transition:transform .2s ease;position:relative}
+    .card-hover::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:var(--shadow-md);opacity:0;transition:opacity .2s ease;pointer-events:none}
+    .card-hover:hover{transform:translateY(-2px)}
+    .card-hover:hover::after{opacity:1}
     /* Toast notifications (legacy — fixed bottom-right; new pd-toast lives bottom-center, see .pd-toast-wrap) */
     .toast{position:fixed;bottom:24px;right:24px;z-index:999;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:500;color:white;opacity:0;transform:translateY(20px);transition:all .3s ease;max-width:320px}
     .toast.show{opacity:1;transform:translateY(0)}
@@ -608,8 +608,8 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     .kanban-drag{box-shadow:var(--shadow-md);transform:rotate(1.5deg);z-index:100}
     .kanban-col{min-height:120px;transition:background .2s,border-color .2s}
     .kanban-col.sortable-chosen-hover{background:var(--accent-dim);border-color:var(--accent)}
-    .kanban-card{transition:box-shadow .2s,transform .15s,border-color .2s}
-    .kanban-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px);border-color:var(--border-s)}
+    .kanban-card{transition:transform .15s ease,border-color .2s ease}
+    .kanban-card:hover{transform:translateY(-1px);border-color:var(--border-s)}
     .kanban-empty{border:1.5px dashed var(--border-s);border-radius:12px;padding:24px;text-align:center;color:var(--text-3);font-size:13px}
     /* View toggle */
     .view-toggle .active{background:var(--accent);color:#fff}
@@ -714,6 +714,12 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     main{animation:page-in .25s ease-out}
     /* Selection */
     ::selection{background:var(--accent-dim);color:var(--text-1)}
+    /* Focus visible globally (a11y §1) */
+    *:focus{outline:none}
+    a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+    /* Skip link */
+    .skip-link{position:absolute;top:-40px;left:8px;background:var(--accent);color:#fff;padding:8px 14px;border-radius:var(--r-md);font-size:13px;font-weight:500;z-index:10000;text-decoration:none;transition:top .15s}
+    .skip-link:focus{top:8px}
     /* Hover bg-slate-50 mappings keep working but darker */
     html.dark .hover\\:bg-blue-50:hover{background-color:var(--accent-dim)!important}
     html.dark .hover\\:bg-orange-50:hover{background-color:var(--amber-dim)!important}
@@ -825,11 +831,11 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     #sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
     #sidebar .sidebar-brand,#sidebar .sidebar-search,#sidebar .sidebar-bottom{flex-shrink:0}
 
-    /* ── Sidebar collapse (desktop) — click-only, NO hover-expand ── */
+    /* ── Sidebar collapse (desktop) — click-only, NO hover-expand, NO width animation
+       (perf: animating width/margin-left causes layout reflow on every frame; instant toggle is faster) ── */
     @media(min-width:768px){
-      #sidebar{transition:width .2s cubic-bezier(.25,.46,.45,.94)}
       body.sidebar-collapsed #sidebar{width:72px!important}
-      body.sidebar-collapsed #main-wrapper{margin-left:72px!important;transition:margin-left .2s cubic-bezier(.25,.46,.45,.94)}
+      body.sidebar-collapsed #main-wrapper{margin-left:72px!important}
       /* ─ Section label: swap text↔divider line (same 20px height) ─ */
       body.sidebar-collapsed #sidebar .sidebar-section-text{display:none!important}
       body.sidebar-collapsed #sidebar .sidebar-section-divider{display:block!important}
@@ -877,7 +883,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       /* Filter-tabs containers (flex-wrap) → horizontal scroll */
       main .flex-wrap.gap-1\\.5,main .flex.flex-wrap{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px}
       main .flex-wrap.gap-1\\.5::-webkit-scrollbar,main .flex.flex-wrap::-webkit-scrollbar{display:none}
-      /* Tables: ensure parent has overflow-x */
+      /* Tables: ensure parent has overflow-x with subtle gradient hint */
       main .overflow-x-auto{overflow-x:auto;-webkit-overflow-scrolling:touch}
       /* Reduce paddings inside cards */
       main .p-5{padding:14px!important}
@@ -887,11 +893,20 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       #sidebar-backdrop{background:rgba(0,0,0,.65)}
       /* Mobile sidebar: slightly narrower so it doesn't dominate the screen */
       #sidebar{width:280px!important;max-width:85vw}
+      /* Inputs ≥16px to prevent iOS auto-zoom on focus */
+      main input:not([type="checkbox"]):not([type="radio"]),main textarea,main select{font-size:16px!important}
+      /* Tap targets: minimum 36px height on interactive elements (close to 44px guideline) */
+      main a:not(.sidebar-label),main button:not(.pd-badge):not(.sidebar-badge){min-height:36px}
+      /* Extra bottom padding so FAB doesn't cover last row */
+      main{padding-bottom:96px!important}
+      /* Toggle dropdown chevrons / tiny icon-only buttons keep their size */
+      main button.pd-btn-icon,main button[aria-label]:not(.fab-btn){min-height:auto}
     }
   </style>
 </head>
 <body class="min-h-screen" style="display:flex;background:var(--bg-app);color:var(--text-1)">
-  <aside id="sidebar" style="width:240px;position:fixed;top:0;left:0;z-index:20;background:var(--bg-card);border-right:1px solid var(--border)" class="flex flex-col">
+  <a href="#main-content" class="skip-link">Saltar al contenido principal</a>
+  <aside id="sidebar" aria-label="Navegación principal" style="width:240px;position:fixed;top:0;left:0;z-index:20;background:var(--bg-card);border-right:1px solid var(--border)" class="flex flex-col">
     <!-- Brand -->
     <div class="px-4 py-4 sidebar-brand" style="border-bottom:1px solid var(--border)">
       <div class="flex items-center gap-3">
@@ -914,7 +929,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       </button>
     </div>
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto py-3 px-3 space-y-4">
+    <nav aria-label="Secciones del panel" class="flex-1 overflow-y-auto py-3 px-3 space-y-4">
       <div>
         ${sectionLabel('General')}
         <div class="space-y-0.5">
@@ -965,8 +980,8 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   </aside>
   <div id="main-wrapper" style="margin-left:240px;flex:1;min-height:100vh">
     <div class="md:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10" style="background:var(--bg-card);border-bottom:1px solid var(--border)">
-      <button onclick="toggleSidebar()" class="text-white p-1.5 rounded-lg hover:bg-white/10">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <button onclick="toggleSidebar()" id="sidebarToggle" aria-label="Abrir menú de navegación" aria-expanded="false" aria-controls="sidebar" class="text-white p-1.5 rounded-lg hover:bg-white/10">
+        <svg aria-hidden="true" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <div class="flex items-center gap-2">
         <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
@@ -975,7 +990,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
         <span class="text-white text-sm font-bold">DT Systems</span>
       </div>
     </div>
-    <main class="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 pb-16 min-h-screen">${body}</main>
+    <main id="main-content" class="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6 pb-16 min-h-screen">${body}</main>
   </div>
   <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
 
@@ -1013,17 +1028,21 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   function toggleSidebar(){
     const s=document.getElementById('sidebar');
     const b=document.getElementById('sidebar-backdrop');
+    const t=document.getElementById('sidebarToggle');
     const isOpen=s.classList.contains('open');
     if(isOpen){closeSidebar();}else{
       s.classList.add('open');
       b.classList.add('open');
       document.body.style.overflow='hidden';
+      if(t)t.setAttribute('aria-expanded','true');
     }
   }
   function closeSidebar(){
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebar-backdrop').classList.remove('open');
     document.body.style.overflow='';
+    const t=document.getElementById('sidebarToggle');
+    if(t)t.setAttribute('aria-expanded','false');
   }
 
   // ── Sidebar collapse (desktop) ──
@@ -1192,17 +1211,17 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   var cmdInp=document.getElementById('cmdInput');
   if(cmdInp)cmdInp.addEventListener('input',function(){_cmdIdx=-1;renderCmdResults(this.value);});
 
-  // ── Count-up + KPI bar fill (Precision Dark KPI cards) ──
+  // ── Count-up + KPI bar fill (respeta prefers-reduced-motion) ──
   (function(){
+    var reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     function countUp(el){
       var target=parseFloat(el.getAttribute('data-count-to'))||0;
-      if(target===0){el.textContent='0';return;}
+      if(reduceMotion || target===0){el.textContent=target;return;}
       var start=performance.now(), dur=700;
       function step(t){
         var p=Math.min(1,(t-start)/dur);
-        var eased=1-Math.pow(1-p,3); // cubic-out
-        var val=Math.round(target*eased);
-        el.textContent=val;
+        var eased=1-Math.pow(1-p,3);
+        el.textContent=Math.round(target*eased);
         if(p<1)requestAnimationFrame(step);
       }
       requestAnimationFrame(step);
@@ -1210,8 +1229,9 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     function init(){
       document.querySelectorAll('[data-count-to]').forEach(countUp);
       document.querySelectorAll('[data-bar-pct]').forEach(function(el){
-        var pct=parseFloat(el.getAttribute('data-bar-pct'))||0;
-        setTimeout(function(){el.style.width=pct+'%';},120);
+        var pct=Math.max(0,Math.min(100,parseFloat(el.getAttribute('data-bar-pct'))||0));
+        if(reduceMotion){el.style.transform='scaleX('+(pct/100)+')';return;}
+        setTimeout(function(){el.style.transform='scaleX('+(pct/100)+')';},120);
       });
     }
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
@@ -1275,8 +1295,8 @@ function loginPage(errorMsg = '') {
       --border: rgba(255,255,255,0.065);
       --border-s: rgba(255,255,255,0.11);
       --text-1: #eef2ff;
-      --text-2: #8b9ab5;
-      --text-3: #3d5070;
+      --text-2: #a3b2cc;
+      --text-3: #6a82a8;
       --r-md: 10px;
       --r-lg: 14px;
       --r-xl: 20px;
@@ -1285,7 +1305,7 @@ function loginPage(errorMsg = '') {
     }
     body{font-family:var(--font);background:var(--bg-app);color:var(--text-1);min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;position:relative}
     /* Noise texture signature */
-    body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' seed='2'/><feColorMatrix values='0 0 0 0 .55 0 0 0 0 .65 0 0 0 0 .85 0 0 0 .025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
+    /* (login) noise texture removed for perf */
     /* Radial accent glow centered behind card */
     .glow{position:fixed;top:50%;left:50%;width:600px;height:600px;transform:translate(-50%,-50%);background:radial-gradient(circle, var(--accent-dim) 0%, transparent 70%);pointer-events:none;z-index:1;animation:glow-breathe 6s ease-in-out infinite}
     @keyframes glow-breathe{0%,100%{opacity:.7;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}}
@@ -2256,8 +2276,17 @@ router.get('/client/:phone', requireAuth, async (req, res) => {
       .catch(function(e){console.error('refresh error',e);});
   }
 
-  function startLive(){ interval = setInterval(refresh, 5000); }
-  function stopLive(){ clearInterval(interval); }
+  function startLive(){
+    if(interval) clearInterval(interval);
+    interval = setInterval(refresh, 5000);
+  }
+  function stopLive(){ clearInterval(interval); interval = null; }
+  // Pause polling when tab is hidden (saves battery + bandwidth)
+  document.addEventListener('visibilitychange', function(){
+    if(!liveOn) return;
+    if(document.hidden){ stopLive(); }
+    else { refresh(); startLive(); }
+  });
 
   window.toggleLive = function(){
     liveOn = !liveOn;
