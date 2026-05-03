@@ -7,9 +7,29 @@ const express = require('express');
 const multer = require('multer');
 const db = require('./db');
 
-const APP_VERSION = '3.2.0'; // Actualizar con cada deploy relevante
+const APP_VERSION = '4.0.0'; // Actualizar con cada deploy relevante
 
 const CHANGELOG = [
+  {
+    version: '4.0.0',
+    date: '2026-05-02',
+    title: 'Rediseño Visual Completo — Precision Dark',
+    changes: [
+      'Sistema de diseño "Precision Dark": paleta OKLCH (azul accent + verde/ámbar/rojo/púrpura semánticos), shadows multi-capa, radii consistentes',
+      'Tipografía: fuente Geist (sans + mono) en todo el panel, números grandes en monospace',
+      'Modo oscuro fijo (Precision Dark) — el toggle claro/oscuro fue removido',
+      'Body con textura de noise SVG sutil signature de Precision Dark',
+      'Animaciones: page-in en cada navegación, count-up en KPIs del dashboard, modal-in con bounce, toast-in suave',
+      'Login rediseñado: card centrado con radial glow accent, spinner inline al enviar, fuente Geist',
+      'Sidebar: active state con barra lateral 3px accent (estilo Linear), badges semánticos, paleta tokens, logout en rojo',
+      'Dashboard: KPI cards con count-up animado + glow radial + barra de progreso + delays escalonados',
+      'Pipeline kanban: avatares circulares colorimétricos, borde ámbar para demos pendientes, dot con glow por etapa, drop zones con dashed border accent',
+      'Centro de Control: pill de estado del agente con servicios (Twilio · Claude · Resend · Drive)',
+      'Changelog: estilo Linear con timeline accent, versiones en mono, badge "Actual" verde con borde',
+      'Toast system: 3 variantes (ok/err/info) con OKLCH backgrounds, posición centro inferior, stacked',
+      'Polish global: ~30 reglas CSS que mapean toda la paleta Tailwind (bg-blue/orange/red/emerald/amber/purple) a tokens Precision Dark sin tocar markup',
+    ],
+  },
   {
     version: '3.2.0',
     date: '2026-04-22',
@@ -370,18 +390,23 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   // Section label: ALWAYS same height (20px). Collapsed shows divider line, expanded shows text.
   // This keeps icon Y-positions identical in both states → no shift on hover expand.
   const sectionLabel = (name) =>
-    `<div class="sidebar-section-label flex items-center" style="height:20px;margin-bottom:4px;padding:0 4px">
-      <span class="sidebar-section-text text-[10px] font-semibold text-slate-600 uppercase tracking-widest leading-none">${name}</span>
-      <div class="sidebar-section-divider" style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:none"></div>
+    `<div class="sidebar-section-label flex items-center" style="height:20px;margin-bottom:4px;padding:0 6px">
+      <span class="sidebar-section-text text-[10px] font-semibold uppercase leading-none" style="color:var(--text-3);letter-spacing:.12em">${name}</span>
+      <div class="sidebar-section-divider" style="flex:1;height:1px;background:var(--border);display:none"></div>
     </div>`;
 
   const navItem = (href, icon, label, page) => {
     const active = activePage === page;
     let badge = '';
-    if (page === 'clients' && pendingCount > 0) badge = `<span class="sidebar-badge bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse">${pendingCount}</span>`;
-    if (page === 'control' && notifCount > 0) badge = `<span class="sidebar-badge bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${notifCount}</span>`;
-    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 ${active ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'}">
-      <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center ${active ? 'text-white' : 'text-slate-400'}">${icon}</span>
+    if (page === 'clients' && pendingCount > 0) badge = `<span class="sidebar-badge text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center animate-pulse" style="background:var(--amber);color:#0a1628">${pendingCount}</span>`;
+    if (page === 'control' && notifCount > 0) badge = `<span class="sidebar-badge text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center" style="background:var(--red);color:#fff">${notifCount}</span>`;
+    const baseStyle = active
+      ? 'background:var(--accent-dim);color:var(--accent)'
+      : 'color:var(--text-2)';
+    const hoverClass = active ? '' : 'sb-nav-hover';
+    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${hoverClass}" style="${baseStyle};position:relative">
+      ${active ? `<span aria-hidden="true" style="position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)"></span>` : ''}
+      <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center" style="color:${active ? 'var(--accent)' : 'var(--text-2)'}">${icon}</span>
       <span class="flex-1 sidebar-label whitespace-nowrap overflow-hidden">${label}</span>
       ${badge}
     </a>`;
@@ -393,52 +418,201 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   const userInitial = (userName || userEmail || 'D')[0].toUpperCase();
 
   const userBlock = `
-    <div class="mx-3 mb-2 p-2.5 bg-white/5 rounded-xl border border-white/5 hover:bg-white/8 transition-colors cursor-default">
+    <div class="mx-3 mb-2 p-2.5 rounded-lg transition-colors cursor-default" style="background:var(--bg-inset);border:1px solid var(--border)">
       <div class="flex items-center gap-2.5">
         ${userPhoto
-          ? `<img src="${userPhoto}" class="w-7 h-7 rounded-full flex-shrink-0 ring-2 ring-blue-500/30" alt="">`
-          : `<div class="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${userInitial}</div>`}
+          ? `<img src="${userPhoto}" class="w-7 h-7 rounded-full flex-shrink-0" style="border:2px solid var(--accent-dim)" alt="">`
+          : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)">${userInitial}</div>`}
         <div class="min-w-0 flex-1 sidebar-user-info">
-          <div class="text-xs font-semibold text-slate-200 truncate leading-tight">${escapeHtml(userName || 'David Taranto')}</div>
-          ${userEmail ? `<div class="text-[10px] text-slate-500 truncate leading-tight">${escapeHtml(userEmail)}</div>` : '<div class="text-[10px] text-slate-500 leading-tight">Admin</div>'}
+          <div class="text-xs font-semibold truncate leading-tight" style="color:var(--text-1)">${escapeHtml(userName || 'David Taranto')}</div>
+          <div class="text-[10px] truncate leading-tight" style="color:var(--text-3)">${userEmail ? escapeHtml(userEmail) : 'Admin · Salta'}</div>
         </div>
       </div>
     </div>`;
 
   return `<!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>${escapeHtml(title)} · DT Systems</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <style>
+    /* ──────────────────────────────────────────────────────────────
+       PRECISION DARK — Design System Tokens
+       ────────────────────────────────────────────────────────────── */
+    :root{
+      /* Accents (OKLCH) */
+      --accent:      oklch(62% 0.2 250);
+      --accent-dim:  oklch(62% 0.2 250 / 0.13);
+      --accent-glow: oklch(62% 0.2 250 / 0.28);
+      --green:       oklch(62% 0.16 160);
+      --green-dim:   oklch(62% 0.16 160 / 0.13);
+      --amber:       oklch(68% 0.17 65);
+      --amber-dim:   oklch(68% 0.17 65 / 0.13);
+      --red:         oklch(58% 0.2 20);
+      --red-dim:     oklch(58% 0.2 20 / 0.13);
+      --purple:      oklch(62% 0.18 290);
+      --purple-dim:  oklch(62% 0.18 290 / 0.13);
+      /* Backgrounds */
+      --bg-app:      #060d19;
+      --bg-card:     #0d1b2e;
+      --bg-card2:    #101e33;
+      --bg-inset:    #091525;
+      --bg-input:    #0a1628;
+      /* Borders */
+      --border:      rgba(255,255,255,0.065);
+      --border-s:    rgba(255,255,255,0.11);
+      /* Text */
+      --text-1:      #eef2ff;
+      --text-2:      #8b9ab5;
+      --text-3:      #3d5070;
+      /* Shadows */
+      --shadow-sm:   0 1px 3px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.25);
+      --shadow-md:   0 4px 16px rgba(0,0,0,.5), 0 8px 32px rgba(0,0,0,.3);
+      --shadow-lg:   0 16px 64px rgba(0,0,0,.7);
+      /* Radii */
+      --r-sm: 6px;
+      --r-md: 10px;
+      --r-lg: 14px;
+      --r-xl: 20px;
+      /* Type */
+      --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'Geist Mono', 'SF Mono', ui-monospace, monospace;
+      /* Sidebar width */
+      --sw: 240px;
+    }
+    /* Base */
+    html,body{font-family:var(--font)}
+    body{font-feature-settings:'cv02','cv03','cv04','cv11','ss01','ss02';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:var(--text-1)}
+    .font-mono,.mono{font-family:var(--mono)!important}
+    /* Subtle noise texture (Precision Dark signature) */
+    body::before{
+      content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' seed='2'/><feColorMatrix values='0 0 0 0 .55 0 0 0 0 .65 0 0 0 0 .85 0 0 0 .025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    }
+    /* Scrollbars */
     ::-webkit-scrollbar{width:5px;height:5px}
-    ::-webkit-scrollbar-track{background:#f1f5f9}
-    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
-    ::-webkit-scrollbar-thumb:hover{background:#94a3b8}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border-s);border-radius:3px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--text-3)}
+
+    /* ──────────────────────────────────────────────────────────────
+       Keyframes
+       ────────────────────────────────────────────────────────────── */
+    @keyframes spin       { to{transform:rotate(360deg)} }
+    @keyframes shimmer    { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+    @keyframes fade-in    { from{opacity:0} to{opacity:1} }
+    @keyframes slide-in   { from{transform:translateX(100%)} to{transform:translateX(0)} }
+    @keyframes modal-in   { from{opacity:0;transform:scale(.94) translateY(-8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+    @keyframes toast-in   { from{opacity:0;transform:translateY(10px) scale(.96)} to{opacity:1;transform:translateY(0) scale(1)} }
+    @keyframes page-in    { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes count-up   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes bubble-in  { from{opacity:0;transform:translateY(8px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+    @keyframes pop-in     { 0%{transform:scale(.7);opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+    @keyframes win-burst  { 0%{transform:scale(1)} 30%{transform:scale(1.15)} 60%{transform:scale(.95)} 100%{transform:scale(1)} }
     .spin{animation:spin 1s linear infinite}
-    body{font-feature-settings:'cv02','cv03','cv04','cv11';-webkit-font-smoothing:antialiased}
+    .page-enter{animation:page-in .22s ease forwards}
+    @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+    /* ──────────────────────────────────────────────────────────────
+       Utility classes (Precision Dark surface system)
+       ────────────────────────────────────────────────────────────── */
+    .pd-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
+    .pd-card2{background:var(--bg-card2);border:1px solid var(--border);border-radius:var(--r-md)}
+    .pd-inset{background:var(--bg-inset)}
+    .pd-divider{height:1px;background:var(--border);margin:12px 0}
+    /* Buttons */
+    .pd-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:var(--r-md);font-size:13px;font-weight:500;color:var(--text-1);background:var(--bg-card2);border:1px solid var(--border-s);cursor:pointer;transition:all .15s;text-decoration:none;line-height:1}
+    .pd-btn:hover{background:var(--bg-inset);border-color:var(--border-s)}
+    .pd-btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .pd-btn-primary:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--accent-dim)}
+    .pd-btn-ghost{background:transparent;border-color:transparent;color:var(--text-2)}
+    .pd-btn-ghost:hover{color:var(--text-1);background:var(--bg-inset)}
+    .pd-btn-danger{background:var(--red);border-color:var(--red);color:#fff}
+    .pd-btn-danger:hover{filter:brightness(1.1)}
+    .pd-btn-sm{padding:5px 10px;font-size:12px}
+    .pd-btn-icon{padding:7px;width:32px;height:32px}
+    /* Badges */
+    .pd-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:3px 8px;border-radius:5px;letter-spacing:.3px;text-transform:uppercase;background:var(--bg-inset);color:var(--text-2);border:1px solid var(--border)}
+    /* Inputs */
+    .pd-input{width:100%;background:var(--bg-input);border:1px solid var(--border-s);color:var(--text-1);padding:9px 12px;border-radius:var(--r-md);font-size:13px;font-family:var(--font);outline:none;transition:all .15s}
+    .pd-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+    .pd-input::placeholder{color:var(--text-3)}
+    /* Tables */
+    .pd-table{width:100%;border-collapse:collapse;font-size:13px}
+    .pd-table th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg-inset)}
+    .pd-table td{padding:12px 14px;border-bottom:1px solid var(--border);color:var(--text-1)}
+    .pd-table tr{transition:background .1s}
+    .pd-table tbody tr:hover{background:var(--bg-inset)}
+    /* Tabs */
+    .pd-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border)}
+    .pd-tab{padding:10px 14px;font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:transparent;border-left:0;border-right:0;border-top:0}
+    .pd-tab:hover{color:var(--text-1)}
+    .pd-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    /* Skeleton */
+    .pd-skeleton{background:linear-gradient(90deg,var(--bg-inset) 25%,var(--border) 50%,var(--bg-inset) 75%);background-size:800px 100%;animation:shimmer 1.6s infinite;border-radius:var(--r-sm)}
+    /* Modal */
+    .pd-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px;animation:fade-in .15s ease}
+    .pd-modal{background:var(--bg-card);border:1px solid var(--border-s);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);max-width:600px;width:100%;padding:28px;animation:modal-in .22s cubic-bezier(.34,1.56,.64,1)}
+    /* Drawer (right slide-in) */
+    .pd-drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:80;animation:fade-in .15s ease}
+    .pd-drawer{position:fixed;top:0;right:0;bottom:0;width:560px;max-width:96vw;background:var(--bg-card);border-left:1px solid var(--border-s);box-shadow:var(--shadow-lg);z-index:81;animation:slide-in .25s cubic-bezier(.4,0,.2,1);overflow-y:auto}
+    /* Checkbox */
+    .pd-check{width:16px;height:16px;border:1.5px solid var(--border-s);border-radius:4px;background:var(--bg-input);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+    .pd-check.on{background:var(--accent);border-color:var(--accent);color:#fff}
+    /* Stage / status colored dots */
+    .pd-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    /* KPI Card (Precision Dark — count-up + glow + mono + bar) */
+    .pd-kpi{display:block;position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 18px 16px;text-decoration:none;color:var(--text-1);overflow:hidden;transition:transform .2s,box-shadow .2s,border-color .2s;animation:count-up .5s ease both;cursor:pointer}
+    .pd-kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-s)}
+    .pd-kpi-glow{position:absolute;top:0;right:0;width:140px;height:140px;opacity:.35;pointer-events:none}
+    .pd-kpi-head{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+    .pd-kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3)}
+    .pd-kpi-alert{display:inline-block;width:7px;height:7px;border-radius:50%;animation:pulse-dot 1.6s ease-in-out infinite;box-shadow:0 0 0 4px rgba(0,0,0,.15)}
+    @keyframes pulse-dot{0%,100%{opacity:.6;transform:scale(.95)}50%{opacity:1;transform:scale(1.1)}}
+    .pd-kpi-value{font-size:32px;font-weight:600;line-height:1;margin-top:10px;color:var(--text-1);letter-spacing:-.01em;position:relative;z-index:1}
+    .pd-kpi-sub{font-size:11px;color:var(--text-2);margin-top:6px;position:relative;z-index:1}
+    .pd-kpi-bar{height:2px;background:var(--bg-inset);border-radius:2px;overflow:hidden;margin-top:12px;position:relative;z-index:1}
+    .pd-kpi-bar-fill{height:100%;border-radius:2px;transition:width 1.2s cubic-bezier(.25,.46,.45,.94)}
+    /* Sidebar nav hover (subtle, only inactive items) */
+    .sb-nav-hover:hover{background:var(--bg-inset);color:var(--text-1)!important}
+    .sb-nav-hover:hover span:not(.sidebar-badge){color:var(--text-1)!important}
+    /* Sidebar logout hover */
+    .sb-logout-btn:hover{background:var(--red-dim);color:var(--red)!important}
+    .sb-logout-btn:hover span{color:var(--red)!important}
+    /* Toast (Precision Dark — bottom-center stacked) */
+    .pd-toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+    .pd-toast{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border-radius:var(--r-md);font-size:13px;font-weight:500;color:var(--text-1);box-shadow:var(--shadow-md);animation:toast-in .22s cubic-bezier(.34,1.56,.64,1);pointer-events:auto;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+    .pd-toast-ok{background:oklch(30% .12 160 / .95);border:1px solid oklch(45% .14 160 / .6);color:#d1fae5}
+    .pd-toast-err{background:oklch(28% .15 20 / .95);border:1px solid oklch(45% .17 20 / .6);color:#fecaca}
+    .pd-toast-info{background:rgba(13,27,46,.95);border:1px solid var(--border-s);color:var(--text-1)}
+
+    /* ──────────────────────────────────────────────────────────────
+       Legacy classes (kept for backward compat during migration)
+       ────────────────────────────────────────────────────────────── */
     .nav-active{background:rgba(59,130,246,0.15)!important}
     .card-hover{transition:box-shadow 0.2s,transform 0.2s}
-    .card-hover:hover{box-shadow:0 8px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
-    /* Toast notifications */
+    .card-hover:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+    /* Toast notifications (legacy — fixed bottom-right; new pd-toast lives bottom-center, see .pd-toast-wrap) */
     .toast{position:fixed;bottom:24px;right:24px;z-index:999;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:500;color:white;opacity:0;transform:translateY(20px);transition:all .3s ease;max-width:320px}
     .toast.show{opacity:1;transform:translateY(0)}
-    .toast-success{background:#059669}
-    .toast-error{background:#dc2626}
+    .toast-success{background:oklch(30% .12 160);border:1px solid oklch(40% .14 160)}
+    .toast-error{background:oklch(28% .15 20);border:1px solid oklch(38% .17 20)}
     /* Kanban */
-    .kanban-ghost{opacity:0.4;background:#e0e7ff!important;border-radius:12px}
-    .kanban-drag{box-shadow:0 12px 40px rgba(0,0,0,0.15);transform:rotate(1.5deg);z-index:100}
-    .kanban-col{min-height:120px;transition:background .2s}
-    .kanban-col.sortable-chosen-hover{background:#eff6ff;border-color:#93c5fd}
-    .kanban-card{transition:box-shadow .2s,transform .15s}
-    .kanban-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.08);transform:translateY(-1px)}
-    .kanban-empty{border:2px dashed #e2e8f0;border-radius:12px;padding:24px;text-align:center;color:#94a3b8;font-size:13px}
+    .kanban-ghost{opacity:.4;background:var(--accent-dim)!important;border-radius:12px;border:1.5px dashed var(--accent)!important}
+    .kanban-drag{box-shadow:var(--shadow-md);transform:rotate(1.5deg);z-index:100}
+    .kanban-col{min-height:120px;transition:background .2s,border-color .2s}
+    .kanban-col.sortable-chosen-hover{background:var(--accent-dim);border-color:var(--accent)}
+    .kanban-card{transition:box-shadow .2s,transform .15s,border-color .2s}
+    .kanban-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px);border-color:var(--border-s)}
+    .kanban-empty{border:1.5px dashed var(--border-s);border-radius:12px;padding:24px;text-align:center;color:var(--text-3);font-size:13px}
     /* View toggle */
-    .view-toggle .active{background:#3b82f6;color:white}
+    .view-toggle .active{background:var(--accent);color:#fff}
     .view-toggle button{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:500;transition:all .15s}
     #sidebar{transition:transform 0.28s cubic-bezier(.4,0,.2,1)}
     #sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:19;opacity:0;visibility:hidden;transition:opacity 0.28s ease,visibility 0.28s ease}
@@ -448,40 +622,103 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       #sidebar.open{transform:translateX(0)}
       #main-wrapper{margin-left:0!important}
     }
-    /* ── Dark Mode ── */
-    html.dark body{background:linear-gradient(135deg,#0c1222 0%,#060d1a 100%)!important;color:#cbd5e1}
-    html.dark .bg-white{background-color:#162032!important}
-    html.dark .bg-slate-50\/80,html.dark .bg-slate-50{background-color:#0f1729!important}
-    html.dark .border-slate-200{border-color:#1e3050!important}
-    html.dark .border-slate-100{border-color:rgba(30,48,80,0.5)!important}
-    html.dark .divide-slate-100>*+*{border-color:rgba(30,48,80,0.5)!important}
-    html.dark .text-slate-900,html.dark .text-slate-800{color:#f1f5f9!important}
-    html.dark .text-slate-700{color:#e2e8f0!important}
-    html.dark .text-slate-600{color:#cbd5e1!important}
-    html.dark .text-slate-500{color:#94a3b8!important}
-    html.dark .text-slate-400{color:#64748b!important}
-    html.dark .hover\:bg-slate-50:hover{background-color:#1e293b!important}
-    html.dark .hover\:bg-slate-50\/50:hover{background-color:rgba(30,41,59,0.3)!important}
-    html.dark input:not([type="checkbox"]):not([type="radio"]):not(.no-dark),html.dark textarea,html.dark select{background-color:#0c1629!important;border-color:#1e3050!important;color:#e2e8f0!important}
-    html.dark input::placeholder,html.dark textarea::placeholder{color:#475569!important}
-    html.dark ::-webkit-scrollbar-track{background:#0f172a}
-    html.dark ::-webkit-scrollbar-thumb{background:#334155}
-    html.dark .kanban-card{background:#162032!important;border-color:#1e3050!important}
-    html.dark .kanban-empty{border-color:#1e3050!important;color:#475569!important}
-    html.dark .kanban-ghost{background:#1e3a5f!important}
-    html.dark .kanban-col.sortable-chosen-hover{background:#1a2744!important;border-color:#2563eb!important}
-    html.dark .bg-slate-100{background-color:#1e293b!important}
-    html.dark .bg-slate-100.text-slate-600{color:#94a3b8!important}
-    html.dark .bg-gray-100{background-color:#1e293b!important}
-    html.dark .bg-gray-100.text-gray-400,html.dark .bg-gray-100.text-gray-500{color:#64748b!important}
-    html.dark .bg-orange-50{background-color:rgba(251,146,60,0.1)!important}
-    html.dark .bg-blue-50{background-color:rgba(59,130,246,0.1)!important}
-    html.dark .bg-emerald-50{background-color:rgba(16,185,129,0.1)!important}
-    html.dark .bg-red-50{background-color:rgba(239,68,68,0.1)!important}
-    html.dark .toast-success{background:#065f46}
-    html.dark .toast-error{background:#991b1b}
-    html.dark #sidebar{background:#060d1a!important;border-color:rgba(30,48,80,0.3)!important}
-    html.dark .card-hover:hover{box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+    /* ── Dark Mode legacy overrides (kept until per-view migration) ── */
+    html.dark body{background:var(--bg-app)!important;color:var(--text-1)}
+    html.dark .bg-white{background-color:var(--bg-card)!important}
+    html.dark .bg-slate-50\/80,html.dark .bg-slate-50{background-color:var(--bg-inset)!important}
+    html.dark .border-slate-200{border-color:var(--border-s)!important}
+    html.dark .border-slate-100{border-color:var(--border)!important}
+    html.dark .divide-slate-100>*+*{border-color:var(--border)!important}
+    html.dark .text-slate-900,html.dark .text-slate-800{color:var(--text-1)!important}
+    html.dark .text-slate-700{color:var(--text-1)!important}
+    html.dark .text-slate-600{color:var(--text-2)!important}
+    html.dark .text-slate-500{color:var(--text-2)!important}
+    html.dark .text-slate-400{color:var(--text-3)!important}
+    html.dark .hover\:bg-slate-50:hover{background-color:var(--bg-inset)!important}
+    html.dark .hover\:bg-slate-50\/50:hover{background-color:var(--bg-inset)!important}
+    html.dark input:not([type="checkbox"]):not([type="radio"]):not(.no-dark),html.dark textarea,html.dark select{background-color:var(--bg-input)!important;border-color:var(--border-s)!important;color:var(--text-1)!important}
+    html.dark input::placeholder,html.dark textarea::placeholder{color:var(--text-3)!important}
+    html.dark ::-webkit-scrollbar-track{background:transparent}
+    html.dark ::-webkit-scrollbar-thumb{background:var(--border-s)}
+    html.dark .kanban-card{background:var(--bg-card2)!important;border-color:var(--border)!important}
+    html.dark .kanban-empty{border-color:var(--border-s)!important;color:var(--text-3)!important}
+    html.dark .kanban-ghost{background:var(--accent-dim)!important}
+    html.dark .kanban-col.sortable-chosen-hover{background:var(--accent-dim)!important;border-color:var(--accent)!important}
+    html.dark .bg-slate-100{background-color:var(--bg-inset)!important}
+    html.dark .bg-slate-100.text-slate-600{color:var(--text-2)!important}
+    html.dark .bg-gray-100{background-color:var(--bg-inset)!important}
+    html.dark .bg-gray-100.text-gray-400,html.dark .bg-gray-100.text-gray-500{color:var(--text-3)!important}
+    html.dark .bg-orange-50{background-color:var(--amber-dim)!important}
+    html.dark .bg-blue-50{background-color:var(--accent-dim)!important}
+    html.dark .bg-emerald-50{background-color:var(--green-dim)!important}
+    html.dark .bg-red-50{background-color:var(--red-dim)!important}
+    html.dark .toast-success{background:oklch(30% .12 160);border:1px solid oklch(40% .14 160)}
+    html.dark .toast-error{background:oklch(28% .15 20);border:1px solid oklch(38% .17 20)}
+    html.dark #sidebar{background:var(--bg-card)!important;border-color:var(--border)!important}
+    html.dark .card-hover:hover{box-shadow:var(--shadow-md)}
+
+    /* ──────────────────────────────────────────────────────────────
+       Global polish — upgrades legacy white card patterns to Precision Dark
+       (without requiring per-view markup changes)
+       ────────────────────────────────────────────────────────────── */
+    /* Surface cards: bg-white + rounded-2xl + border-slate-200 → Precision Dark surface */
+    html.dark .bg-white.rounded-2xl,
+    html.dark .bg-white.rounded-xl{
+      background:var(--bg-card)!important;
+      border-color:var(--border)!important;
+      box-shadow:var(--shadow-sm);
+    }
+    /* Headings inside cards (font-weight tightening) */
+    html.dark h1,html.dark h2,html.dark h3{letter-spacing:-.01em}
+    /* Numbers inside cards: mono Geist if they use font-bold + text-2xl/text-3xl, but NOT headings */
+    html.dark div.text-3xl.font-bold,html.dark div.text-2xl.font-bold,html.dark span.text-3xl.font-bold,html.dark span.text-2xl.font-bold{font-family:var(--mono);font-weight:600;letter-spacing:-.01em}
+    /* Page H1: tightening only */
+    html.dark h1.font-bold,html.dark h2.font-bold{font-weight:600;letter-spacing:-.01em}
+    /* Buttons: tweak common Tailwind blue/orange/red/emerald/amber with accent palette glow on hover */
+    html.dark .bg-blue-500,html.dark .bg-blue-600{background-color:var(--accent)!important}
+    html.dark .bg-blue-500:hover,html.dark .bg-blue-600:hover,html.dark .hover\\:bg-blue-600:hover,html.dark .hover\\:bg-blue-700:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--accent-dim)}
+    html.dark .bg-orange-500,html.dark .bg-orange-600{background-color:var(--amber)!important;color:#0a1628!important}
+    html.dark .bg-orange-500:hover,html.dark .bg-orange-600:hover,html.dark .hover\\:bg-orange-600:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--amber-dim)}
+    html.dark .bg-red-500,html.dark .bg-red-600{background-color:var(--red)!important}
+    html.dark .bg-red-500:hover,html.dark .bg-red-600:hover,html.dark .hover\\:bg-red-600:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--red-dim)}
+    html.dark .bg-emerald-500,html.dark .bg-emerald-600,html.dark .bg-green-500,html.dark .bg-green-600{background-color:var(--green)!important}
+    html.dark .bg-emerald-500:hover,html.dark .bg-emerald-600:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--green-dim)}
+    html.dark .bg-amber-500,html.dark .bg-amber-600,html.dark .bg-yellow-500{background-color:var(--amber)!important;color:#0a1628!important}
+    html.dark .bg-purple-500,html.dark .bg-purple-600,html.dark .bg-violet-500,html.dark .bg-indigo-500,html.dark .bg-indigo-600{background-color:var(--purple)!important}
+    /* Text colors: blue-600 link → accent */
+    html.dark .text-blue-600,html.dark .text-blue-500,html.dark .hover\\:text-blue-600:hover,html.dark .hover\\:text-blue-700:hover{color:var(--accent)!important}
+    html.dark .text-orange-600,html.dark .text-orange-500{color:var(--amber)!important}
+    html.dark .text-red-600,html.dark .text-red-500,html.dark .text-red-400{color:var(--red)!important}
+    html.dark .text-emerald-600,html.dark .text-emerald-500,html.dark .text-green-600,html.dark .text-green-500{color:var(--green)!important}
+    html.dark .text-amber-600,html.dark .text-amber-500{color:var(--amber)!important}
+    html.dark .text-purple-600,html.dark .text-purple-500,html.dark .text-violet-600{color:var(--purple)!important}
+    /* Badges (bg-X-100 + text-X-700/600 patterns): use dim+full color */
+    html.dark .bg-blue-100{background-color:var(--accent-dim)!important}
+    html.dark .bg-blue-100.text-blue-600,html.dark .bg-blue-100.text-blue-700,html.dark .bg-blue-100.text-blue-800{color:var(--accent)!important}
+    html.dark .bg-orange-100,html.dark .bg-amber-100,html.dark .bg-yellow-100{background-color:var(--amber-dim)!important}
+    html.dark .bg-orange-100.text-orange-600,html.dark .bg-orange-100.text-orange-700,html.dark .bg-orange-100.text-orange-800,html.dark .bg-amber-100.text-amber-600,html.dark .bg-amber-100.text-amber-700{color:var(--amber)!important}
+    html.dark .bg-red-100{background-color:var(--red-dim)!important}
+    html.dark .bg-red-100.text-red-600,html.dark .bg-red-100.text-red-700,html.dark .bg-red-100.text-red-800{color:var(--red)!important}
+    html.dark .bg-emerald-100,html.dark .bg-green-100{background-color:var(--green-dim)!important}
+    html.dark .bg-emerald-100.text-emerald-600,html.dark .bg-emerald-100.text-emerald-700,html.dark .bg-green-100.text-green-700{color:var(--green)!important}
+    html.dark .bg-purple-100,html.dark .bg-violet-100,html.dark .bg-indigo-100{background-color:var(--purple-dim)!important}
+    html.dark .bg-purple-100.text-purple-600,html.dark .bg-purple-100.text-purple-700{color:var(--purple)!important}
+    /* Small accent strips (border-l) */
+    html.dark .border-l-4.border-blue-500{border-left-color:var(--accent)!important}
+    html.dark .border-l-4.border-orange-500{border-left-color:var(--amber)!important}
+    html.dark .border-l-4.border-red-500{border-left-color:var(--red)!important}
+    html.dark .border-l-4.border-emerald-500,html.dark .border-l-4.border-green-500{border-left-color:var(--green)!important}
+    /* Inputs focus ring uses accent */
+    html.dark .focus\\:ring-blue-500:focus,html.dark .focus\\:ring-2:focus{box-shadow:0 0 0 3px var(--accent-dim)!important;border-color:var(--accent)!important}
+    /* Page enter animation for main content */
+    main{animation:page-in .25s ease-out}
+    /* Selection */
+    ::selection{background:var(--accent-dim);color:var(--text-1)}
+    /* Hover bg-slate-50 mappings keep working but darker */
+    html.dark .hover\\:bg-blue-50:hover{background-color:var(--accent-dim)!important}
+    html.dark .hover\\:bg-orange-50:hover{background-color:var(--amber-dim)!important}
+    html.dark .hover\\:bg-emerald-50:hover{background-color:var(--green-dim)!important}
+    html.dark .hover\\:bg-red-50:hover{background-color:var(--red-dim)!important}
     /* ── Command Palette ── */
     .cmd-palette{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-start;justify-content:center;padding-top:min(20vh,160px)}
     .cmd-palette.open{display:flex}
@@ -551,30 +788,27 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     }
   </style>
 </head>
-<body class="bg-slate-50/80 text-slate-800 min-h-screen" style="display:flex;background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%)">
-  <aside id="sidebar" style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20" class="bg-[#0f172a] flex flex-col border-r border-white/5">
+<body class="min-h-screen" style="display:flex;background:var(--bg-app);color:var(--text-1)">
+  <aside id="sidebar" style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20;background:var(--bg-card);border-right:1px solid var(--border)" class="flex flex-col">
     <!-- Brand -->
-    <div class="px-4 py-4 border-b border-white/5 sidebar-brand">
+    <div class="px-4 py-4 sidebar-brand" style="border-bottom:1px solid var(--border)">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-900/40">
+        <button onclick="toggleSidebarCollapse()" class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all" style="background:var(--accent);box-shadow:0 0 24px var(--accent-glow)" title="Colapsar/expandir sidebar">
           <span class="text-white text-[11px] font-black tracking-tight">DT</span>
-        </div>
-        <div class="flex-1 min-w-0 sidebar-brand-text">
-          <div class="text-sm font-bold text-white tracking-tight leading-tight">DT Systems</div>
-          <div class="text-[10px] text-slate-500 leading-none mt-0.5">CRM & Proyectos · <span class="text-slate-600">v${APP_VERSION}</span></div>
-        </div>
-        <button onclick="toggleDarkMode()" id="darkToggle" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0" title="Tema claro/oscuro">
-          <svg id="darkIcon" class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
         </button>
+        <div class="flex-1 min-w-0 sidebar-brand-text">
+          <div class="text-sm font-semibold tracking-tight leading-tight" style="color:var(--text-1)">DT Systems</div>
+          <div class="text-[10px] leading-none mt-1 mono" style="color:var(--text-3)">CRM & Proyectos · v${APP_VERSION}</div>
+        </div>
       </div>
     </div>
 
     <!-- Search trigger -->
     <div class="px-3 pt-3 pb-1 sidebar-search">
-      <button onclick="openCmdPalette()" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-colors cursor-pointer group">
-        <svg class="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <span class="text-xs text-slate-500 flex-1 text-left">Buscar...</span>
-        <kbd class="text-[9px] text-slate-600 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-mono">⌘K</kbd>
+      <button onclick="openCmdPalette()" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors cursor-pointer" style="background:var(--bg-inset);border:1px solid var(--border)">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <span class="text-xs flex-1 text-left" style="color:var(--text-3)">Buscar...</span>
+        <kbd class="text-[9px] px-1.5 py-0.5 rounded mono" style="background:var(--bg-card2);border:1px solid var(--border-s);color:var(--text-2)">⌘K</kbd>
       </button>
     </div>
     <!-- Navigation -->
@@ -617,18 +851,18 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     </nav>
 
     <!-- User + Logout -->
-    <div class="pb-3 border-t border-slate-700/40 pt-3 sidebar-bottom">
+    <div class="pb-3 pt-3 sidebar-bottom" style="border-top:1px solid var(--border)">
       ${userBlock}
       <form method="POST" action="/admin/logout" class="px-3">
-        <button class="flex items-center gap-2 text-xs text-slate-500 hover:text-red-400 transition-colors w-full px-3 py-2 rounded-xl hover:bg-slate-800">
-          <span class="flex-shrink-0 text-slate-500">${LOGOUT_ICON}</span>
+        <button class="flex items-center gap-2 text-xs transition-colors w-full px-3 py-2 rounded-lg sb-logout-btn" style="color:var(--text-3)">
+          <span class="flex-shrink-0">${LOGOUT_ICON}</span>
           <span class="sidebar-label">Cerrar sesión</span>
         </button>
       </form>
     </div>
   </aside>
   <div id="main-wrapper" style="margin-left:240px;flex:1;min-height:100vh">
-    <div class="md:hidden flex items-center gap-3 px-4 py-3 bg-[#0f172a] border-b border-white/10 sticky top-0 z-10">
+    <div class="md:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10" style="background:var(--bg-card);border-bottom:1px solid var(--border)">
       <button onclick="toggleSidebar()" class="text-white p-1.5 rounded-lg hover:bg-white/10">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
@@ -738,41 +972,57 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     });
   })();
 
-  // ── Dark Mode ──
-  function initDarkMode(){
-    var pref=localStorage.getItem('dt-theme');
-    if(pref==='dark'||(pref===null&&window.matchMedia('(prefers-color-scheme:dark)').matches)){
-      document.documentElement.classList.add('dark');
-    }
-    updateDarkIcon();
-  }
-  function toggleDarkMode(){
-    document.documentElement.classList.toggle('dark');
-    var isDark=document.documentElement.classList.contains('dark');
-    localStorage.setItem('dt-theme',isDark?'dark':'light');
-    updateDarkIcon();
-    showToast(isDark?'Modo oscuro activado':'Modo claro activado');
-  }
-  function updateDarkIcon(){
-    var icon=document.getElementById('darkIcon');
-    if(!icon)return;
-    var isDark=document.documentElement.classList.contains('dark');
-    icon.innerHTML=isDark
-      ?'<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>'
-      :'<path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>';
-  }
+  // ── Dark Mode (Precision Dark = always dark; legacy stubs for back-compat) ──
+  function initDarkMode(){ document.documentElement.classList.add('dark'); }
+  function toggleDarkMode(){ /* no-op: Precision Dark is always dark */ }
+  function updateDarkIcon(){ /* no-op */ }
   initDarkMode();
+  // ── Sidebar collapse (desktop) ──
+  function toggleSidebarCollapse(){
+    if(window.innerWidth<768){ toggleSidebar(); return; }
+    var collapsed=document.body.classList.toggle('sidebar-collapsed');
+    try{localStorage.setItem('dt-sidebar',collapsed?'collapsed':'expanded');}catch(e){}
+  }
+  (function(){
+    try{
+      if(localStorage.getItem('dt-sidebar')==='collapsed'&&window.innerWidth>=768){
+        document.body.classList.add('sidebar-collapsed');
+      }
+    }catch(e){}
+  })();
 
-  // ── Toast ──
+  // ── Toast (Precision Dark — bottom-center stacked) ──
   function showToast(msg,type){
     type=type||'success';
+    // Normalize legacy aliases
+    var variant=({success:'ok',error:'err',info:'info',ok:'ok',err:'err'})[type]||'ok';
+    var wrap=document.querySelector('.pd-toast-wrap');
+    if(!wrap){
+      wrap=document.createElement('div');
+      wrap.className='pd-toast-wrap';
+      document.body.appendChild(wrap);
+    }
     var t=document.createElement('div');
-    t.className='toast toast-'+type;
-    t.textContent=msg;
-    document.body.appendChild(t);
-    requestAnimationFrame(function(){t.classList.add('show');});
-    setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},300);},3000);
+    t.className='pd-toast pd-toast-'+variant;
+    var icon=variant==='err'
+      ? '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+      : variant==='info'
+        ? '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+        : '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+    t.innerHTML=icon+'<span>'+msg.replace(/[<>&]/g,function(c){return{'<':'&lt;','>':'&gt;','&':'&amp;'}[c];})+'</span>';
+    wrap.appendChild(t);
+    setTimeout(function(){
+      t.style.transition='opacity .25s ease, transform .25s ease';
+      t.style.opacity='0';
+      t.style.transform='translateY(8px)';
+      setTimeout(function(){
+        if(t.parentNode)t.parentNode.removeChild(t);
+        if(wrap.children.length===0)wrap.remove();
+      },260);
+    },3200);
   }
+  // Expose globally so server-rendered pages can call it
+  window.showToast=showToast;
 
   // ── Command Palette ──
   var _cmdData=null;
@@ -840,6 +1090,32 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
   var cmdInp=document.getElementById('cmdInput');
   if(cmdInp)cmdInp.addEventListener('input',function(){_cmdIdx=-1;renderCmdResults(this.value);});
 
+  // ── Count-up + KPI bar fill (Precision Dark KPI cards) ──
+  (function(){
+    function countUp(el){
+      var target=parseFloat(el.getAttribute('data-count-to'))||0;
+      if(target===0){el.textContent='0';return;}
+      var start=performance.now(), dur=700;
+      function step(t){
+        var p=Math.min(1,(t-start)/dur);
+        var eased=1-Math.pow(1-p,3); // cubic-out
+        var val=Math.round(target*eased);
+        el.textContent=val;
+        if(p<1)requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    function init(){
+      document.querySelectorAll('[data-count-to]').forEach(countUp);
+      document.querySelectorAll('[data-bar-pct]').forEach(function(el){
+        var pct=parseFloat(el.getAttribute('data-bar-pct'))||0;
+        setTimeout(function(){el.style.width=pct+'%';},120);
+      });
+    }
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+    else init();
+  })();
+
   // ── FAB ──
   function toggleFab(){
     document.getElementById('fabMenu').classList.toggle('open');
@@ -875,85 +1151,109 @@ const passport = require('passport');
 function loginPage(errorMsg = '') {
   const googleConfigured = !!process.env.GOOGLE_CLIENT_ID;
   return `<!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>DT Systems · Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;background:#060612;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-font-smoothing:antialiased}
-    .blob1{position:fixed;top:-20%;left:-10%;width:60vw;height:60vw;background:radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 65%);pointer-events:none;border-radius:50%}
-    .blob2{position:fixed;bottom:-15%;right:-5%;width:50vw;height:50vw;background:radial-gradient(circle,rgba(139,92,246,0.14) 0%,transparent 65%);pointer-events:none;border-radius:50%}
-    .blob3{position:fixed;top:40%;left:55%;width:30vw;height:30vw;background:radial-gradient(circle,rgba(59,130,246,0.08) 0%,transparent 65%);pointer-events:none;border-radius:50%}
-    .grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:48px 48px;pointer-events:none}
-    .card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:36px;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
-    .gradient-text{background:linear-gradient(135deg,#c7d2fe 0%,#a5b4fc 30%,#818cf8 60%,#6366f1 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-    .btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:12px;color:rgba(255,255,255,0.85);font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s;text-decoration:none}
-    .btn-google:hover{background:rgba(255,255,255,0.11);border-color:rgba(255,255,255,0.2)}
-    .divider{display:flex;align-items:center;gap:12px;margin:18px 0}
-    .divider-line{flex:1;height:1px;background:rgba(255,255,255,0.06)}
-    .divider span{font-size:11px;color:rgba(255,255,255,0.25);white-space:nowrap}
-    .input{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:13px 16px;color:rgba(255,255,255,0.9);font-size:14px;outline:none;transition:border-color 0.2s;font-family:inherit}
-    .input::placeholder{color:rgba(255,255,255,0.25)}
-    .input:focus{border-color:rgba(99,102,241,0.6);background:rgba(99,102,241,0.06)}
-    .btn-submit{width:100%;background:linear-gradient(135deg,#6366f1,#7c3aed);border:none;border-radius:12px;padding:13px;color:white;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:10px;font-family:inherit;position:relative;overflow:hidden}
-    .btn-submit::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(to bottom right,transparent 45%,rgba(255,255,255,0.08) 50%,transparent 55%);transform:rotate(-45deg);transition:all 0.5s}
-    .btn-submit:hover{background:linear-gradient(135deg,#4f46e5,#6d28d9);transform:translateY(-1px);box-shadow:0 8px 24px rgba(99,102,241,0.4)}
-    .btn-submit:hover::after{left:100%}
-    .error-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:12px 16px;color:#fca5a5;font-size:13px;margin-bottom:18px}
-    .logo-ring{width:80px;height:80px;border-radius:20px;border:2px solid rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;box-shadow:0 0 30px rgba(99,102,241,0.15)}
-    .logo-icon{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#7c3aed);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(99,102,241,0.5),0 0 80px rgba(99,102,241,0.2);animation:pulse-glow 3s ease-in-out infinite}
-    .card{animation:fade-up 0.6s ease-out}
-    .particles{position:fixed;inset:0;pointer-events:none;overflow:hidden}
-    .particles::before,.particles::after{content:'';position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(99,102,241,0.4);box-shadow:0 0 12px rgba(99,102,241,0.6);animation:float-dot 8s ease-in-out infinite}
-    .particles::before{top:20%;left:15%;animation-delay:0s}
-    .particles::after{top:60%;right:20%;width:4px;height:4px;background:rgba(139,92,246,0.35);box-shadow:0 0 10px rgba(139,92,246,0.5);animation-delay:-4s}
-    @keyframes pulse-glow{0%,100%{box-shadow:0 0 40px rgba(99,102,241,0.4),0 0 80px rgba(99,102,241,0.15)}50%{box-shadow:0 0 60px rgba(99,102,241,0.6),0 0 120px rgba(99,102,241,0.25)}}
-    @keyframes fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes float-dot{0%,100%{transform:translateY(0) translateX(0)}25%{transform:translateY(-20px) translateX(10px)}50%{transform:translateY(-5px) translateX(-8px)}75%{transform:translateY(-25px) translateX(5px)}}
+    :root{
+      --accent: oklch(62% 0.2 250);
+      --accent-dim: oklch(62% 0.2 250 / 0.13);
+      --accent-glow: oklch(62% 0.2 250 / 0.28);
+      --red: oklch(58% 0.2 20);
+      --red-dim: oklch(58% 0.2 20 / 0.13);
+      --bg-app: #060d19;
+      --bg-card: #0d1b2e;
+      --bg-input: #0a1628;
+      --border: rgba(255,255,255,0.065);
+      --border-s: rgba(255,255,255,0.11);
+      --text-1: #eef2ff;
+      --text-2: #8b9ab5;
+      --text-3: #3d5070;
+      --r-md: 10px;
+      --r-lg: 14px;
+      --r-xl: 20px;
+      --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'Geist Mono', 'SF Mono', ui-monospace, monospace;
+    }
+    body{font-family:var(--font);background:var(--bg-app);color:var(--text-1);min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;position:relative}
+    /* Noise texture signature */
+    body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' seed='2'/><feColorMatrix values='0 0 0 0 .55 0 0 0 0 .65 0 0 0 0 .85 0 0 0 .025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
+    /* Radial accent glow centered behind card */
+    .glow{position:fixed;top:50%;left:50%;width:600px;height:600px;transform:translate(-50%,-50%);background:radial-gradient(circle, var(--accent-dim) 0%, transparent 70%);pointer-events:none;z-index:1;animation:glow-breathe 6s ease-in-out infinite}
+    @keyframes glow-breathe{0%,100%{opacity:.7;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}}
+    @keyframes fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .stage{position:relative;z-index:10;width:100%;max-width:340px;padding:0 20px;animation:fade-up .4s ease-out}
+    .brand{text-align:center;margin-bottom:28px}
+    .logo{width:56px;height:56px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 0 0 4px var(--accent-dim),0 8px 32px var(--accent-glow)}
+    .logo span{color:#fff;font-size:18px;font-weight:800;letter-spacing:-.5px}
+    .brand-title{font-size:22px;font-weight:600;letter-spacing:-.4px;color:var(--text-1);margin-bottom:4px}
+    .brand-sub{font-size:12px;color:var(--text-3);font-family:var(--mono)}
+    .card{background:var(--bg-card);border:1px solid var(--border-s);border-radius:var(--r-lg);padding:24px;box-shadow:0 16px 64px rgba(0,0,0,.5)}
+    .err{display:flex;align-items:center;gap:8px;background:var(--red-dim);border:1px solid var(--red);border-radius:var(--r-md);padding:10px 12px;color:#fca5a5;font-size:12.5px;margin-bottom:14px;animation:fade-up .25s ease-out}
+    .err svg{flex-shrink:0}
+    .label{display:block;font-size:11px;font-weight:500;color:var(--text-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+    .input{width:100%;background:var(--bg-input);border:1px solid var(--border-s);border-radius:var(--r-md);padding:13px 16px;color:var(--text-1);font-size:16px;outline:none;transition:all .15s;font-family:var(--font);letter-spacing:2px}
+    .input::placeholder{color:var(--text-3);letter-spacing:0}
+    .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+    .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--accent);border:none;border-radius:var(--r-md);padding:12px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;margin-top:14px;font-family:var(--font);position:relative;line-height:1}
+    .btn:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--accent-dim)}
+    .btn[disabled]{opacity:.7;cursor:wait}
+    .btn .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+    .btn[disabled] .spinner{display:inline-block}
+    .btn[disabled] .btn-text{opacity:.6}
+    .gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:transparent;border:1px solid var(--border-s);border-radius:var(--r-md);padding:11px;color:var(--text-1);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;text-decoration:none;font-family:var(--font);line-height:1}
+    .gbtn:hover{background:rgba(255,255,255,.04);border-color:var(--text-3)}
+    .divider{display:flex;align-items:center;gap:10px;margin:14px 0;font-size:11px;color:var(--text-3)}
+    .divider-line{flex:1;height:1px;background:var(--border)}
+    .footer{text-align:center;margin-top:18px;color:var(--text-3);font-size:11px;font-family:var(--mono)}
   </style>
 </head>
 <body>
-  <div class="blob1"></div>
-  <div class="blob2"></div>
-  <div class="blob3"></div>
-  <div class="grid-bg"></div>
-  <div class="particles"></div>
-
-  <div style="width:100%;max-width:400px;padding:0 20px;position:relative;z-index:10">
-    <!-- Brand -->
-    <div style="text-align:center;margin-bottom:28px">
-      <div class="logo-ring">
-        <div class="logo-icon">
-          <span style="color:white;font-size:22px;font-weight:900;letter-spacing:-0.5px">DT</span>
-        </div>
-      </div>
-      <div style="font-size:36px;font-weight:800;letter-spacing:-0.8px" class="gradient-text">DT Systems</div>
-      <div style="color:rgba(255,255,255,0.35);font-size:13px;margin-top:4px">David Sebastian Taranto · CRM & Proyectos</div>
+  <div class="glow"></div>
+  <div class="stage">
+    <div class="brand">
+      <div class="logo"><span>DT</span></div>
+      <div class="brand-title">DT Systems</div>
+      <div class="brand-sub">CRM & Proyectos</div>
     </div>
-
-    <!-- Card -->
     <div class="card">
-      ${errorMsg ? `<div class="error-box">⚠ ${errorMsg}</div>` : ''}
+      ${errorMsg ? `<div class="err">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span>${errorMsg}</span>
+      </div>` : ''}
 
       ${googleConfigured ? `
-      <a href="/admin/auth/google" class="btn-google">
-        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
+      <a href="/admin/auth/google" class="gbtn">
+        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
         Continuar con Google
       </a>
       <div class="divider"><div class="divider-line"></div><span>o con contraseña</span><div class="divider-line"></div></div>` : ''}
 
-      <form method="POST" action="/admin/login">
-        <input type="password" name="password" autofocus placeholder="Contraseña de acceso" class="input">
-        <button type="submit" class="btn-submit">Acceder al panel →</button>
+      <form method="POST" action="/admin/login" id="loginForm">
+        <label class="label" for="pw">Contraseña</label>
+        <input id="pw" type="password" name="password" autofocus placeholder="••••••••••" class="input" required>
+        <button type="submit" class="btn" id="loginBtn">
+          <span class="btn-text">Acceder al panel</span>
+          <span class="spinner"></span>
+        </button>
       </form>
     </div>
-
-    <div style="text-align:center;margin-top:20px;color:rgba(255,255,255,0.2);font-size:11px">
-      v${APP_VERSION} · Solo uso interno
-    </div>
+    <div class="footer">v${APP_VERSION} · Solo uso interno</div>
   </div>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit',function(){
+      var b=document.getElementById('loginBtn');
+      b.setAttribute('disabled','');
+      b.querySelector('.btn-text').textContent='Verificando…';
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -1002,22 +1302,26 @@ router.get('/', requireAuth, async (req, res) => {
   const activeProjects = projects.filter(p => ['planning','in_progress','waiting_client','waiting_payment','review'].includes(p.status)).length;
   const pendingTasks = projects.reduce((n, p) => n + (p.tasks || []).filter(t => !t.done).length, 0);
 
-  const metricCards = [
-    { label: 'Pipeline WA',     value: clients.length,        icon: '💬', grad: 'from-blue-500 to-blue-600',      sub: `${clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length} activos`, href: '/admin/clients' },
-    { label: 'Demos pendientes', value: pendingReview.length,  icon: '⏳', grad: pendingReview.length > 0 ? 'from-orange-400 to-orange-500' : 'from-slate-400 to-slate-500', sub: 'para revisar', alert: pendingReview.length > 0, href: '/admin/clients' },
-    { label: 'Proyectos activos',value: activeProjects,        icon: '📁', grad: 'from-purple-500 to-purple-600',  sub: `${projects.length} en total`, href: '/admin/projects' },
-    { label: 'Tareas pendientes',value: pendingTasks,          icon: '✅', grad: pendingTasks > 0 ? 'from-amber-400 to-amber-500' : 'from-emerald-500 to-emerald-600', sub: 'en proyectos', href: '/admin/tasks' },
-  ].map(m => `
-    <a href="${m.href || '#'}" class="bg-gradient-to-br ${m.grad} rounded-2xl p-5 text-white relative overflow-hidden block hover:opacity-95 hover:scale-[1.01] transition-all cursor-pointer no-underline">
-      <div class="flex items-start justify-between">
-        <div>
-          <div class="text-xs font-medium opacity-75 uppercase tracking-wide">${m.label}</div>
-          <div class="text-3xl md:text-4xl font-bold mt-1">${m.value}</div>
-          <div class="text-xs opacity-60 mt-1">${m.sub}</div>
-        </div>
-        <div class="text-3xl opacity-50">${m.icon}</div>
+  // Precision Dark KPI cards (count-up animado + glow radial + mono number + barra inferior)
+  const kpiActiveClients = clients.filter(c => c.client_stage !== 'lost' && c.client_stage !== 'dormant').length;
+  const kpiTotalClients = Math.max(clients.length, 1);
+  const kpiTasksTotal = projects.reduce((n, p) => n + (p.tasks || []).length, 0) || 1;
+  const kpis = [
+    { label: 'Pipeline WA',      value: clients.length,       sub: `${kpiActiveClients} activos`,     color: 'var(--accent)', pct: Math.round(kpiActiveClients/kpiTotalClients*100), href: '/admin/clients',   delay: 0   },
+    { label: 'Demos pendientes', value: pendingReview.length, sub: 'para revisar',                    color: pendingReview.length>0?'var(--amber)':'var(--text-3)', pct: pendingReview.length>0?100:0, href: '/admin/clients',   delay: 80,  alert: pendingReview.length>0 },
+    { label: 'Proyectos activos',value: activeProjects,       sub: `${projects.length} en total`,     color: 'var(--purple)', pct: projects.length?Math.round(activeProjects/projects.length*100):0, href: '/admin/projects',  delay: 160 },
+    { label: 'Tareas pendientes',value: pendingTasks,         sub: pendingTasks>0?'en proyectos':'al día', color: pendingTasks>0?'var(--amber)':'var(--green)', pct: kpiTasksTotal?Math.round(pendingTasks/kpiTasksTotal*100):0, href: '/admin/tasks',     delay: 240 },
+  ];
+  const metricCards = kpis.map((m, i) => `
+    <a href="${m.href || '#'}" class="pd-kpi" style="animation-delay:${m.delay}ms">
+      <div class="pd-kpi-glow" style="background:radial-gradient(circle at 100% 0%, ${m.color}, transparent 70%)"></div>
+      <div class="pd-kpi-head">
+        <span class="pd-kpi-label">${m.label}</span>
+        ${m.alert ? `<span class="pd-kpi-alert" style="background:${m.color}"></span>` : ''}
       </div>
-      ${m.alert ? '<div class="absolute top-3 right-3 w-2 h-2 bg-white rounded-full animate-pulse opacity-80"></div>' : ''}
+      <div class="pd-kpi-value mono" data-count-to="${m.value}" style="--kpi-color:${m.color}">0</div>
+      <div class="pd-kpi-sub">${m.sub}</div>
+      <div class="pd-kpi-bar"><div class="pd-kpi-bar-fill" style="background:${m.color};width:0" data-bar-pct="${m.pct}"></div></div>
     </a>`).join('');
 
   // Alert strip
@@ -1422,38 +1726,48 @@ router.get('/clients', requireAuth, async (req, res) => {
       </tr>`;
   }).join('');
 
-  // Kanban view: group clients by stage — with drag-and-drop
+  // Kanban view: group clients by stage — with drag-and-drop (Precision Dark)
   const kanbanHtml = (() => {
     const kanbanStages = STAGES.slice(0, 7); // exclude 'dormant' for space
+    const initial = (n) => (n || '?').charAt(0).toUpperCase();
+    const avatarColor = (s) => { let h=0; for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0; const hues=[210,160,290,30,340,250,180]; return hues[h%hues.length]; };
     return `
       <div class="overflow-x-auto pb-4">
       <div class="flex gap-4" style="min-height:60vh;min-width:max-content">
         ${kanbanStages.map(s => {
           const stageClients = clients.filter(c => c.client_stage === s.key);
           return `
-            <div class="flex-shrink-0" style="width:260px">
+            <div class="flex-shrink-0" style="width:280px">
               <div class="flex items-center gap-2 mb-3 px-1">
-                <div class="w-2.5 h-2.5 rounded-full" style="background:${s.dot}"></div>
-                <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">${s.label}</span>
-                <span class="ml-auto text-xs font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">${stageClients.length}</span>
+                <div class="pd-dot" style="background:${s.dot};box-shadow:0 0 8px ${s.dot}"></div>
+                <span class="text-[11px] font-semibold uppercase" style="color:var(--text-2);letter-spacing:.08em">${s.label}</span>
+                <span class="ml-auto text-[10px] font-semibold mono px-1.5 py-0.5 rounded" style="background:var(--bg-inset);color:var(--text-2);border:1px solid var(--border)">${stageClients.length}</span>
               </div>
-              <div class="pipeline-kanban-col kanban-col bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 p-2" data-stage="${s.key}" style="min-height:200px">
+              <div class="pipeline-kanban-col kanban-col p-2" data-stage="${s.key}" style="min-height:200px;background:var(--bg-inset);border:1.5px dashed var(--border-s);border-radius:14px">
                 ${stageClients.length > 0 ? stageClients.map(c => {
                   const nombre = c.report?.cliente?.nombre || c.context?.nombre || '—';
                   const tipo = c.report?.proyecto?.tipo || '';
+                  const isPending = c.demo_status === 'pending_review';
+                  const hue = avatarColor(c.phone || nombre);
                   return `
-                    <div class="kanban-card bg-white rounded-xl border border-slate-200 p-3 mb-2 cursor-grab active:cursor-grabbing"
+                    <div class="kanban-card p-3 mb-2 cursor-grab active:cursor-grabbing"
                          data-phone="${escapeHtml(c.phone)}"
+                         style="background:var(--bg-card2);border:1px solid ${isPending ? 'var(--amber)' : 'var(--border)'};border-radius:10px${isPending ? ';box-shadow:0 0 0 1px var(--amber-dim)' : ''}"
                          onclick="if(!window._pipelineDragging)location.href='/admin/client/${encodeURIComponent(c.phone)}'">
-                      <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(nombre)}</div>
-                      ${tipo ? `<div class="text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(tipo)}</div>` : ''}
-                      <div class="flex items-center justify-between mt-2">
+                      <div class="flex items-start gap-2.5">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold" style="background:oklch(62% 0.16 ${hue} / 0.18);color:oklch(75% 0.16 ${hue});border:1px solid oklch(62% 0.16 ${hue} / 0.3)">${initial(nombre)}</div>
+                        <div class="flex-1 min-w-0">
+                          <div class="text-[13px] font-medium truncate" style="color:var(--text-1)">${escapeHtml(nombre)}</div>
+                          ${tipo ? `<div class="text-[11px] mt-0.5 truncate" style="color:var(--text-3)">${escapeHtml(tipo)}</div>` : ''}
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between mt-2.5 gap-2">
                         ${demoStatusBadge(c.demo_status)}
-                        <span class="text-[10px] text-slate-300">${timeAgo(c.updated_at)}</span>
+                        <span class="text-[10px] mono" style="color:var(--text-3)">${timeAgo(c.updated_at)}</span>
                       </div>
                     </div>`;
                 }).join('')
-                : '<div class="kanban-empty">Arrastra contactos aqu&iacute;</div>'}
+                : '<div class="kanban-empty">Arrastrá contactos aquí</div>'}
               </div>
             </div>`;
         }).join('')}
@@ -3024,9 +3338,18 @@ router.get('/control', requireAuth, async (req, res) => {
   const isToday = nextMeeting ? new Date(nextMeeting.start).toDateString() === new Date().toDateString() : false;
 
   const body = `
-    <div class="mb-5">
-      <h1 class="text-xl font-bold text-slate-900">Centro de Control</h1>
-      <p class="text-xs text-slate-400 mt-1">Estado del agente y acciones pendientes</p>
+    <div class="flex items-start justify-between mb-5 gap-4 flex-wrap">
+      <div>
+        <h1 class="text-xl font-semibold" style="color:var(--text-1);letter-spacing:-.01em">Centro de Control</h1>
+        <p class="text-xs mt-1" style="color:var(--text-3)">Estado del agente y acciones pendientes</p>
+      </div>
+      <!-- System health pill -->
+      <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border)">
+        <span class="pd-dot" style="background:var(--green);box-shadow:0 0 12px var(--green);animation:pulse-dot 1.6s infinite"></span>
+        <span class="text-xs font-medium" style="color:var(--text-1)">Agente activo</span>
+        <span class="text-[10px] mono" style="color:var(--text-3)">·</span>
+        <span class="text-[10px] mono" style="color:var(--text-2)" title="Servicios">Twilio · Claude · Resend · Drive</span>
+      </div>
     </div>
 
     <!-- Status bar -->
@@ -7355,24 +7678,22 @@ router.get('/changelog', requireAuth, (req, res) => {
     const isLatest = idx === 0;
     const dateFormatted = new Date(release.date + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
     return `
-    <div class="relative pl-8 pb-8 ${idx < CHANGELOG.length - 1 ? 'border-l-2 border-slate-200' : ''} ml-3">
-      <div class="absolute -left-[9px] top-1 w-[18px] h-[18px] rounded-full ${isLatest ? 'bg-blue-500 ring-4 ring-blue-100' : 'bg-slate-300'} flex items-center justify-center">
-        ${isLatest ? '<div class="w-2 h-2 bg-white rounded-full"></div>' : ''}
-      </div>
-      <div class="bg-white rounded-xl border ${isLatest ? 'border-blue-200 ring-1 ring-blue-100' : 'border-slate-200'} overflow-hidden">
-        <div class="px-5 py-4 ${isLatest ? 'bg-gradient-to-r from-blue-50 to-indigo-50' : ''}">
+    <div class="relative pl-7 pb-7 ml-3" style="${idx < CHANGELOG.length - 1 ? 'border-left:1px solid var(--border)' : ''}">
+      <div class="absolute -left-[6px] top-1 w-3 h-3 rounded-full" style="background:${isLatest ? 'var(--accent)' : 'var(--text-3)'};${isLatest ? 'box-shadow:0 0 0 4px var(--accent-dim),0 0 16px var(--accent-glow)' : ''}"></div>
+      <div class="rounded-xl overflow-hidden" style="background:var(--bg-card);border:1px solid ${isLatest ? 'var(--accent-dim)' : 'var(--border)'};box-shadow:var(--shadow-sm)">
+        <div class="px-5 py-4">
           <div class="flex items-center gap-3 flex-wrap">
-            <span class="px-2.5 py-1 rounded-lg text-xs font-bold ${isLatest ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}">v${release.version}</span>
-            <span class="text-xs text-slate-400">${dateFormatted}</span>
-            ${isLatest ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase">Actual</span>' : ''}
+            <span class="px-2.5 py-1 rounded-md text-xs font-semibold mono" style="background:${isLatest ? 'var(--accent)' : 'var(--bg-inset)'};color:${isLatest ? '#fff' : 'var(--text-2)'};border:1px solid ${isLatest ? 'var(--accent)' : 'var(--border)'}">v${release.version}</span>
+            <span class="text-xs mono" style="color:var(--text-3)">${dateFormatted}</span>
+            ${isLatest ? `<span class="px-2 py-0.5 text-[10px] font-bold rounded uppercase" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green);letter-spacing:.06em">Actual</span>` : ''}
           </div>
-          <h3 class="text-sm font-semibold text-slate-800 mt-2">${escapeHtml(release.title)}</h3>
+          <h3 class="text-sm font-semibold mt-2.5" style="color:var(--text-1)">${escapeHtml(release.title)}</h3>
         </div>
-        <div class="px-5 py-3 border-t border-slate-100">
+        <div class="px-5 py-3" style="border-top:1px solid var(--border);background:var(--bg-inset)">
           <ul class="space-y-1.5">
             ${release.changes.map(c => `
-              <li class="flex items-start gap-2 text-sm text-slate-600">
-                <span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
+              <li class="flex items-start gap-2 text-[13px]" style="color:var(--text-2)">
+                <svg width="14" height="14" style="color:var(--accent);margin-top:3px;flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 <span>${escapeHtml(c)}</span>
               </li>
             `).join('')}
@@ -7385,12 +7706,10 @@ router.get('/changelog', requireAuth, (req, res) => {
   const body = `
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-bold text-slate-900">Historial de actualizaciones</h1>
-        <p class="text-sm text-slate-400 mt-1">Todas las mejoras y correcciones de DT Systems</p>
+        <h1 class="text-xl font-semibold" style="color:var(--text-1);letter-spacing:-.01em">Historial de actualizaciones</h1>
+        <p class="text-sm mt-1" style="color:var(--text-3)">Todas las mejoras y correcciones de DT Systems</p>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg">v${APP_VERSION}</span>
-      </div>
+      <span class="px-3 py-1.5 text-xs font-semibold rounded-md mono" style="background:var(--accent);color:#fff;box-shadow:0 0 0 3px var(--accent-dim)">v${APP_VERSION}</span>
     </div>
     <div class="max-w-2xl">
       ${changelogHtml}
