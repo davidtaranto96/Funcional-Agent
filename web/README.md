@@ -1,8 +1,17 @@
-# WPanalista — Web (Next.js 15 migration)
+# WPanalista — Web (Next.js 15)
 
-Migración del panel admin de Express SSR a Next.js 15 + React 19 + TS + Tailwind v4 + shadcn/ui patterns.
+Panel admin completo en Next.js 15 + React 19 + TS + Tailwind v4 + shadcn-style components.
 
-> **Status:** v5.0.0-alpha.1 — foundation only. Login + Dashboard + auth funcionando. El resto del admin sigue corriendo en `../src/admin.js` (legacy Express) hasta que se completen las próximas sesiones de migración.
+> **Status:** v5.0.0-alpha.1 — **migración completa**. Las 5 waves shippeadas:
+> - Wave 1: backend completion (webhook + demos + reports + orchestrator)
+> - Wave 2: CRM views (pipeline kanban + clients + clientes + review)
+> - Wave 3: Project mgmt (projects list/kanban/detail + tasks kanban)
+> - Wave 4: Operations (Centro Control + Notifications + Finanzas + Documentos + Changelog)
+> - Wave 5: Deploy config (Dockerfile + railway.json + DEPLOY.md)
+>
+> El Express legacy (`../src/`) sigue intacto y corriendo. NO se borra. Ver `../src/admin.BACKUP.js` y `../MIGRATION_LOG.md` para historia.
+>
+> Para deploy: ver [DEPLOY.md](./DEPLOY.md).
 
 ## Stack
 
