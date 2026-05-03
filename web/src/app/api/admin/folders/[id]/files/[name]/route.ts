@@ -3,10 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { requireAuth } from '@/lib/session';
 import { publicUrl } from '@/lib/utils';
+import { resolveFolder, safeFilenameInDir } from '@/lib/document-folders';
 
 export const runtime = 'nodejs';
-
-const DOCUMENTS_DIR = path.resolve(process.cwd(), '..', 'data', 'documents');
 
 const MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -27,28 +26,24 @@ const MIME: Record<string, string> = {
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
-function safeFile(folderId: string, name: string): string | null {
-  const folderDir = path.resolve(DOCUMENTS_DIR, folderId);
-  if (!folderDir.startsWith(path.resolve(DOCUMENTS_DIR))) return null;
-  const full = path.resolve(folderDir, name);
-  if (!full.startsWith(folderDir)) return null;
-  return full;
-}
-
-// GET: download (or inline for safe types)
+// GET: download (or inline preview)
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string; name: string }> }) {
   await requireAuth();
   const { id, name } = await ctx.params;
   const decoded = decodeURIComponent(name);
-  const full = safeFile(id, decoded);
+
+  const folder = await resolveFolder(id);
+  if (!folder) return new NextResponse('Not found', { status: 404 });
+
+  const full = safeFilenameInDir(folder.dir, decoded);
   if (!full || !fs.existsSync(full) || !fs.statSync(full).isFile()) {
     return new NextResponse('Not found', { status: 404 });
   }
+
   const ext = path.extname(full).toLowerCase();
   const mime = MIME[ext] || 'application/octet-stream';
   const buf = fs.readFileSync(full);
 
-  // Inline para tipos previsualizables, attachment para el resto
   const previewable = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.txt', '.csv'];
   const disposition = previewable.includes(ext)
     ? `inline; filename="${encodeURIComponent(decoded)}"`
@@ -68,8 +63,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const formData = await req.formData().catch(() => null);
   const action = String(formData?.get('action') || 'delete');
 
+  const folder = await resolveFolder(id);
+  if (!folder) return new NextResponse('Not found', { status: 404 });
+
   if (action === 'delete') {
-    const full = safeFile(id, decoded);
+    const full = safeFilenameInDir(folder.dir, decoded);
     if (full && fs.existsSync(full)) {
       fs.unlinkSync(full);
     }

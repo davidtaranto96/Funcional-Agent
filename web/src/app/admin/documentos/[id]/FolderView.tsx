@@ -12,8 +12,8 @@ import { confirmDialog } from '@/components/admin/ConfirmModal';
 import { showToast } from '@/components/ui/toast';
 
 export interface FolderFile { name: string; size: number; mtime: string; ext: string }
-export interface FolderInfo { id: string; name: string; color: string; description?: string }
-export interface OtherFolder { id: string; name: string; color: string }
+export interface FolderInfo { id: string; name: string; color: string; description?: string; type?: 'custom' | 'project' | 'demo'; subtitle?: string }
+export interface OtherFolder { id: string; name: string; color: string; type?: 'custom' | 'project' | 'demo' }
 
 interface Props {
   folder: FolderInfo;
@@ -317,25 +317,36 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
           <Folder className="w-3 h-3" /> Mi Drive
         </Link>
         <ChevronRight className="w-3 h-3" />
+        {folder.type === 'project' && <span className="text-muted-foreground">Proyectos</span>}
+        {folder.type === 'demo' && <span className="text-muted-foreground">Demos WA</span>}
+        {(folder.type === 'project' || folder.type === 'demo') && <ChevronRight className="w-3 h-3" />}
         <span className="text-foreground font-medium">{folder.name}</span>
       </div>
 
       {/* Header */}
       <div className="flex items-start justify-between mb-5 gap-3 flex-wrap">
         <div className="flex items-start gap-3 min-w-0">
-          <div className="relative flex-shrink-0">
-            <div
-              className="absolute top-1 left-1 right-2 h-7 rounded-md opacity-30"
-              style={{ background: folder.color }}
-            />
-            <div
-              className="absolute top-0.5 left-0.5 right-1.5 h-7 rounded-md opacity-50"
-              style={{ background: folder.color }}
-            />
-            <Folder className="relative w-10 h-10" style={{ color: folder.color }} fill={folder.color} fillOpacity={0.18} />
-          </div>
+          <Folder
+            className="w-10 h-10 flex-shrink-0"
+            style={{ color: folder.color }}
+            fill={folder.color}
+            fillOpacity={0.22}
+            strokeWidth={1.4}
+          />
           <div className="min-w-0">
-            <h1 className="text-[20px] font-bold tracking-tight text-foreground truncate">{folder.name}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-[20px] font-bold tracking-tight text-foreground truncate">{folder.name}</h1>
+              {folder.type === 'project' && (
+                <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 bg-[oklch(0.62_0.18_290_/_0.14)] text-[oklch(0.62_0.18_290)]">
+                  Proyecto
+                </span>
+              )}
+              {folder.type === 'demo' && (
+                <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 bg-[oklch(0.62_0.16_160_/_0.14)] text-[var(--green)]">
+                  Demo WA
+                </span>
+              )}
+            </div>
             <p className="text-[12px] text-muted-foreground mt-0.5">
               <span className="mono">{filtered.length}</span> {filtered.length === 1 ? 'archivo' : 'archivos'} · <span className="mono">{fmtSize(totalBytes)}</span>
               {query && (
@@ -345,6 +356,7 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
                 </>
               )}
             </p>
+            {folder.subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{folder.subtitle}</p>}
             {folder.description && <p className="text-[11px] text-muted-foreground mt-1 max-w-[480px]">{folder.description}</p>}
           </div>
         </div>

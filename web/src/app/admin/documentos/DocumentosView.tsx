@@ -4,17 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Folder, Plus, Home, MessageCircle, FolderKanban, Search } from 'lucide-react';
 import { confirmDialog } from '@/components/admin/ConfirmModal';
-
-interface Folder {
-  id: string;
-  name: string;
-  color: string;
-  description?: string;
-  _count: number;
-}
-
-interface ProjectFolder { id: string; name: string; sub: string; color: string }
-interface DemoFolder { id: string; name: string; sub: string; initials: string }
+import type { FolderListing } from '@/lib/document-folders';
 
 interface Stats {
   totalFiles: number;
@@ -25,21 +15,26 @@ interface Stats {
 }
 
 interface Props {
-  folders: Folder[];
-  projectFolders: ProjectFolder[];
-  demoFolders: DemoFolder[];
+  custom: FolderListing[];
+  projects: FolderListing[];
+  demos: FolderListing[];
   stats: Stats;
 }
 
-export function DocumentosView({ folders, projectFolders, demoFolders, stats }: Props) {
+export function DocumentosView({ custom, projects, demos, stats }: Props) {
   const [showNew, setShowNew] = useState(false);
   const [query, setQuery] = useState('');
 
-  const filteredMy = useMemo(() => {
-    if (!query.trim()) return folders;
+  const all = useMemo(() => [...custom, ...projects, ...demos], [custom, projects, demos]);
+  const filteredAll = useMemo(() => {
+    if (!query.trim()) return null;
     const q = query.toLowerCase();
-    return folders.filter(f => f.name.toLowerCase().includes(q));
-  }, [folders, query]);
+    return all.filter(f => f.name.toLowerCase().includes(q) || f.subtitle.toLowerCase().includes(q));
+  }, [all, query]);
+
+  const filteredCustom = filteredAll ? filteredAll.filter(f => f.type === 'custom') : custom;
+  const filteredProjects = filteredAll ? filteredAll.filter(f => f.type === 'project') : projects;
+  const filteredDemos = filteredAll ? filteredAll.filter(f => f.type === 'demo') : demos;
 
   return (
     <div className="flex gap-4 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
@@ -52,57 +47,36 @@ export function DocumentosView({ folders, projectFolders, demoFolders, stats }: 
         </div>
 
         <div className="flex-1 overflow-y-auto py-2 px-2">
-          {/* Mis carpetas */}
           <SidebarGroup label="Mis carpetas">
-            {folders.length === 0 ? (
+            {custom.length === 0 ? (
               <div className="text-[10px] text-muted-foreground px-2 py-1.5 italic">Sin carpetas</div>
             ) : (
-              folders.map(f => (
-                <Link
-                  key={f.id}
-                  href={`/admin/documentos/${f.id}`}
-                  className="flex items-center gap-2 px-2 h-7 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)] transition-colors"
-                >
-                  <Folder className="w-3 h-3 flex-shrink-0" style={{ color: f.color }} />
-                  <span className="truncate flex-1">{f.name}</span>
-                  {f._count > 0 && (
-                    <span className="mono text-[10px] opacity-70">{f._count}</span>
-                  )}
-                </Link>
+              custom.map(f => (
+                <SidebarItem key={f.id} f={f} icon={<Folder className="w-3 h-3 flex-shrink-0" style={{ color: f.color }} />} />
               ))
             )}
           </SidebarGroup>
 
-          {/* Proyectos */}
-          {projectFolders.length > 0 && (
+          {projects.length > 0 && (
             <SidebarGroup label="Proyectos">
-              {projectFolders.map(p => (
-                <Link
-                  key={p.id}
-                  href={`/admin/projects/${p.id}`}
-                  className="flex items-center gap-2 px-2 h-7 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)] transition-colors"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
-                  <span className="truncate">{p.name}</span>
-                </Link>
+              {projects.map(p => (
+                <SidebarItem key={p.id} f={p} icon={<span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: p.color }} />} />
               ))}
             </SidebarGroup>
           )}
 
-          {/* Demos WA */}
-          {demoFolders.length > 0 && (
+          {demos.length > 0 && (
             <SidebarGroup label="Demos WA">
-              {demoFolders.map(d => (
-                <Link
+              {demos.map(d => (
+                <SidebarItem
                   key={d.id}
-                  href={`/admin/client/${encodeURIComponent(d.id)}`}
-                  className="flex items-center gap-2 px-2 h-7 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)] transition-colors"
-                >
-                  <span className="grid place-items-center w-4 h-4 rounded text-[8px] font-bold text-white bg-[var(--green)] flex-shrink-0">
-                    {d.initials}
-                  </span>
-                  <span className="truncate">{d.name}</span>
-                </Link>
+                  f={d}
+                  icon={
+                    <span className="grid place-items-center w-4 h-4 rounded text-[8px] font-bold text-white bg-[var(--green)] flex-shrink-0">
+                      {d.name.charAt(0).toUpperCase()}
+                    </span>
+                  }
+                />
               ))}
             </SidebarGroup>
           )}
@@ -123,7 +97,6 @@ export function DocumentosView({ folders, projectFolders, demoFolders, stats }: 
           <p className="mono text-[9px] text-muted-foreground">{stats.usedLabel} de {stats.capLabel}</p>
         </div>
 
-        {/* Nueva carpeta CTA */}
         <div className="border-t border-[var(--border)] p-2.5">
           <button
             type="button"
@@ -161,12 +134,12 @@ export function DocumentosView({ folders, projectFolders, demoFolders, stats }: 
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar carpetas…"
+            placeholder="Buscar en todas las carpetas…"
             className="w-full h-9 pl-9 pr-3 rounded-md bg-[var(--bg-input)] border border-[var(--border)] text-[12px] text-foreground placeholder:text-muted-foreground outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)] transition-colors"
           />
         </div>
 
-        {/* New folder form (collapsable) */}
+        {/* New folder form */}
         {showNew && (
           <div className="bg-card border border-[var(--accent)] rounded-[var(--r-lg)] p-5 mb-5 shadow-[var(--shadow-soft)] pd-fade-in">
             <div className="flex items-center justify-between mb-3">
@@ -191,7 +164,7 @@ export function DocumentosView({ folders, projectFolders, demoFolders, stats }: 
                 <input
                   name="color"
                   type="color"
-                  defaultValue="#3b82f6"
+                  defaultValue="#fbbf24"
                   className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-input)] cursor-pointer"
                 />
               </Field>
@@ -210,64 +183,78 @@ export function DocumentosView({ folders, projectFolders, demoFolders, stats }: 
         )}
 
         {/* Mis carpetas */}
-        <Section title="Mis carpetas" icon={<Home className="w-3.5 h-3.5" />} count={filteredMy.length}>
-          {filteredMy.length === 0 ? (
+        <Section title="Mis carpetas" icon={<Home className="w-3.5 h-3.5" />} count={filteredCustom.length}>
+          {filteredCustom.length === 0 ? (
             <p className="text-[12px] text-muted-foreground px-1">
               {query ? 'Sin resultados.' : 'Sin carpetas todavía. Creá una desde el panel lateral.'}
             </p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {filteredMy.map(f => (
-                <FolderCard
-                  key={f.id}
-                  href={`/admin/documentos/${f.id}`}
-                  color={f.color}
-                  name={f.name}
-                  sub={`${f._count} archivo${f._count === 1 ? '' : 's'}`}
-                  description={f.description}
-                  deleteAction={`/api/admin/folders/${f.id}/delete`}
-                />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {filteredCustom.map(f => (
+                <FolderCard key={f.id} f={f} deletable />
               ))}
             </div>
           )}
         </Section>
 
         {/* Proyectos con archivos */}
-        {projectFolders.length > 0 && (
-          <Section title="Proyectos con archivos" icon={<FolderKanban className="w-3.5 h-3.5" />} count={projectFolders.length}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {projectFolders.map(p => (
-                <FolderCard
-                  key={p.id}
-                  href={`/admin/projects/${p.id}`}
-                  color={p.color}
-                  name={p.name}
-                  sub="Proyecto"
-                  description={p.sub}
-                />
+        {filteredProjects.length > 0 && (
+          <Section title="Proyectos con archivos" icon={<FolderKanban className="w-3.5 h-3.5" />} count={filteredProjects.length}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {filteredProjects.map(p => (
+                <FolderCard key={p.id} f={p} />
               ))}
             </div>
           </Section>
         )}
 
         {/* Demos WA */}
-        {demoFolders.length > 0 && (
-          <Section title="Demos WA" icon={<MessageCircle className="w-3.5 h-3.5" />} count={demoFolders.length}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {demoFolders.map(d => (
-                <FolderCard
-                  key={d.id}
-                  href={`/admin/client/${encodeURIComponent(d.id)}`}
-                  color="oklch(0.62 0.16 160)"
-                  name={d.name}
-                  sub={d.sub}
-                />
+        {filteredDemos.length > 0 && (
+          <Section title="Demos WA" icon={<MessageCircle className="w-3.5 h-3.5" />} count={filteredDemos.length}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {filteredDemos.map(d => (
+                <FolderCard key={d.id} f={d} />
               ))}
             </div>
           </Section>
         )}
+
+        {/* Empty state global */}
+        {custom.length === 0 && projects.length === 0 && demos.length === 0 && (
+          <div className="bg-card border border-dashed border-[var(--border-strong)] rounded-[var(--r-lg)] p-10 text-center mt-5">
+            <div className="inline-grid place-items-center w-12 h-12 rounded-xl bg-[var(--bg-inset)] mb-4">
+              <Folder className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <h2 className="text-[14px] font-semibold text-foreground mb-1">Drive vacío</h2>
+            <p className="text-[12px] text-muted-foreground max-w-md mx-auto mb-3">
+              Cuando crees una carpeta, demo o proyecto con archivos, va a aparecer acá.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowNew(true)}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" /> Crear primera carpeta
+            </button>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function SidebarItem({ f, icon }: { f: FolderListing; icon: React.ReactNode }) {
+  return (
+    <Link
+      href={f.href}
+      className="flex items-center gap-2 px-2 h-7 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)] transition-colors"
+    >
+      {icon}
+      <span className="truncate flex-1">{f.name}</span>
+      {f.fileCount > 0 && (
+        <span className="mono text-[10px] opacity-70">{f.fileCount}</span>
+      )}
+    </Link>
   );
 }
 
@@ -284,9 +271,7 @@ function Section({ title, icon, count, children }: { title: string; icon: React.
   return (
     <section className="mb-6 last:mb-0">
       <div className="flex items-center gap-2 mb-3 px-1">
-        <div
-          className="grid place-items-center w-5 h-5 rounded bg-[var(--accent-dim)] text-[var(--accent-strong)]"
-        >
+        <div className="grid place-items-center w-5 h-5 rounded bg-[var(--accent-dim)] text-[var(--accent-strong)]">
           {icon}
         </div>
         <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
@@ -297,39 +282,31 @@ function Section({ title, icon, count, children }: { title: string; icon: React.
   );
 }
 
-function FolderCard({
-  href, color, name, sub, description, deleteAction,
-}: {
-  href: string; color: string; name: string; sub: string; description?: string; deleteAction?: string;
-}) {
+function FolderCard({ f, deletable }: { f: FolderListing; deletable?: boolean }) {
+  const fileLabel = f.fileCount === 0 ? 'Vacía' : `${f.fileCount} archivo${f.fileCount === 1 ? '' : 's'}`;
   return (
     <div className="relative group">
       <Link
-        href={href}
-        className="block bg-card border border-[var(--border)] rounded-[var(--r-lg)] p-4 transition-all hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-soft)]"
+        href={f.href}
+        className="flex items-start gap-2.5 bg-card border border-[var(--border)] rounded-[var(--r-lg)] p-3 transition-all hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-soft)]"
       >
-        <div className="relative mb-3">
-          {/* Stack effect — 3 layers */}
-          <div
-            className="absolute top-1 left-1 right-2 h-7 rounded-md opacity-30"
-            style={{ background: color }}
-          />
-          <div
-            className="absolute top-0.5 left-0.5 right-1.5 h-7 rounded-md opacity-50"
-            style={{ background: color }}
-          />
-          <Folder className="relative w-9 h-9" style={{ color }} fill={color} fillOpacity={0.18} />
+        <Folder
+          className="w-9 h-9 flex-shrink-0"
+          style={{ color: f.color }}
+          fill={f.color}
+          fillOpacity={0.22}
+          strokeWidth={1.4}
+        />
+        <div className="min-w-0 flex-1 pt-0.5">
+          <div className="text-[12.5px] font-semibold text-foreground truncate" title={f.name}>{f.name}</div>
+          <div className="mono text-[10px] text-muted-foreground mt-0.5">{fileLabel}</div>
+          <div className="text-[10px] text-muted-foreground truncate mt-0.5" title={f.subtitle}>{f.subtitle}</div>
         </div>
-        <div className="text-[13px] font-semibold text-foreground truncate">{name}</div>
-        <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>
-        {description && (
-          <div className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{description}</div>
-        )}
       </Link>
-      {deleteAction && (
+      {deletable && (
         <form
           method="POST"
-          action={deleteAction}
+          action={`/api/admin/folders/${f.id}/delete`}
           className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <button
