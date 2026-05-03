@@ -1,0 +1,5 @@
+# Forzar line endings LF en scripts shell para que funcionen en el container Linux
+# (Windows local puede usar CRLF, pero Docker necesita LF en el shebang)
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+Dockerfile text eol=lf
