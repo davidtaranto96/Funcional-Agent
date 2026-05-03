@@ -483,6 +483,10 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       /* Type */
       --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       --mono: 'Geist Mono', 'SF Mono', ui-monospace, monospace;
+      /* Heading scale (intermediate H2 fills the H1->card-label gap) */
+      --h1-size: 22px;
+      --h2-size: 16px;
+      --h3-size: 13px;
       /* Sidebar width */
       --sw: 240px;
     }
@@ -674,6 +678,9 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     html.dark div.text-3xl.font-bold,html.dark div.text-2xl.font-bold,html.dark span.text-3xl.font-bold,html.dark span.text-2xl.font-bold{font-family:var(--mono);font-weight:600;letter-spacing:-.01em}
     /* Page H1: tightening only */
     html.dark h1.font-bold,html.dark h2.font-bold{font-weight:600;letter-spacing:-.01em}
+    /* Section H2 inside cards: upgrade text-sm (14px) → 16px so they read as headings, not labels.
+       Scoped to cards via .bg-white wrapper (mapped to bg-card) to avoid breaking compact UIs. */
+    html.dark .bg-white h2.text-sm.font-semibold,html.dark .pd-card h2.text-sm.font-semibold{font-size:var(--h2-size);line-height:1.25;letter-spacing:-.005em}
     /* Buttons: tweak common Tailwind blue/orange/red/emerald/amber with accent palette glow on hover */
     html.dark .bg-blue-500,html.dark .bg-blue-600{background-color:var(--accent)!important}
     html.dark .bg-blue-500:hover,html.dark .bg-blue-600:hover,html.dark .hover\\:bg-blue-600:hover,html.dark .hover\\:bg-blue-700:hover{filter:brightness(1.1);box-shadow:0 0 0 3px var(--accent-dim)}
@@ -815,8 +822,8 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     html.dark .cmd-footer kbd{background:#0f172a;border-color:#1e3050;color:#64748b}
     /* ── FAB ── */
     .fab-container{position:fixed;bottom:24px;right:24px;z-index:50}
-    .fab-btn{width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(59,130,246,0.4);transition:all .2s}
-    .fab-btn:hover{transform:scale(1.05);box-shadow:0 12px 32px rgba(59,130,246,0.5)}
+    .fab-btn{width:52px;height:52px;border-radius:16px;background:var(--accent);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px var(--accent-glow);transition:transform .2s ease}
+    .fab-btn:hover{transform:scale(1.05)}
     .fab-btn svg{transition:transform .2s}
     .fab-menu{position:absolute;bottom:60px;right:0;background:white;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);border:1px solid #e2e8f0;padding:6px;min-width:200px;opacity:0;visibility:hidden;transform:translateY(8px) scale(0.95);transition:all .15s ease}
     .fab-menu.open{opacity:1;visibility:visible;transform:translateY(0) scale(1)}
@@ -1570,7 +1577,7 @@ router.get('/', requireAuth, async (req, res) => {
           const h = new Date().getHours();
           const name = (req.session?.user?.name || 'David').split(' ')[0];
           const greet = h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
-          return `${greet}, ${name} 👋`;
+          return `${greet}, ${name}`;
         })()}</h1>
         <div class="text-sm text-slate-400 mt-0.5">${new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</div>
       </div>
