@@ -1,6 +1,7 @@
 import { createClient, type Client } from '@libsql/client';
 import path from 'path';
 import fs from 'fs';
+import type { Task } from './constants';
 
 let client: Client | null = null;
 
@@ -94,7 +95,7 @@ export interface Project {
   status: string;
   budget: string;
   budget_status: string;
-  tasks: Array<Record<string, unknown>>;
+  tasks: Task[];
   notes: string;
   updates_log: Array<{ date: string; text: string }>;
   is_personal: boolean;
