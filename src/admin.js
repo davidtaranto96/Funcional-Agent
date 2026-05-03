@@ -404,7 +404,7 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
       ? 'background:var(--accent-dim);color:var(--accent)'
       : 'color:var(--text-2)';
     const hoverClass = active ? '' : 'sb-nav-hover';
-    return `<a href="${href}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${hoverClass}" style="${baseStyle};position:relative">
+    return `<a href="${href}" data-label="${escapeHtml(label)}" title="${escapeHtml(label)}" class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${hoverClass}" style="${baseStyle};position:relative">
       ${active ? `<span aria-hidden="true" style="position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)"></span>` : ''}
       <span class="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center" style="color:${active ? 'var(--accent)' : 'var(--text-2)'}">${icon}</span>
       <span class="flex-1 sidebar-label whitespace-nowrap overflow-hidden">${label}</span>
@@ -719,6 +719,72 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     html.dark .hover\\:bg-orange-50:hover{background-color:var(--amber-dim)!important}
     html.dark .hover\\:bg-emerald-50:hover{background-color:var(--green-dim)!important}
     html.dark .hover\\:bg-red-50:hover{background-color:var(--red-dim)!important}
+
+    /* ──────────────────────────────────────────────────────────────
+       Dark Mode Contrast Fixes — text-white over bg-white now → text-1
+       ────────────────────────────────────────────────────────────── */
+    /* When text-white sits inside a bg-white card, it disappears.
+       In Precision Dark, bg-white maps to var(--bg-card) (dark), so text-white still works.
+       BUT any element that had text-white intended for a colored gradient might become invisible.
+       Keep text-white only for elements with explicit colored backgrounds. */
+    html.dark .text-white{color:var(--text-1)!important}
+    /* Restore text-white for elements that have an explicit accent/colored background */
+    html.dark .bg-blue-500.text-white,html.dark .bg-blue-600.text-white,
+    html.dark .bg-orange-500.text-white,html.dark .bg-orange-600.text-white,
+    html.dark .bg-red-500.text-white,html.dark .bg-red-600.text-white,
+    html.dark .bg-emerald-500.text-white,html.dark .bg-emerald-600.text-white,
+    html.dark .bg-green-500.text-white,html.dark .bg-green-600.text-white,
+    html.dark .bg-amber-500.text-white,html.dark .bg-amber-600.text-white,
+    html.dark .bg-purple-500.text-white,html.dark .bg-purple-600.text-white,
+    html.dark .bg-indigo-500.text-white,html.dark .bg-indigo-600.text-white,
+    html.dark .bg-violet-500.text-white,
+    html.dark .bg-gradient-to-br.text-white,html.dark .bg-gradient-to-r.text-white,
+    html.dark button.bg-blue-600,html.dark button.bg-emerald-600,html.dark button.bg-red-600,html.dark button.bg-orange-600,
+    html.dark a.bg-blue-600,html.dark a.bg-emerald-600,html.dark a.bg-red-600,html.dark a.bg-orange-600{color:#fff!important}
+    /* Text-gray defaults inside cards */
+    html.dark .text-gray-900,html.dark .text-gray-800,html.dark .text-gray-700{color:var(--text-1)!important}
+    html.dark .text-gray-600,html.dark .text-gray-500{color:var(--text-2)!important}
+    html.dark .text-gray-400,html.dark .text-gray-300{color:var(--text-3)!important}
+    /* Tailwind divider lines */
+    html.dark .divide-gray-200>*+*,html.dark .divide-gray-100>*+*{border-color:var(--border)!important}
+    /* Any leftover bg-slate-50 on tiny inset surfaces */
+    html.dark .bg-slate-50{background-color:var(--bg-inset)!important}
+    /* Border defaults */
+    html.dark .border,html.dark .border-2{border-color:var(--border)}
+    html.dark .border-gray-200,html.dark .border-gray-100,html.dark .border-gray-300{border-color:var(--border-s)!important}
+    /* Inputs that have explicit white bg */
+    html.dark .bg-white input,html.dark input.bg-white,html.dark textarea.bg-white,html.dark select.bg-white{background-color:var(--bg-input)!important;color:var(--text-1)!important;border-color:var(--border-s)!important}
+    /* Placeholder text */
+    html.dark .placeholder-slate-400::placeholder,html.dark .placeholder-gray-400::placeholder{color:var(--text-3)!important}
+    /* Code blocks */
+    html.dark code,html.dark pre{background:var(--bg-inset)!important;color:var(--text-1)!important;border:1px solid var(--border)}
+    /* "white" in tag style attributes */
+    html.dark [style*="color:white"]:not(.bg-blue-500):not(.bg-blue-600):not(.bg-emerald-500):not(.bg-emerald-600):not(.bg-red-500):not(.bg-red-600):not(.bg-amber-500):not(.bg-amber-600):not(.bg-orange-500):not(.bg-orange-600):not(.bg-purple-500):not(.bg-purple-600){color:var(--text-1)!important}
+    /* Badges with text-white inside dim backgrounds */
+    html.dark .bg-orange-100 .text-white,html.dark .bg-blue-100 .text-white,html.dark .bg-red-100 .text-white,html.dark .bg-emerald-100 .text-white,html.dark .bg-amber-100 .text-white{color:var(--text-1)!important}
+
+    /* Extra Tailwind colors not covered above (rose/pink/sky/cyan/teal/fuchsia/lime) */
+    html.dark .bg-rose-500,html.dark .bg-rose-600,html.dark .bg-pink-500,html.dark .bg-pink-600,html.dark .bg-fuchsia-500{background-color:var(--red)!important}
+    html.dark .bg-rose-500.text-white,html.dark .bg-rose-600.text-white,html.dark .bg-pink-500.text-white,html.dark .bg-pink-600.text-white,html.dark .bg-fuchsia-500.text-white{color:#fff!important}
+    html.dark .bg-sky-500,html.dark .bg-sky-600,html.dark .bg-cyan-500,html.dark .bg-cyan-600,html.dark .bg-teal-500,html.dark .bg-teal-600{background-color:var(--accent)!important}
+    html.dark .bg-sky-500.text-white,html.dark .bg-sky-600.text-white,html.dark .bg-cyan-500.text-white,html.dark .bg-cyan-600.text-white,html.dark .bg-teal-500.text-white,html.dark .bg-teal-600.text-white{color:#fff!important}
+    html.dark .bg-lime-500,html.dark .bg-lime-600{background-color:var(--green)!important}
+    html.dark .bg-rose-100,html.dark .bg-pink-100{background-color:var(--red-dim)!important}
+    html.dark .bg-sky-100,html.dark .bg-cyan-100,html.dark .bg-teal-100{background-color:var(--accent-dim)!important}
+    /* Common slate-900 (used for active filter pills) — keep as solid dark with white text */
+    html.dark .bg-slate-900{background-color:var(--bg-card2)!important;border:1px solid var(--border-s)}
+    html.dark .bg-slate-900.text-white{color:var(--text-1)!important}
+    /* Defensive: any element with explicit colored gradient bg keeps white text */
+    html.dark [class*="bg-gradient"].text-white,html.dark [class*="bg-gradient"] .text-white{color:#fff!important}
+    /* Border colors that map to slate variants used in dark cards */
+    html.dark .border-slate-700,html.dark .border-slate-800{border-color:var(--border-s)!important}
+    /* Inputs nested inside cards (no .bg-white prefix on the input itself) */
+    html.dark .bg-white input:not([type="checkbox"]):not([type="radio"]),html.dark .bg-white textarea,html.dark .bg-white select{background-color:var(--bg-input)!important;color:var(--text-1)!important;border-color:var(--border-s)!important}
+    /* Pre-existing checkboxes (accent-blue-600) → use accent token */
+    html.dark input[type="checkbox"]{accent-color:var(--accent)}
+    /* Force readable text inside ANY card / card-like surface that ended up "bg-white-mapped" */
+    html.dark .bg-white *:not(svg):not(path){color:inherit}
+    /* When divs nested inside bg-white have text-slate-X classes, those mappings already apply */
     /* ── Command Palette ── */
     .cmd-palette{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-start;justify-content:center;padding-top:min(20vh,160px)}
     .cmd-palette.open{display:flex}
@@ -754,42 +820,78 @@ function layout(title, body, { pendingCount = 0, notifCount = 0, activePage = ''
     html.dark .fab-menu a{color:#94a3b8}
     html.dark .fab-menu a:hover{background:#162032}
     .fab-menu a span.fab-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-    /* ── Sidebar collapse (desktop) ── */
+    /* ── Sidebar — full viewport height + correct flex shrink (mobile + desktop) ── */
+    #sidebar{height:100vh;height:100dvh;display:flex;flex-direction:column}
+    #sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    #sidebar .sidebar-brand,#sidebar .sidebar-search,#sidebar .sidebar-bottom{flex-shrink:0}
+
+    /* ── Sidebar collapse (desktop) — click-only, NO hover-expand ── */
     @media(min-width:768px){
-      #sidebar{transition:width .2s cubic-bezier(.25,.46,.45,.94),box-shadow .2s ease}
-      body.sidebar-collapsed #sidebar{width:72px!important;overflow:visible}
+      #sidebar{transition:width .2s cubic-bezier(.25,.46,.45,.94)}
+      body.sidebar-collapsed #sidebar{width:72px!important}
       body.sidebar-collapsed #main-wrapper{margin-left:72px!important;transition:margin-left .2s cubic-bezier(.25,.46,.45,.94)}
-      /* ─ Section label: swap text↔divider line (same 20px height → icons never shift) ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-text{display:none!important}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-section-divider{display:block!important}
-      /* ─ Text labels hidden (inline in flex row — no height impact) ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-label,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-user-info,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand-text,
-      body.sidebar-collapsed #sidebar:not(:hover) #darkToggle,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-badge{display:none!important}
-      /* ─ Nav items: center icon (gap:0 prevents gap-3 from offsetting icon) ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) nav a{justify-content:center;gap:0;padding:10px 0}
-      /* ─ Search: icon-only (same height as full bar → no vertical shift) ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search{padding:6px 8px}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button{justify-content:center;padding:7px 0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button>span,
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-search button kbd{display:none}
+      /* ─ Section label: swap text↔divider line (same 20px height) ─ */
+      body.sidebar-collapsed #sidebar .sidebar-section-text{display:none!important}
+      body.sidebar-collapsed #sidebar .sidebar-section-divider{display:block!important}
+      /* ─ Text labels + extras hidden ─ */
+      body.sidebar-collapsed #sidebar .sidebar-label,
+      body.sidebar-collapsed #sidebar .sidebar-user-info,
+      body.sidebar-collapsed #sidebar .sidebar-brand-text,
+      body.sidebar-collapsed #sidebar .sidebar-badge{display:none!important}
+      /* ─ Nav items: center icon ─ */
+      body.sidebar-collapsed #sidebar nav a{justify-content:center;gap:0;padding:10px 0;position:relative}
+      /* ─ Tooltip on hover when collapsed (compensates for no hover-expand) ─ */
+      body.sidebar-collapsed #sidebar nav a[data-label]::after{
+        content:attr(data-label);
+        position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);
+        background:var(--bg-card2);color:var(--text-1);
+        padding:6px 10px;border-radius:var(--r-md);font-size:12px;font-weight:500;
+        white-space:nowrap;border:1px solid var(--border-s);box-shadow:var(--shadow-md);
+        opacity:0;pointer-events:none;transition:opacity .15s ease .25s;z-index:50;
+      }
+      body.sidebar-collapsed #sidebar nav a:hover[data-label]::after{opacity:1}
+      /* Hide active-state lateral bar in collapsed (would clip outside 72px) */
+      body.sidebar-collapsed #sidebar nav a>span[aria-hidden="true"]{display:none}
+      /* ─ Search: icon-only ─ */
+      body.sidebar-collapsed #sidebar .sidebar-search{padding:6px 8px}
+      body.sidebar-collapsed #sidebar .sidebar-search button{justify-content:center;padding:7px 0}
+      body.sidebar-collapsed #sidebar .sidebar-search button>span,
+      body.sidebar-collapsed #sidebar .sidebar-search button kbd{display:none}
       /* ─ Brand ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand{padding:14px 0;display:flex;justify-content:center;align-items:center}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-brand>div{justify-content:center;gap:0}
+      body.sidebar-collapsed #sidebar .sidebar-brand{padding:14px 0;display:flex;justify-content:center;align-items:center}
+      body.sidebar-collapsed #sidebar .sidebar-brand>div{justify-content:center;gap:0}
       /* ─ Bottom ─ */
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom{padding:8px 4px}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3{margin:0;padding:6px 0;display:flex;justify-content:center;align-items:center;background:transparent!important;border:none!important;border-radius:0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom .mx-3>div{justify-content:center;gap:0}
-      body.sidebar-collapsed #sidebar:not(:hover) .sidebar-bottom form button{justify-content:center;padding:8px 0;gap:0}
-      /* ─ Hover expand as overlay ─ */
-      body.sidebar-collapsed #sidebar:hover{width:240px!important;box-shadow:8px 0 40px rgba(0,0,0,0.3);z-index:30}
+      body.sidebar-collapsed #sidebar .sidebar-bottom{padding:8px 4px}
+      body.sidebar-collapsed #sidebar .sidebar-bottom .mx-3{margin:0;padding:6px 0;display:flex;justify-content:center;align-items:center;background:transparent!important;border:none!important;border-radius:0}
+      body.sidebar-collapsed #sidebar .sidebar-bottom .mx-3>div{justify-content:center;gap:0}
+      body.sidebar-collapsed #sidebar .sidebar-bottom form button{justify-content:center;padding:8px 0;gap:0}
+    }
+
+    /* ── Mobile responsive polish ── */
+    @media(max-width:767px){
+      /* H1 page titles: smaller on mobile */
+      h1{font-size:18px!important;line-height:1.25!important}
+      h2{font-size:15px!important}
+      /* Reduce big number font-size in KPI cards */
+      .pd-kpi-value{font-size:24px!important}
+      /* Filter-tabs containers (flex-wrap) → horizontal scroll */
+      main .flex-wrap.gap-1\\.5,main .flex.flex-wrap{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px}
+      main .flex-wrap.gap-1\\.5::-webkit-scrollbar,main .flex.flex-wrap::-webkit-scrollbar{display:none}
+      /* Tables: ensure parent has overflow-x */
+      main .overflow-x-auto{overflow-x:auto;-webkit-overflow-scrolling:touch}
+      /* Reduce paddings inside cards */
+      main .p-5{padding:14px!important}
+      main .px-5{padding-left:14px!important;padding-right:14px!important}
+      main .py-5{padding-top:14px!important;padding-bottom:14px!important}
+      /* Backdrop coverage */
+      #sidebar-backdrop{background:rgba(0,0,0,.65)}
+      /* Mobile sidebar: slightly narrower so it doesn't dominate the screen */
+      #sidebar{width:280px!important;max-width:85vw}
     }
   </style>
 </head>
 <body class="min-h-screen" style="display:flex;background:var(--bg-app);color:var(--text-1)">
-  <aside id="sidebar" style="width:240px;min-height:100vh;position:fixed;top:0;left:0;z-index:20;background:var(--bg-card);border-right:1px solid var(--border)" class="flex flex-col">
+  <aside id="sidebar" style="width:240px;position:fixed;top:0;left:0;z-index:20;background:var(--bg-card);border-right:1px solid var(--border)" class="flex flex-col">
     <!-- Brand -->
     <div class="px-4 py-4 sidebar-brand" style="border-bottom:1px solid var(--border)">
       <div class="flex items-center gap-3">
