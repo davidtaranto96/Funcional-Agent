@@ -57,7 +57,8 @@ export interface ConversationReport {
   resumen_ejecutivo?: string;
   analisis?: {
     complejidad_estimada?: string;
-    horas_estimadas?: number;
+    horas_estimadas?: string;
+    riesgos?: string[];
     recomendaciones_tecnicas?: string[];
     recomendaciones?: string[];
     mvp_sugerido?: string;
