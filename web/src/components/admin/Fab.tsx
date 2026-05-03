@@ -18,6 +18,7 @@ export function Fab() {
   const pathname = usePathname() || '';
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [overlayActive, setOverlayActive] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Cerrar al click fuera
@@ -33,8 +34,30 @@ export function Fab() {
     };
   }, [open]);
 
-  // No mostrar en login
+  // Detectar drawers/modales activos: muchos modales bloquean el scroll del body o
+  // tienen [role="dialog"] / [data-overlay="true"]. Cuando hay uno abierto, escondemos
+  // el FAB para no tapar botones de acción del drawer (ej. "Avanzar etapa").
+  useEffect(() => {
+    function check() {
+      if (typeof document === 'undefined') return;
+      const bodyOverflow = window.getComputedStyle(document.body).overflow;
+      const htmlOverflow = window.getComputedStyle(document.documentElement).overflow;
+      const hasDialog = !!document.querySelector('[role="dialog"], [data-overlay="true"]');
+      setOverlayActive(bodyOverflow === 'hidden' || htmlOverflow === 'hidden' || hasDialog);
+    }
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'role', 'data-overlay'] });
+    return () => mo.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (overlayActive && open) setOpen(false);
+  }, [overlayActive, open]);
+
+  // No mostrar en login ni cuando hay un overlay activo
   if (pathname.startsWith('/login')) return null;
+  if (overlayActive) return null;
 
   const actions: Action[] = [
     { Icon: Search,        label: 'Buscar (⌘K)',           color: 'oklch(0.62 0.18 250)', onClick: () => window.dispatchEvent(new Event('pd-cmdk-open')) },

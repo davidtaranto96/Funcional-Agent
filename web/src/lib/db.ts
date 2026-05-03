@@ -215,6 +215,27 @@ export async function init() {
     )
   `);
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY,
+      number TEXT NOT NULL DEFAULT '',
+      client_id TEXT DEFAULT '',
+      client_name TEXT DEFAULT '',
+      project_id TEXT DEFAULT '',
+      issue_date TEXT DEFAULT (date('now')),
+      due_date TEXT DEFAULT '',
+      amount REAL DEFAULT 0,
+      currency TEXT DEFAULT 'ARS',
+      status TEXT DEFAULT 'draft',
+      paid_at TEXT DEFAULT '',
+      payment_method TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      items TEXT DEFAULT '[]',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Migraciones idempotentes
   for (const sql of [
     `ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0`,
@@ -243,6 +264,9 @@ export async function init() {
     `CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at)`,
     `CREATE INDEX IF NOT EXISTS idx_notif_is_read ON notifications(is_read)`,
     `CREATE INDEX IF NOT EXISTS idx_notif_created_at ON notifications(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_invoices_client_id ON invoices(client_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_invoices_issue_date ON invoices(issue_date)`,
   ]) {
     try { await db.execute(sql); } catch { /* index already exists */ }
   }
@@ -692,4 +716,136 @@ export async function deleteReadNotifications(): Promise<void> {
 export async function deleteAllNotifications(): Promise<void> {
   await ensureInit();
   await getDb().execute('DELETE FROM notifications');
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────
+
+export interface InvoiceItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface Invoice {
+  id: string;
+  number: string;
+  client_id: string;
+  client_name: string;
+  project_id: string;
+  issue_date: string;
+  due_date: string;
+  amount: number;
+  currency: string;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | string;
+  paid_at: string;
+  payment_method: string;
+  notes: string;
+  items: InvoiceItem[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+function parseInvoice(row: Record<string, unknown>): Invoice {
+  return {
+    id: String(row.id),
+    number: String(row.number || ''),
+    client_id: String(row.client_id || ''),
+    client_name: String(row.client_name || ''),
+    project_id: String(row.project_id || ''),
+    issue_date: String(row.issue_date || ''),
+    due_date: String(row.due_date || ''),
+    amount: Number(row.amount || 0),
+    currency: String(row.currency || 'ARS'),
+    status: String(row.status || 'draft'),
+    paid_at: String(row.paid_at || ''),
+    payment_method: String(row.payment_method || ''),
+    notes: String(row.notes || ''),
+    items: safeParseArray<InvoiceItem>(row.items),
+    created_at: row.created_at as string | undefined,
+    updated_at: row.updated_at as string | undefined,
+  };
+}
+
+export async function listInvoices(): Promise<Invoice[]> {
+  await ensureInit();
+  const result = await getDb().execute('SELECT * FROM invoices ORDER BY issue_date DESC, created_at DESC');
+  return result.rows.map(r => parseInvoice(r as unknown as Record<string, unknown>));
+}
+
+export async function getInvoice(id: string): Promise<Invoice | null> {
+  await ensureInit();
+  const result = await getDb().execute({ sql: 'SELECT * FROM invoices WHERE id = ?', args: [id] });
+  return result.rows.length ? parseInvoice(result.rows[0] as unknown as Record<string, unknown>) : null;
+}
+
+async function nextInvoiceNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const result = await getDb().execute({
+    sql: `SELECT number FROM invoices WHERE number LIKE ? ORDER BY number DESC LIMIT 1`,
+    args: [`${year}-%`],
+  });
+  if (result.rows.length === 0) return `${year}-0001`;
+  const last = String((result.rows[0] as Record<string, unknown>).number || '');
+  const match = last.match(/-(\d+)$/);
+  const next = match ? Number(match[1]) + 1 : 1;
+  return `${year}-${String(next).padStart(4, '0')}`;
+}
+
+export async function createInvoice(data: Partial<Invoice>): Promise<string> {
+  await ensureInit();
+  const id = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const number = data.number || (await nextInvoiceNumber());
+  await getDb().execute({
+    sql: `INSERT INTO invoices
+          (id, number, client_id, client_name, project_id, issue_date, due_date,
+           amount, currency, status, paid_at, payment_method, notes, items)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    args: [
+      id, number, data.client_id || '', data.client_name || '', data.project_id || '',
+      data.issue_date || new Date().toISOString().slice(0, 10),
+      data.due_date || '',
+      Number(data.amount || 0),
+      data.currency || 'ARS',
+      data.status || 'draft',
+      data.paid_at || '',
+      data.payment_method || '',
+      data.notes || '',
+      JSON.stringify(data.items || []),
+    ],
+  });
+  return id;
+}
+
+export async function updateInvoice(id: string, data: Partial<Invoice>): Promise<void> {
+  await ensureInit();
+  const current = await getInvoice(id);
+  if (!current) return;
+  const merged = { ...current, ...data };
+  await getDb().execute({
+    sql: `UPDATE invoices SET
+            number=?, client_id=?, client_name=?, project_id=?, issue_date=?, due_date=?,
+            amount=?, currency=?, status=?, paid_at=?, payment_method=?, notes=?, items=?,
+            updated_at=datetime('now')
+          WHERE id=?`,
+    args: [
+      merged.number, merged.client_id, merged.client_name, merged.project_id,
+      merged.issue_date, merged.due_date, Number(merged.amount || 0),
+      merged.currency, merged.status, merged.paid_at, merged.payment_method,
+      merged.notes, JSON.stringify(merged.items || []),
+      id,
+    ],
+  });
+}
+
+export async function markInvoicePaid(id: string, method: string = ''): Promise<void> {
+  await ensureInit();
+  await getDb().execute({
+    sql: `UPDATE invoices SET status='paid', paid_at=date('now'), payment_method=?, updated_at=datetime('now') WHERE id=?`,
+    args: [method, id],
+  });
+}
+
+export async function deleteInvoice(id: string): Promise<void> {
+  await ensureInit();
+  await getDb().execute({ sql: 'DELETE FROM invoices WHERE id = ?', args: [id] });
 }

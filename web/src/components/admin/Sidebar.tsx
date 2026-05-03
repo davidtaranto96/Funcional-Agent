@@ -121,11 +121,16 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
         )}
       >
         {/* Brand */}
-        <div className="flex items-center justify-between gap-2 px-3.5 py-3 border-b border-[var(--border)] flex-shrink-0">
+        <div
+          className={cn(
+            'flex items-center border-b border-[var(--border)] flex-shrink-0 py-3',
+            collapsed ? 'justify-center px-0' : 'justify-between gap-2 px-3.5',
+          )}
+        >
           <button
             type="button"
             onClick={toggleCollapse}
-            className="flex items-center gap-2.5 group min-w-0"
+            className={cn('flex items-center group min-w-0', collapsed ? 'justify-center' : 'gap-2.5')}
             title={collapsed ? 'Expandir' : 'Colapsar'}
           >
             <span
@@ -169,7 +174,7 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
         )}
 
         {/* Nav */}
-        <nav aria-label="Secciones del panel" className="flex-1 overflow-y-auto py-2 px-2.5">
+        <nav aria-label="Secciones del panel" className={cn('flex-1 overflow-y-auto py-2', collapsed ? 'px-0' : 'px-2.5')}>
           {NAV.map((section) => (
             <div key={section.label} className="mb-3 last:mb-0">
               {!collapsed && (
@@ -189,7 +194,7 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
                         title={collapsed ? label : undefined}
                         className={cn(
                           'group relative flex items-center rounded-lg text-[13px] font-medium transition-colors',
-                          collapsed ? 'justify-center h-9 w-9 mx-auto' : 'gap-2 px-2.5 h-8',
+                          collapsed ? 'justify-center h-9 w-[30px] mx-auto' : 'gap-2 px-2.5 h-8',
                           active
                             ? 'text-[var(--accent)] bg-[var(--accent-dim)]'
                             : 'text-muted-foreground hover:text-foreground hover:bg-[var(--bg-inset)]',
@@ -210,8 +215,8 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
         </nav>
 
         {/* User + logout */}
-        <div className="border-t border-[var(--border)] p-2.5 flex-shrink-0">
-          <div className={cn('flex items-center gap-2 px-2 py-1.5 rounded-md', collapsed && 'justify-center')}>
+        <div className={cn('border-t border-[var(--border)] flex-shrink-0', collapsed ? 'py-2.5 px-0' : 'p-2.5')}>
+          <div className={cn('flex items-center rounded-md', collapsed ? 'justify-center py-1.5' : 'gap-2 px-2 py-1.5')}>
             {user?.photo ? (
               <img
                 src={user.photo}
@@ -236,9 +241,9 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
             <button
               type="submit"
               className={cn(
-                'w-full flex items-center gap-2 rounded-md px-2.5 h-8 text-xs',
+                'flex items-center rounded-md text-xs',
                 'text-muted-foreground hover:text-[oklch(70%_0.18_25)] hover:bg-[oklch(0.62_0.22_27_/_0.10)] transition-colors',
-                collapsed && 'justify-center',
+                collapsed ? 'justify-center w-[30px] h-9 mx-auto' : 'gap-2 w-full px-2.5 h-8',
               )}
               title="Cerrar sesión"
             >
