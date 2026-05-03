@@ -1,4 +1,4 @@
-FROM node:20-slim AS deps
+FROM node:20-slim
 
 # Dependencias del sistema para @libsql/client (native bindings necesitan openssl)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -7,41 +7,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Copy package files first (cache layer)
 COPY package*.json ./
-RUN npm ci --omit=dev
 
-# ─── Build stage ─────────────────────────────────────────────────────────
-FROM node:20-slim AS builder
-
-WORKDIR /app
-
-# Instalar TODAS las deps incluyendo dev para el build
-COPY package*.json ./
+# Install ALL deps (incluye dev — necesarias para next build)
+# Single-stage para no duplicar node_modules entre stages (Railway builder OOM con multi-stage)
 RUN npm ci
 
+# Copy source
 COPY . .
 
 # Build de Next.js (genera .next/)
 RUN npm run build
 
-# ─── Runtime stage ───────────────────────────────────────────────────────
-FROM node:20-slim AS runtime
+# Limpiar dev deps post-build para slim el image final
+RUN npm prune --omit=dev && npm cache clean --force
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Solo prod node_modules + build artifacts + package.json
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/next.config.ts ./next.config.ts
-
-# La data dir está en ../data (hermano del web/ en el monorepo)
-# En Railway con un Volume, mountealo en /app/../data o configurá TURSO_DATABASE_URL
+# Crear data dir y dar ownership al usuario node (existente en node:20-slim)
 RUN mkdir -p /app/data && chown -R node:node /app
 
 # Drop root
@@ -50,6 +32,6 @@ USER node
 EXPOSE 3000
 
 ENV NODE_ENV=production
-ENV PORT=3000
+# PORT lo setea Railway automáticamente, el start command lo lee con ${PORT:-3000}
 
 CMD ["npm", "start"]
