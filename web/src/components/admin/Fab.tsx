@@ -64,7 +64,17 @@ export function Fab() {
     { Icon: ContactRound,  label: 'Nuevo cliente',          color: 'oklch(0.62 0.20 250)', href: '/admin/clientes/nuevo' },
     { Icon: FolderKanban,  label: 'Nuevo proyecto',         color: 'oklch(0.62 0.18 290)', href: '/admin/projects/nuevo' },
     { Icon: Calculator,    label: 'Nuevo presupuesto',      color: 'oklch(0.62 0.16 160)', href: '/admin/presupuesto' },
-    { Icon: Folder,        label: 'Nueva carpeta',          color: 'oklch(0.74 0.16 75)',  href: '/admin/documentos' },
+    { Icon: Folder,        label: 'Nueva carpeta',          color: 'oklch(0.74 0.16 75)', onClick: () => {
+        // Si ya estoy en /admin/documentos, dispatch directo. Si no, navego y luego dispatch
+        // (DocumentosView escucha el evento al montarse).
+        if (pathname.startsWith('/admin/documentos')) {
+          window.dispatchEvent(new Event('pd-new-folder'));
+        } else {
+          // Marcamos en sessionStorage para que DocumentosView abra el form al montar
+          try { sessionStorage.setItem('pd-open-new-folder', '1'); } catch { /* ignore */ }
+          router.push('/admin/documentos');
+        }
+      } },
     { Icon: Users,         label: 'Ver pipeline WA',        color: 'oklch(0.62 0.16 200)', href: '/admin/clients' },
     { Icon: ListTodo,      label: 'Ver tareas',             color: 'oklch(0.62 0.20 250)', href: '/admin/tasks' },
   ];

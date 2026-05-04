@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Folder, Plus, Home, MessageCircle, FolderKanban, Search } from 'lucide-react';
@@ -38,6 +38,20 @@ export function DocumentosView({ custom, projects, demos, stats }: Props) {
   const filteredCustom = filteredAll ? filteredAll.filter(f => f.type === 'custom') : custom;
   const filteredProjects = filteredAll ? filteredAll.filter(f => f.type === 'project') : projects;
   const filteredDemos = filteredAll ? filteredAll.filter(f => f.type === 'demo') : demos;
+
+  // Trigger externo: el FAB dispara `pd-new-folder` o setea sessionStorage
+  // antes de navegar, asi abrimos el form automaticamente.
+  useEffect(() => {
+    function open() { setShowNew(true); }
+    window.addEventListener('pd-new-folder', open);
+    try {
+      if (sessionStorage.getItem('pd-open-new-folder') === '1') {
+        sessionStorage.removeItem('pd-open-new-folder');
+        setShowNew(true);
+      }
+    } catch { /* ignore */ }
+    return () => window.removeEventListener('pd-new-folder', open);
+  }, []);
 
   return (
     <div className="flex gap-4 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
