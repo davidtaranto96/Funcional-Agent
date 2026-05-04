@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getFolderWithFiles, listAllFolders } from '@/lib/document-folders';
+import { getFolderWithFiles, listFolderTargets } from '@/lib/document-folders';
 import { FolderView } from './FolderView';
 
 export const dynamic = 'force-dynamic';
@@ -9,21 +9,22 @@ export default async function FolderDetailPage({ params }: {
 }) {
   const { id } = await params;
 
-  const result = await getFolderWithFiles(id).catch(() => null);
-  if (!result) notFound();
+  // Paralelo: contenido de la carpeta + lista liviana de destinos para "mover".
+  // Antes esto era secuencial y la lista de destinos hacia countFiles() en TODAS
+  // las carpetas (proyectos + demos + custom). Ahora listFolderTargets() solo
+  // toca DB, sin filesystem.
+  const [result, targets] = await Promise.all([
+    getFolderWithFiles(id).catch(() => null),
+    listFolderTargets(id).catch(() => []),
+  ]);
 
-  // Listar otras carpetas (custom + project + demo) excluyendo la actual,
-  // como destino para "Mover archivo a..."
-  const all = await listAllFolders().catch(() => ({ custom: [], projects: [], demos: [] }));
-  const otherFolders = [...all.custom, ...all.projects, ...all.demos]
-    .filter(f => f.id !== result.folder.id)
-    .map(f => ({ id: f.id, name: f.name, color: f.color, type: f.type }));
+  if (!result) notFound();
 
   return (
     <FolderView
       folder={result.folder}
       files={result.files}
-      otherFolders={otherFolders}
+      otherFolders={targets}
     />
   );
 }

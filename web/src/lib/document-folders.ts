@@ -134,39 +134,38 @@ export async function resolveFolder(id: string): Promise<ResolvedFolder | null> 
 }
 
 function countFiles(dir: string): { count: number; bytes: number } {
-  if (!fs.existsSync(dir)) return { count: 0, bytes: 0 };
   let count = 0; let bytes = 0;
   try {
-    for (const f of fs.readdirSync(dir)) {
-      if (f.startsWith('.')) continue;
-      const full = path.join(dir, f);
+    // withFileTypes evita un statSync por entrada solo para chequear si es archivo.
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.name.startsWith('.') || !e.isFile()) continue;
       try {
-        const st = fs.statSync(full);
-        if (st.isFile()) { count++; bytes += st.size; }
+        const st = fs.statSync(path.join(dir, e.name));
+        count++; bytes += st.size;
       } catch { /* skip */ }
     }
-  } catch { /* skip */ }
+  } catch { /* dir no existe o sin permisos */ }
   return { count, bytes };
 }
 
 export function listFolderFiles(dir: string): FolderFile[] {
-  if (!fs.existsSync(dir)) return [];
   try {
-    return fs.readdirSync(dir)
-      .filter(f => !f.startsWith('.'))
-      .map(name => {
-        const full = path.join(dir, name);
-        try {
-          const stat = fs.statSync(full);
-          if (!stat.isFile()) return null;
-          return {
-            name, size: stat.size, mtime: stat.mtime.toISOString(),
-            ext: path.extname(name).toLowerCase(),
-          };
-        } catch { return null; }
-      })
-      .filter((x): x is FolderFile => x !== null)
-      .sort((a, b) => b.mtime.localeCompare(a.mtime));
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const out: FolderFile[] = [];
+    for (const e of entries) {
+      if (e.name.startsWith('.') || !e.isFile()) continue;
+      try {
+        const stat = fs.statSync(path.join(dir, e.name));
+        out.push({
+          name: e.name,
+          size: stat.size,
+          mtime: stat.mtime.toISOString(),
+          ext: path.extname(e.name).toLowerCase(),
+        });
+      } catch { /* skip */ }
+    }
+    return out.sort((a, b) => b.mtime.localeCompare(a.mtime));
   } catch {
     return [];
   }
@@ -222,6 +221,39 @@ export async function listAllFolders(): Promise<AllFoldersResult> {
   const totalBytes = allShown.reduce((s, f) => s + f.bytes, 0);
 
   return { custom, projects: projectsWithFiles, demos: demosWithFiles, totalFiles, totalBytes };
+}
+
+// Liviana: devuelve solo metadata de carpetas (id/name/color/type) para
+// pickers/dropdowns. NO toca el filesystem ni cuenta archivos. Mucho más rápida
+// que listAllFolders() cuando solo se necesita la lista de destinos para mover.
+export interface FolderTarget {
+  id: string;
+  name: string;
+  color: string;
+  type: FolderType;
+}
+
+export async function listFolderTargets(excludeId?: string): Promise<FolderTarget[]> {
+  const [folders, projects, conversations] = await Promise.all([
+    db.listDocumentFolders(),
+    db.listProjects(),
+    db.listAllClients(),
+  ]);
+
+  const out: FolderTarget[] = [];
+  for (const f of folders) {
+    out.push({ id: f.id, name: f.name, color: f.color, type: 'custom' });
+  }
+  for (const p of projects) {
+    out.push({ id: `pf_${p.id}`, name: p.title || 'Sin título', color: '#8b5cf6', type: 'project' });
+  }
+  for (const c of conversations) {
+    if (c.demo_status === 'sent' || c.demo_status === 'approved' || c.demo_status === 'pending_review') {
+      const name = c.report?.cliente?.nombre || c.phone;
+      out.push({ id: `wd_${c.phone}`, name, color: '#10b981', type: 'demo' });
+    }
+  }
+  return excludeId ? out.filter(t => t.id !== excludeId) : out;
 }
 
 export async function getFolderWithFiles(id: string): Promise<FolderWithFilesResult | null> {
