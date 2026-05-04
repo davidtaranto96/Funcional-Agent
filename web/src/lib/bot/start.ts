@@ -107,42 +107,46 @@ async function handleAdminCommand(fromKey: string, text: string): Promise<string
 }
 
 // ── Procesador principal de mensajes entrantes ──────────────────────────────
-async function processIncomingMessage({ fromKey, text, audioBuffer, audioMime, hasMedia }: IncomingMessage): Promise<void> {
-  console.log(`[wa] ▶ INCOMING From=${fromKey} text="${(text || '').substring(0, 80)}" audio=${!!audioBuffer} media=${hasMedia}`);
+async function processIncomingMessage({ fromKey, fromJid, text, audioBuffer, audioMime, hasMedia }: IncomingMessage): Promise<void> {
+  console.log(`[wa] ▶ INCOMING fromKey=${fromKey} fromJid=${fromJid} text="${(text || '').substring(0, 80)}" audio=${!!audioBuffer} media=${hasMedia}`);
+
+  // Para responder usamos siempre fromJid (puede ser @lid o @s.whatsapp.net),
+  // que es donde realmente esta el chat. fromKey se usa solo para DB lookups.
+  const replyTo = fromJid || fromKey;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error('[wa] ❌ ANTHROPIC_API_KEY no configurada — el agente no puede responder');
-    try { await sendMessage(fromKey, 'Hola! Sistema en mantenimiento, te respondo en un rato.'); } catch (e: any) { console.error('[wa] sendMessage fallback fallo:', e.message); }
+    try { await sendMessage(replyTo, 'Hola! Sistema en mantenimiento, te respondo en un rato.'); } catch (e: any) { console.error('[wa] sendMessage fallback fallo:', e.message); }
     return;
   }
 
   let actualText = (text || '').trim();
 
   if (audioBuffer) {
-    sendMessage(fromKey, '🎙️ Recibí tu audio, dame unos segundos que lo proceso...').catch(() => { });
+    sendMessage(replyTo, '🎙️ Recibí tu audio, dame unos segundos que lo proceso...').catch(() => { });
     try {
       const transcribed = await transcribe(audioBuffer, { mime: audioMime });
       if (!transcribed || transcribed.startsWith('[')) {
-        await sendMessage(fromKey, transcribed || 'No pude entender el audio. ¿Podrías escribirlo o grabar otro?');
+        await sendMessage(replyTo, transcribed || 'No pude entender el audio. ¿Podrías escribirlo o grabar otro?');
         return;
       }
       actualText = transcribed;
     } catch (err: any) {
       console.error('[wa] Error transcribiendo:', err.message);
-      await sendMessage(fromKey, 'Perdón, tuve un error procesando el audio. ¿Podés escribirlo o grabar otro?');
+      await sendMessage(replyTo, 'Perdón, tuve un error procesando el audio. ¿Podés escribirlo o grabar otro?');
       return;
     }
   }
 
   if (!actualText && hasMedia) {
-    await sendMessage(fromKey, 'Por ahora solo puedo leer texto y audios. Si me querés mandar algo, escribilo o grabá un audio.');
+    await sendMessage(replyTo, 'Por ahora solo puedo leer texto y audios. Si me querés mandar algo, escribilo o grabá un audio.');
     return;
   }
   if (!actualText) return;
 
   const adminReply = await handleAdminCommand(fromKey, actualText);
   if (adminReply) {
-    await sendMessage(fromKey, adminReply);
+    await sendMessage(replyTo, adminReply);
     return;
   }
 
@@ -154,7 +158,7 @@ async function processIncomingMessage({ fromKey, text, audioBuffer, audioMime, h
   } catch (err: any) {
     console.error('[wa] ❌ Error en agente:', err?.message || err, err?.stack?.split('\n').slice(0, 3).join(' | '));
     try {
-      await sendMessage(fromKey, 'Perdón, tuve un error. ¿Podés intentar de nuevo?');
+      await sendMessage(replyTo, 'Perdón, tuve un error. ¿Podés intentar de nuevo?');
     } catch (sendErr: any) {
       console.error('[wa] ❌❌ tampoco pude mandar mensaje de error:', sendErr?.message);
     }
@@ -201,10 +205,10 @@ async function processIncomingMessage({ fromKey, text, audioBuffer, audioMime, h
     }
   }
 
-  console.log(`[wa] ▶ enviando reply a ${fromKey} (${result.reply.length} chars): "${result.reply.substring(0, 120)}..."`);
+  console.log(`[wa] ▶ enviando reply a ${replyTo} (${result.reply.length} chars): "${result.reply.substring(0, 120)}..."`);
   try {
-    await sendMessage(fromKey, result.reply);
-    console.log(`[wa] ✅ reply enviado OK a ${fromKey}`);
+    await sendMessage(replyTo, result.reply);
+    console.log(`[wa] ✅ reply enviado OK a ${replyTo}`);
   } catch (sendErr: any) {
     console.error(`[wa] ❌ sendMessage fallo:`, sendErr?.message, sendErr?.stack?.split('\n')[0]);
     return;
@@ -220,7 +224,7 @@ async function processIncomingMessage({ fromKey, text, audioBuffer, audioMime, h
         const nombre = report?.cliente?.nombre || fromKey;
         await db.addNotification({ type: 'lead', title: `Nuevo reporte: ${nombre}`, body: `${report?.proyecto?.tipo || 'Proyecto'} — listo para generar demos`, phone: fromKey });
         try { const html = formatReportEmail(report); await sendEmailReport(report, html); } catch (e: any) { console.error('[bg] Email:', e.message); }
-        try { await sendMessage(fromKey, '🎨 ¡Perfecto! Ya le pasé todo a David. En unos minutos te mando una propuesta visual por acá mismo.'); } catch (e: any) { console.error('[bg] Confirm client:', e.message); }
+        try { await sendMessage(replyTo, '🎨 ¡Perfecto! Ya le pasé todo a David. En unos minutos te mando una propuesta visual por acá mismo.'); } catch (e: any) { console.error('[bg] Confirm client:', e.message); }
         orchestrator.processNewReport(fromKey, report).catch((err: any) => {
           console.error('[bg] orchestrator error:', err);
           db.addNotification({ type: 'warning', title: `Error generando demos`, body: err.message, phone: fromKey }).catch(() => { });

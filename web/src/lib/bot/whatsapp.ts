@@ -63,8 +63,22 @@ function setConnected(connected: boolean, user: string | null = null): void {
   if (connected) g.__wpLastConnectedAt = new Date();
 }
 
+// WhatsApp multi-device usa 2 formatos de JID:
+//   - @s.whatsapp.net  → formato clasico, contiene el numero de telefono
+//   - @lid             → "Local Identifier" introducido en 2024, NO es phone
+//
+// Nuestra DB key tradicional es `whatsapp:+<digits>` (compat con conversaciones
+// existentes). Cuando el remoteJid es @lid, prefijamos con `lid:` para poder
+// reconstruir el JID original al responder y NO confundir LID con phone.
+
 function dbKeyToJid(key: string): string | null {
-  const digits = String(key || '').replace(/[^0-9]/g, '');
+  if (!key) return null;
+  // Formato lid: el ID viene tal cual sin "+"
+  if (key.startsWith('whatsapp:lid:')) {
+    const id = key.slice('whatsapp:lid:'.length).replace(/[^0-9]/g, '');
+    return id ? `${id}@lid` : null;
+  }
+  const digits = String(key).replace(/[^0-9]/g, '');
   if (!digits) return null;
   return `${digits}@s.whatsapp.net`;
 }
@@ -73,7 +87,31 @@ function jidToDbKey(jid: string): string | null {
   if (!jid) return null;
   const digits = String(jid).split('@')[0].replace(/[^0-9]/g, '');
   if (!digits) return null;
+  if (jid.endsWith('@lid')) return `whatsapp:lid:${digits}`;
   return `whatsapp:+${digits}`;
+}
+
+// Cuando el sender tiene un @lid pero Baileys nos pasa el phone real en
+// senderPn/participantPn, preferimos el phone para mantener compat con DB y
+// el formato de comandos admin (DAVID_PHONE).
+function extractFromKeyAndJid(m: any): { fromKey: string | null; fromJid: string | null } {
+  const remoteJid = m.key?.remoteJid;
+  if (!remoteJid) return { fromKey: null, fromJid: null };
+
+  // Phone number real desde Baileys (disponible en 6.7+ cuando el chat es @lid)
+  const senderPn = m.key?.senderPn;
+  const participantPn = m.key?.participantPn;
+  const altJid = m.key?.remoteJidAlt;
+  const phoneJid = senderPn || participantPn || (altJid?.endsWith?.('@s.whatsapp.net') ? altJid : null);
+
+  if (phoneJid) {
+    // Tenemos el numero real → key estandar `whatsapp:+digits`. Pero respondemos
+    // al JID `@lid` original porque ahi esta el chat.
+    return { fromKey: jidToDbKey(phoneJid), fromJid: remoteJid };
+  }
+
+  // Sin PN, usamos el LID o el JID tal cual
+  return { fromKey: jidToDbKey(remoteJid), fromJid: remoteJid };
 }
 
 export function normalizePhone(phone: string): string | null {
@@ -103,7 +141,9 @@ function splitMessage(text: string, maxLen = 4000): string[] {
 
 export async function sendMessage(to: string, body: string): Promise<void> {
   if (!sock) { console.error('[whatsapp] sendMessage llamado sin conexión activa'); return; }
-  const jid = dbKeyToJid(to);
+  // Si nos pasan un JID raw (contiene @), lo usamos tal cual. Esto es clave
+  // para chats @lid: si reconstruimos a @s.whatsapp.net el mensaje no llega.
+  const jid = to.includes('@') ? to : dbKeyToJid(to);
   if (!jid) { console.error(`[whatsapp] No pude parsear destinatario: ${to}`); return; }
   const chunks = splitMessage(body);
   for (let i = 0; i < chunks.length; i++) {
@@ -296,14 +336,18 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
           console.log(`[whatsapp]   ⚠ skip: grupo (${jid})`);
           continue;
         }
-        if (!jid.endsWith('@s.whatsapp.net')) {
+        // Aceptamos @s.whatsapp.net (clasico) y @lid (nuevo formato 2024+).
+        // Cualquier otro tipo de JID lo skipeamos.
+        if (!jid.endsWith('@s.whatsapp.net') && !jid.endsWith('@lid')) {
           console.log(`[whatsapp]   ⚠ skip: jid raro (${jid})`);
           continue;
         }
-        console.log(`[whatsapp]   ✓ procesando mensaje de ${jid}`);
-
-        const fromKey = jidToDbKey(m.key.remoteJid);
-        if (!fromKey) continue;
+        const { fromKey, fromJid } = extractFromKeyAndJid(m);
+        if (!fromKey || !fromJid) {
+          console.log(`[whatsapp]   ⚠ skip: no pude extraer fromKey/jid (${jid})`);
+          continue;
+        }
+        console.log(`[whatsapp]   ✓ procesando mensaje jid=${fromJid} key=${fromKey}`);
 
         const msg = m.message || {};
         const text = msg.conversation
@@ -328,7 +372,7 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
 
         await onIncomingMessage({
           fromKey,
-          fromJid: m.key.remoteJid,
+          fromJid,
           text: text || '',
           audioBuffer,
           audioMime,
