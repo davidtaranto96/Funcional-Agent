@@ -27,8 +27,10 @@ export default async function FacturaDetailPage({ params }: {
   const effectiveStatus = (inv.status === 'sent' && inv.due_date && inv.due_date < today) ? 'overdue' : inv.status;
   const status = STATUS_LABELS[effectiveStatus] || STATUS_LABELS.draft;
 
-  let project = null;
-  if (inv.project_id) project = await db.getProject(inv.project_id);
+  // El project depende del invoice (necesitamos project_id), por eso no
+  // entra en Promise.all con getInvoice. Pero ya esta optimo: 1 sola query
+  // mas si hay proyecto vinculado.
+  const project = inv.project_id ? await db.getProject(inv.project_id) : null;
 
   const totalLabel = inv.currency === 'USD' ? `US$ ${inv.amount.toFixed(2)}` : formatARS(inv.amount);
 

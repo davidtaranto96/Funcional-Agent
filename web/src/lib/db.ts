@@ -489,6 +489,53 @@ export async function listAllClients(includeArchived = false): Promise<Conversat
   return result.rows.map(r => parseConv(r as unknown as Record<string, unknown>));
 }
 
+// ─── Lite: lista de conversaciones SIN parsear JSON completo. ─────────────
+// Usa json_extract de SQLite para sacar solo los campos que casi todas las
+// vistas necesitan (nombre cliente, tipo proyecto). Mucho mas rapido cuando
+// hay >50 conversaciones porque evita parsear history/timeline/context/report
+// enteros por fila. Usar este cuando la pagina solo necesita listado/conteos
+// (dashboard, document-folders targets, etc).
+export interface ConversationLite {
+  phone: string;
+  stage: string;
+  client_stage: string;
+  demo_status: string;
+  followup_sent: number;
+  archived: number;
+  updated_at: string;
+  created_at: string;
+  clientName: string | null;
+  projectType: string | null;
+}
+
+export async function listAllClientsLite(includeArchived = false): Promise<ConversationLite[]> {
+  await ensureInit();
+  const cols = `
+    phone, stage, client_stage, demo_status, followup_sent, archived, updated_at, created_at,
+    json_extract(report, '$.cliente.nombre') as clientName,
+    json_extract(report, '$.proyecto.tipo') as projectType
+  `;
+  const sql = includeArchived
+    ? `SELECT ${cols} FROM conversations ORDER BY updated_at DESC`
+    : `SELECT ${cols} FROM conversations WHERE archived = 0 OR archived IS NULL ORDER BY updated_at DESC`;
+  const result = await getDb().execute(sql);
+  return result.rows.map(r => {
+    const row = r as unknown as Record<string, unknown>;
+    return {
+      phone: String(row.phone || ''),
+      stage: String(row.stage || 'greeting'),
+      client_stage: String(row.client_stage || 'lead'),
+      demo_status: String(row.demo_status || 'none'),
+      followup_sent: Number(row.followup_sent || 0),
+      archived: Number(row.archived || 0),
+      updated_at: String(row.updated_at || ''),
+      created_at: String(row.created_at || ''),
+      clientName: row.clientName ? String(row.clientName) : null,
+      projectType: row.projectType ? String(row.projectType) : null,
+    };
+  });
+}
+
 export async function getClientsByStage(clientStage: string): Promise<Conversation[]> {
   await ensureInit();
   const result = await getDb().execute({ sql: 'SELECT * FROM conversations WHERE client_stage = ? ORDER BY updated_at DESC', args: [clientStage] });

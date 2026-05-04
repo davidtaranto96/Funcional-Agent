@@ -29,8 +29,10 @@ function getServices(): ServiceStatus[] {
 }
 
 export default async function ControlPage() {
+  // listAllClientsLite() para evitar parsear history/timeline. Esta page solo
+  // usa demo_status, client_stage, stage, updated_at y nombre del cliente.
   const [clients, projects, notifications, meetings] = await Promise.all([
-    db.listAllClients(),
+    db.listAllClientsLite(),
     db.listProjects(),
     db.getNotifications(20),
     calendar.getUpcomingMeetings(5).catch(() => []),
@@ -156,7 +158,7 @@ export default async function ControlPage() {
               emptyText="Sin demos esperando"
             >
               {pendingDemos.slice(0, 3).map(c => {
-                const nombre = c.report?.cliente?.nombre || c.phone;
+                const nombre = c.clientName || c.phone;
                 return (
                   <Link
                     key={c.phone}
@@ -179,7 +181,7 @@ export default async function ControlPage() {
               emptyText="Todos respondieron"
             >
               {noResponse.slice(0, 3).map(c => {
-                const nombre = c.report?.cliente?.nombre || c.phone;
+                const nombre = c.clientName || c.phone;
                 return (
                   <Link
                     key={c.phone}
@@ -263,7 +265,7 @@ export default async function ControlPage() {
             ) : (
               <ul className="divide-y divide-[var(--border)]">
                 {activeConversations.slice(0, 6).map(c => {
-                  const nombre = c.report?.cliente?.nombre || c.phone;
+                  const nombre = c.clientName || c.phone;
                   const stage = STAGES.find(s => s.key === c.client_stage);
                   return (
                     <li key={c.phone}>

@@ -1,7 +1,7 @@
 import { APP_VERSION } from '@/lib/constants';
 import { History, Sparkles } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+// Data 100% estatica (CHANGELOG hardcodeado), prerendereable en build.
 
 interface ChangelogEntry {
   version: string;

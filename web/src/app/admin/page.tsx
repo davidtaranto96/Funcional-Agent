@@ -23,8 +23,10 @@ interface ActivityEvent {
 }
 
 export default async function DashboardPage() {
+  // listAllClientsLite() en vez de listAllClients(): el dashboard solo usa
+  // counts, demo_status, client_stage y nombre. Evitar parsear history/timeline.
   const [clients, projects, invoices] = await Promise.all([
-    db.listAllClients(),
+    db.listAllClientsLite(),
     db.listProjects(),
     db.listInvoices(),
   ]);
@@ -79,7 +81,7 @@ export default async function DashboardPage() {
       const isDemo = c.demo_status === 'sent' || c.demo_status === 'pending_review' || c.demo_status === 'approved';
       return {
         type: (isDemo ? 'demo' : 'lead') as ActivityEvent['type'],
-        title: c.report?.cliente?.nombre || c.phone,
+        title: c.clientName || c.phone,
         sub: stage?.label || c.client_stage,
         href: `/admin/client/${encodeURIComponent(c.phone)}`,
         ts: c.updated_at || '',
@@ -209,7 +211,7 @@ export default async function DashboardPage() {
               <span key={c.phone}>
                 {i > 0 && ' · '}
                 <Link href={`/admin/review/${encodeURIComponent(c.phone)}`} className="underline">
-                  {c.report?.cliente?.nombre || c.phone}
+                  {c.clientName || c.phone}
                 </Link>
               </span>
             ))}
@@ -372,7 +374,7 @@ interface NextAction {
 }
 
 function computeNextAction(args: {
-  pendingReview: { phone: string; report?: { cliente?: { nombre?: string } } | null }[];
+  pendingReview: { phone: string; clientName: string | null }[];
   enrichedInvoices: { id: string; status: string; client_name: string; number: string; amount: number; due_date: string }[];
   projects: { id: string; title: string; tasks: { text: string; done?: boolean; due_date?: string }[] }[];
   todayISO: string;
@@ -393,7 +395,7 @@ function computeNextAction(args: {
   if (args.pendingReview.length > 0) {
     const c = args.pendingReview[0];
     return {
-      title: `Revisar demo: ${c.report?.cliente?.nombre || c.phone}`,
+      title: `Revisar demo: ${c.clientName || c.phone}`,
       sub: 'El bot generó el demo. Aprobá o pedí cambios antes de enviar al cliente.',
       cta: 'Revisar',
       href: `/admin/review/${encodeURIComponent(c.phone)}`,

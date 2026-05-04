@@ -172,10 +172,12 @@ export function listFolderFiles(dir: string): FolderFile[] {
 }
 
 export async function listAllFolders(): Promise<AllFoldersResult> {
+  // listAllClientsLite() en vez de listAllClients(): no parsea history/timeline,
+  // usa json_extract para nombre cliente + tipo proyecto. Mucho mas rapido.
   const [folders, projects, conversations] = await Promise.all([
     db.listDocumentFolders(),
     db.listProjects(),
-    db.listAllClients(),
+    db.listAllClientsLite(),
   ]);
 
   const custom: FolderListing[] = folders.map(f => {
@@ -205,10 +207,10 @@ export async function listAllFolders(): Promise<AllFoldersResult> {
     .map(c => {
       const dir = safeJoin(path.join(dataDir(), DEMOS_DIR_NAME), c.phone) || '';
       const { count, bytes } = dir ? countFiles(dir) : { count: 0, bytes: 0 };
-      const name = c.report?.cliente?.nombre || c.phone;
+      const name = c.clientName || c.phone;
       return {
         id: `wd_${c.phone}`, type: 'demo', name, color: '#10b981',
-        subtitle: c.report?.proyecto?.tipo || 'Demo WA',
+        subtitle: c.projectType || 'Demo WA',
         fileCount: count, bytes,
         href: `/admin/documentos/wd_${c.phone}`,
       };
@@ -237,7 +239,7 @@ export async function listFolderTargets(excludeId?: string): Promise<FolderTarge
   const [folders, projects, conversations] = await Promise.all([
     db.listDocumentFolders(),
     db.listProjects(),
-    db.listAllClients(),
+    db.listAllClientsLite(),
   ]);
 
   const out: FolderTarget[] = [];
@@ -249,7 +251,7 @@ export async function listFolderTargets(excludeId?: string): Promise<FolderTarge
   }
   for (const c of conversations) {
     if (c.demo_status === 'sent' || c.demo_status === 'approved' || c.demo_status === 'pending_review') {
-      const name = c.report?.cliente?.nombre || c.phone;
+      const name = c.clientName || c.phone;
       out.push({ id: `wd_${c.phone}`, name, color: '#10b981', type: 'demo' });
     }
   }

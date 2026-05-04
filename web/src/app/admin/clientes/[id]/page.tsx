@@ -19,10 +19,12 @@ export const dynamic = 'force-dynamic';
 
 export default async function EditClientePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const c = await db.getClientRecord(id);
+  // Paralelizo: cliente + sus proyectos. Antes era secuencial (2x roundtrip DB).
+  const [c, projects] = await Promise.all([
+    db.getClientRecord(id),
+    db.getProjectsByClientId(id),
+  ]);
   if (!c) notFound();
-
-  const projects = await db.getProjectsByClientId(id);
   const initial = (c.name || '?').charAt(0).toUpperCase();
   const catColor = CATEGORY_COLORS[c.category] || 'oklch(0.5 0.05 250)';
 

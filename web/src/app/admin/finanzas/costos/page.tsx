@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ChevronLeft, Server, Cpu } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+// SERVICES hardcodeado, no toca DB ni filesystem. Prerendereable.
 
 const SERVICES = [
   { name: 'Railway',          monthly: 5,    currency: 'USD', usage: 62, status: 'ok'   as const, notes: 'Hosting + DB' },
