@@ -307,24 +307,27 @@ function FolderCard({ f, deletable }: { f: FolderListing; deletable?: boolean })
         <form
           method="POST"
           action={`/api/admin/folders/${f.id}/delete`}
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute top-1.5 right-1.5"
         >
           <button
             type="submit"
             onClick={async e => {
               e.preventDefault();
               const ok = await confirmDialog({
-                title: '¿Borrar esta carpeta?',
-                description: 'Los archivos dentro también se borrarán. Esta acción no se puede deshacer.',
+                title: `¿Borrar "${f.name}"?`,
+                description: f.fileCount > 0
+                  ? `Esta carpeta tiene ${f.fileCount} archivo${f.fileCount === 1 ? '' : 's'}. Se borrarán también. Esta acción no se puede deshacer.`
+                  : 'Esta acción no se puede deshacer.',
                 confirmLabel: 'Sí, borrar',
                 variant: 'danger',
               });
               if (ok) (e.currentTarget.closest('form') as HTMLFormElement)?.submit();
             }}
-            className="grid place-items-center w-6 h-6 rounded text-muted-foreground hover:text-[var(--red)] hover:bg-[oklch(0.62_0.22_27_/_0.10)] transition-colors"
-            aria-label="Borrar"
+            className="grid place-items-center w-7 h-7 rounded-md bg-card/80 backdrop-blur border border-[var(--border)] text-muted-foreground hover:text-[var(--red)] hover:bg-[oklch(0.62_0.22_27_/_0.15)] hover:border-[var(--red)] transition-all opacity-60 group-hover:opacity-100"
+            aria-label="Borrar carpeta"
+            title="Borrar carpeta"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
             </svg>
           </button>
