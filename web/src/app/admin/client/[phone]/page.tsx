@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { STAGES } from '@/lib/constants';
 import { phoneSlug, timeAgo } from '@/lib/utils';
+import { AnalyzeConversation } from './AnalyzeConversation';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,6 +133,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
               </button>
             </form>
           )}
+          <AnalyzeConversation phone={decoded} hasHistory={(conv.history || []).length > 0} />
         </div>
       </div>
 
