@@ -143,19 +143,26 @@ export default async function DashboardPage() {
             className="relative block bg-card rounded-[var(--r-lg)] border border-[var(--border)] overflow-hidden shadow-[var(--shadow-soft)] px-[18px] pt-[18px] pb-[15px] hover:-translate-y-0.5 hover:shadow-[var(--shadow-elev)] transition-all"
           >
             <div
-              className="pointer-events-none absolute top-0 right-0 w-[70px] h-[70px] rounded-full"
-              style={{ background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)'} 18%, transparent), transparent 70%)` }}
+              className="pointer-events-none absolute top-0 right-0 w-[180px] h-[180px]"
+              style={{ background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)'} 38%, transparent), transparent 65%)` }}
+            />
+            <div
+              className="pointer-events-none absolute top-0 right-0 w-[90px] h-[90px]"
+              style={{ background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)'} 22%, transparent), transparent 70%)` }}
             />
             <div className="relative flex items-center justify-between mb-2.5">
               <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Por cobrar</span>
               <div
-                className="w-[22px] h-[22px] rounded-md grid place-items-center"
-                style={{ background: `color-mix(in oklch, ${overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)'} 13%, transparent)` }}
+                className="w-[24px] h-[24px] rounded-md grid place-items-center"
+                style={{
+                  background: `color-mix(in oklch, ${overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)'} 18%, transparent)`,
+                  boxShadow: `0 0 12px color-mix(in oklch, ${overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)'} 28%, transparent)`,
+                }}
               >
-                <DollarSign className="w-3 h-3" style={{ color: overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)' }} />
+                <DollarSign className="w-3.5 h-3.5" style={{ color: overdueCount > 0 ? 'oklch(0.62 0.22 27)' : 'oklch(0.62 0.16 160)' }} />
               </div>
             </div>
-            <div className="relative mono text-[20px] font-bold leading-none text-foreground" style={{ letterSpacing: '-0.5px' }}>
+            <div className="relative mono text-[22px] font-bold leading-none text-foreground" style={{ letterSpacing: '-0.8px' }}>
               {porCobrarLabel}
             </div>
             <div className="relative mt-[7px] text-[11px] text-muted-foreground">

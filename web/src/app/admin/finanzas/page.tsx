@@ -281,17 +281,25 @@ function FinKpiCard({ label, valueLabel, sub, color, pct }: {
   return (
     <div className="relative block bg-card rounded-[var(--r-lg)] border border-[var(--border)] overflow-hidden shadow-[var(--shadow-soft)] px-[18px] pt-[18px] pb-[15px]">
       <div
-        className="pointer-events-none absolute top-0 right-0 w-[70px] h-[70px] rounded-full"
-        style={{ background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${color} 18%, transparent), transparent 70%)` }}
+        className="pointer-events-none absolute top-0 right-0 w-[180px] h-[180px]"
+        style={{ background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${color} 38%, transparent), transparent 65%)` }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute top-0 right-0 w-[90px] h-[90px]"
+        style={{ background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${color} 22%, transparent), transparent 70%)` }}
         aria-hidden
       />
       <div className="relative flex items-center justify-between mb-2.5">
         <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</span>
         <div
-          className="w-[22px] h-[22px] rounded-md grid place-items-center"
-          style={{ background: `color-mix(in oklch, ${color} 13%, transparent)` }}
+          className="w-[24px] h-[24px] rounded-md grid place-items-center"
+          style={{
+            background: `color-mix(in oklch, ${color} 18%, transparent)`,
+            boxShadow: `0 0 12px color-mix(in oklch, ${color} 28%, transparent)`,
+          }}
         >
-          <span className="block w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+          <span className="block w-[7px] h-[7px] rounded-full" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
         </div>
       </div>
       <div className="relative mono text-[22px] font-bold leading-none text-foreground" style={{ letterSpacing: '-0.8px' }}>

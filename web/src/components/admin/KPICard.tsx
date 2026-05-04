@@ -59,11 +59,19 @@ export function KPICard({ label, value, sub, href, color = 'var(--accent)', pct 
 
   const inner = (
     <>
-      {/* Glow radial sólo en esquina sup-der, sutil */}
+      {/* Glow radial en esquina sup-der — mas grande y visible para dar identidad */}
       <div
-        className="pointer-events-none absolute top-0 right-0 w-[70px] h-[70px] rounded-full"
+        className="pointer-events-none absolute top-0 right-0 w-[180px] h-[180px]"
         style={{
-          background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${color} 18%, transparent), transparent 70%)`,
+          background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${color} 38%, transparent), transparent 65%)`,
+        }}
+        aria-hidden
+      />
+      {/* Capa secundaria mas concentrada en el corner — suma profundidad */}
+      <div
+        className="pointer-events-none absolute top-0 right-0 w-[90px] h-[90px]"
+        style={{
+          background: `radial-gradient(circle at 100% 0%, color-mix(in oklch, ${color} 22%, transparent), transparent 70%)`,
         }}
         aria-hidden
       />
@@ -73,22 +81,25 @@ export function KPICard({ label, value, sub, href, color = 'var(--accent)', pct 
           {label}
         </span>
         <div
-          className="w-[22px] h-[22px] rounded-md grid place-items-center"
-          style={{ background: `color-mix(in oklch, ${color} 13%, transparent)` }}
+          className="w-[24px] h-[24px] rounded-md grid place-items-center"
+          style={{
+            background: `color-mix(in oklch, ${color} 18%, transparent)`,
+            boxShadow: `0 0 12px color-mix(in oklch, ${color} 28%, transparent)`,
+          }}
         >
           <span
-            className="block w-1.5 h-1.5 rounded-full"
+            className="block w-[7px] h-[7px] rounded-full"
             style={{
               background: color,
-              boxShadow: alert ? `0 0 8px ${color}` : 'none',
+              boxShadow: `0 0 6px ${color}${alert ? `, 0 0 12px ${color}` : ''}`,
             }}
           />
         </div>
       </div>
       {/* Number — mono, white, big */}
       <div
-        className="relative mono text-[24px] font-bold leading-none text-foreground"
-        style={{ letterSpacing: '-1px' }}
+        className="relative mono text-[26px] font-bold leading-none text-foreground"
+        style={{ letterSpacing: '-1.1px' }}
       >
         {display}
       </div>
