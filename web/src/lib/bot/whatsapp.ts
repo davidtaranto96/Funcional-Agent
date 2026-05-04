@@ -32,10 +32,36 @@ let sock: any = null;
 let connecting = false;
 let lastConnectedAt: Date | null = null;
 let consecutive405 = 0;
+
 // Latest QR string emitido por Baileys — expuesto via /api/auth/whatsapp-qr
 // para que se pueda escanear desde el browser sin tener que mirar logs ASCII.
-let latestQR: string | null = null;
-let latestQRAt: Date | null = null;
+//
+// IMPORTANTE: lo persistimos en globalThis y NO en variables module-scope.
+// Razon: en Next.js 15 con webpack/turbopack, instrumentation.ts y la API
+// route pueden cargar el modulo en bundles separados, dejando dos instancias
+// de las variables. globalThis es compartido entre todas. Mismo trick que
+// usamos para __wpBotStarted en instrumentation.ts.
+type QRGlobal = {
+  __wpQR?: string | null;
+  __wpQRAt?: Date | null;
+  __wpConnected?: boolean;
+  __wpUser?: string | null;
+  __wpLastConnectedAt?: Date | null;
+};
+function qrGlobal(): QRGlobal {
+  return globalThis as unknown as QRGlobal;
+}
+function setLatestQR(qr: string | null): void {
+  const g = qrGlobal();
+  g.__wpQR = qr;
+  g.__wpQRAt = qr ? new Date() : null;
+}
+function setConnected(connected: boolean, user: string | null = null): void {
+  const g = qrGlobal();
+  g.__wpConnected = connected;
+  g.__wpUser = user;
+  if (connected) g.__wpLastConnectedAt = new Date();
+}
 
 function dbKeyToJid(key: string): string | null {
   const digits = String(key || '').replace(/[^0-9]/g, '');
@@ -214,8 +240,7 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
       consecutive405 = 0;
-      latestQR = qr;
-      latestQRAt = new Date();
+      setLatestQR(qr);
       console.log('\n┌─────────────────────────────────────────────────────────┐');
       console.log('│  WHATSAPP NO CONECTADO — escaneá QR desde el cel        │');
       console.log('│  Opcion 1: en logs (abajo) — bajá zoom del browser     │');
@@ -227,7 +252,8 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
       lastConnectedAt = new Date();
       connecting = false;
       consecutive405 = 0;
-      latestQR = null; // ya no se necesita
+      setLatestQR(null); // ya no se necesita
+      setConnected(true, sock.user?.id || null);
       console.log(`[whatsapp] ✅ Conectado como ${sock.user?.id || '?'} a las ${lastConnectedAt.toISOString()}`);
     }
     if (connection === 'close') {
@@ -237,6 +263,7 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
       const errData = err?.data ? JSON.stringify(err.data).slice(0, 200) : '';
       const shouldReconnect = code !== DisconnectReason.loggedOut;
       if (code === 405) consecutive405++;
+      setConnected(false);
       console.warn(`[whatsapp] ⚠️ Cerrada (code=${code}, msg="${errMsg}", reconnect=${shouldReconnect}, 405streak=${consecutive405})`);
       if (errData) console.warn(`[whatsapp]   error.data: ${errData}`);
       sock = null;
@@ -301,16 +328,21 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
 }
 
 export function getStatus() {
+  const g = qrGlobal();
+  // sock es module-scoped y solo existe en la instance que arranco el bot.
+  // connected/user/lastConnectedAt los leemos de globalThis para que
+  // cualquier API route los vea aunque corra en otra instance.
   return {
-    connected: !!sock,
-    user: sock?.user?.id || null,
-    lastConnectedAt: lastConnectedAt?.toISOString() || null,
+    connected: !!g.__wpConnected,
+    user: g.__wpUser || null,
+    lastConnectedAt: g.__wpLastConnectedAt?.toISOString() || null,
     authDirExists: fs.existsSync(getAuthDir()),
-    qrAvailable: !!latestQR,
-    qrAt: latestQRAt?.toISOString() || null,
+    qrAvailable: !!g.__wpQR,
+    qrAt: g.__wpQRAt?.toISOString() || null,
   };
 }
 
 export function getLatestQR(): { qr: string | null; at: Date | null } {
-  return { qr: latestQR, at: latestQRAt };
+  const g = qrGlobal();
+  return { qr: g.__wpQR || null, at: g.__wpQRAt || null };
 }
