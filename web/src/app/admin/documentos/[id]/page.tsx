@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { resolveFolder, listFolderFiles, listAllFolders } from '@/lib/document-folders';
+import { getFolderWithFiles, listAllFolders } from '@/lib/file-proxy';
 import { FolderView } from './FolderView';
 
 export const dynamic = 'force-dynamic';
@@ -9,29 +9,20 @@ export default async function FolderDetailPage({ params }: {
 }) {
   const { id } = await params;
 
-  const folder = await resolveFolder(id);
-  if (!folder) notFound();
-
-  const files = listFolderFiles(folder.dir);
+  const result = await getFolderWithFiles(id).catch(() => null);
+  if (!result) notFound();
 
   // Listar otras carpetas (custom + project + demo) excluyendo la actual,
   // como destino para "Mover archivo a..."
-  const all = await listAllFolders();
+  const all = await listAllFolders().catch(() => ({ custom: [], projects: [], demos: [] }));
   const otherFolders = [...all.custom, ...all.projects, ...all.demos]
-    .filter(f => f.id !== folder.id)
+    .filter(f => f.id !== result.folder.id)
     .map(f => ({ id: f.id, name: f.name, color: f.color, type: f.type }));
 
   return (
     <FolderView
-      folder={{
-        id: folder.id,
-        name: folder.name,
-        color: folder.color,
-        description: folder.description,
-        type: folder.type,
-        subtitle: folder.subtitle,
-      }}
-      files={files}
+      folder={result.folder}
+      files={result.files}
       otherFolders={otherFolders}
     />
   );

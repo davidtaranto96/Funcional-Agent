@@ -24,6 +24,7 @@ const db = require('./db');
 const orchestrator = require('./orchestrator');
 const calendar = require('./calendar');
 const adminRouter = require('./admin');
+const fileApiRouter = require('./file-api');
 
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
@@ -82,6 +83,11 @@ if (process.env.GOOGLE_CLIENT_ID) {
 app.use('/demos', express.static(path.join(__dirname, '..', 'data', 'demos')));
 app.use('/project-files', express.static(path.join(__dirname, '..', 'data', 'project-files')));
 app.use('/admin', adminRouter);
+
+// File API: endpoints REST para que Next.js pueda gestionar archivos del volume
+// (Next.js corre en otro Railway service sin acceso al volume).
+// Auth: header 'x-admin-token' con ADMIN_API_TOKEN.
+app.use('/api', fileApiRouter);
 
 app.get('/health', (req, res) => {
   const wa = getWhatsAppStatus();

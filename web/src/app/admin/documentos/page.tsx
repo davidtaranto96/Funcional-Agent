@@ -1,4 +1,4 @@
-import { listAllFolders } from '@/lib/document-folders';
+import { listAllFolders } from '@/lib/file-proxy';
 import { DocumentosView } from './DocumentosView';
 
 export const dynamic = 'force-dynamic';
@@ -11,19 +11,22 @@ function formatBytes(b: number): string {
 }
 
 export default async function DocumentosPage() {
-  const { custom, projects, demos, totalFiles, totalBytes } = await listAllFolders();
+  const result = await listAllFolders().catch(err => {
+    console.error('[documentos] proxy fail:', err);
+    return { custom: [], projects: [], demos: [], totalFiles: 0, totalBytes: 0 };
+  });
 
   return (
     <DocumentosView
-      custom={custom}
-      projects={projects}
-      demos={demos}
+      custom={result.custom}
+      projects={result.projects}
+      demos={result.demos}
       stats={{
-        totalFiles,
-        totalFolders: custom.length + projects.length + demos.length,
-        usedLabel: formatBytes(totalBytes),
+        totalFiles: result.totalFiles,
+        totalFolders: result.custom.length + result.projects.length + result.demos.length,
+        usedLabel: formatBytes(result.totalBytes),
         capLabel: '~1 GB · Railway Volume',
-        usedPct: Math.min(100, (totalBytes / (1024 * 1024 * 1024)) * 100),
+        usedPct: Math.min(100, (result.totalBytes / (1024 * 1024 * 1024)) * 100),
       }}
     />
   );
