@@ -142,7 +142,7 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
             {!collapsed && (
               <span className="min-w-0 text-left">
                 <span className="block text-[13px] font-bold text-foreground tracking-tight truncate">DT Systems</span>
-                <span className="block mono text-[9.5px] text-muted-foreground truncate mt-0.5">CRM &amp; Proyectos · v4.0.0</span>
+                <span className="block mono text-[9.5px] text-muted-foreground truncate mt-0.5">CRM &amp; Proyectos · v5.1.0</span>
               </span>
             )}
           </button>

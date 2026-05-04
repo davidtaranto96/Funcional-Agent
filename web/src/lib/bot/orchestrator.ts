@@ -7,15 +7,21 @@ import * as demos from './demos';
 import { sendMessage } from './whatsapp';
 import { sendEmail } from './mailer';
 
-const DEMOS_DIR = path.join(process.cwd(), '..', 'data', 'demos');
-fs.mkdirSync(DEMOS_DIR, { recursive: true });
+import { resolveDataDir } from './data-dir';
+let _DEMOS_DIR: string | null = null;
+function DEMOS_DIR(): string {
+  if (_DEMOS_DIR) return _DEMOS_DIR;
+  _DEMOS_DIR = path.join(resolveDataDir(), 'demos');
+  try { fs.mkdirSync(_DEMOS_DIR, { recursive: true }); } catch (e: any) { console.error('[orchestrator] mkdir DEMOS_DIR:', e.message); }
+  return _DEMOS_DIR;
+}
 
 function phoneSlug(phone) {
   return (phone || 'unknown').replace(/[^0-9]/g, '');
 }
 
 function localDemoDir(phone) {
-  const dir = path.join(DEMOS_DIR, phoneSlug(phone));
+  const dir = path.join(DEMOS_DIR(), phoneSlug(phone));
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

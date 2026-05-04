@@ -28,7 +28,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
   if (!conv) notFound();
 
   const slug = phoneSlug(decoded);
-  const localDir = path.resolve(process.cwd(), '..', 'data', 'demos', slug);
+  const localDir = path.join(process.env.DATA_DIR || '/app/data', 'demos', slug);
   const hasLanding = fs.existsSync(path.join(localDir, 'landing.html'));
   const hasWA = fs.existsSync(path.join(localDir, 'whatsapp.html'));
   const hasPDF = fs.existsSync(path.join(localDir, 'propuesta.pdf'));

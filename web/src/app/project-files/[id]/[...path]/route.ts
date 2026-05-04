@@ -4,7 +4,7 @@ import path from 'path';
 
 export const runtime = 'nodejs';
 
-const PROJECT_FILES_DIR = path.resolve(process.cwd(), '..', 'data', 'project-files');
+const PROJECT_FILES_DIR = path.join(process.env.DATA_DIR || '/app/data', 'project-files');
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

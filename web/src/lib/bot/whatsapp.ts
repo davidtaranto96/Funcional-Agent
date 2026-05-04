@@ -14,9 +14,18 @@ import {
   Browsers,
 } from '@whiskeysockets/baileys';
 
-const AUTH_DIR = process.env.BAILEYS_AUTH_DIR
-  ? path.resolve(process.env.BAILEYS_AUTH_DIR)
-  : path.resolve(process.cwd(), '..', 'data', 'baileys-auth');
+// Path resolution robusto: usa resolveDataDir() que prueba varios candidates
+// y elige el primero escribible.
+import { resolveDataDir } from './data-dir';
+function resolveAuthDir(): string {
+  if (process.env.BAILEYS_AUTH_DIR) return path.resolve(process.env.BAILEYS_AUTH_DIR);
+  return path.join(resolveDataDir(), 'baileys-auth');
+}
+let _authDir: string | null = null;
+function getAuthDir(): string {
+  if (!_authDir) _authDir = resolveAuthDir();
+  return _authDir;
+}
 const logger = pino({ level: 'warn' });
 
 let sock: any = null;
@@ -115,15 +124,15 @@ export async function sendMediaMessage(to: string, body: string, mediaUrlOrPath:
 }
 
 function ensureAuthDir(): string {
-  const candidates = [AUTH_DIR, path.join(os.tmpdir(), 'baileys-auth')];
+  const candidates = [getAuthDir(), path.join(os.tmpdir(), 'baileys-auth')];
   for (const dir of candidates) {
     try {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const testFile = path.join(dir, '.write-test');
       fs.writeFileSync(testFile, 'ok');
       fs.unlinkSync(testFile);
-      if (dir !== AUTH_DIR) {
-        console.warn(`[whatsapp] ⚠️ AUTH_DIR (${AUTH_DIR}) no escribible. Usando fallback: ${dir}`);
+      if (dir !== getAuthDir()) {
+        console.warn(`[whatsapp] ⚠️ getAuthDir() (${getAuthDir()}) no escribible. Usando fallback: ${dir}`);
         console.warn('[whatsapp] ⚠️ Las credenciales NO van a persistir entre reinicios.');
       }
       return dir;
@@ -289,6 +298,6 @@ export function getStatus() {
     connected: !!sock,
     user: sock?.user?.id || null,
     lastConnectedAt: lastConnectedAt?.toISOString() || null,
-    authDirExists: fs.existsSync(AUTH_DIR),
+    authDirExists: fs.existsSync(getAuthDir()),
   };
 }
