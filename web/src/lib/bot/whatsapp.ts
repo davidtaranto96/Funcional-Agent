@@ -32,6 +32,10 @@ let sock: any = null;
 let connecting = false;
 let lastConnectedAt: Date | null = null;
 let consecutive405 = 0;
+// Latest QR string emitido por Baileys — expuesto via /api/auth/whatsapp-qr
+// para que se pueda escanear desde el browser sin tener que mirar logs ASCII.
+let latestQR: string | null = null;
+let latestQRAt: Date | null = null;
 
 function dbKeyToJid(key: string): string | null {
   const digits = String(key || '').replace(/[^0-9]/g, '');
@@ -210,10 +214,12 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
       consecutive405 = 0;
+      latestQR = qr;
+      latestQRAt = new Date();
       console.log('\n┌─────────────────────────────────────────────────────────┐');
-      console.log('│  WHATSAPP NO CONECTADO — escaneá este QR desde tu cel  │');
-      console.log('│  WhatsApp → Config → Dispositivos vinculados →         │');
-      console.log('│  Vincular un dispositivo → escanear QR                 │');
+      console.log('│  WHATSAPP NO CONECTADO — escaneá QR desde el cel        │');
+      console.log('│  Opcion 1: en logs (abajo) — bajá zoom del browser     │');
+      console.log('│  Opcion 2: visitá /api/auth/whatsapp-qr (PNG fácil)     │');
       console.log('└─────────────────────────────────────────────────────────┘\n');
       qrcode.generate(qr, { small: true });
     }
@@ -221,6 +227,7 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
       lastConnectedAt = new Date();
       connecting = false;
       consecutive405 = 0;
+      latestQR = null; // ya no se necesita
       console.log(`[whatsapp] ✅ Conectado como ${sock.user?.id || '?'} a las ${lastConnectedAt.toISOString()}`);
     }
     if (connection === 'close') {
@@ -299,5 +306,11 @@ export function getStatus() {
     user: sock?.user?.id || null,
     lastConnectedAt: lastConnectedAt?.toISOString() || null,
     authDirExists: fs.existsSync(getAuthDir()),
+    qrAvailable: !!latestQR,
+    qrAt: latestQRAt?.toISOString() || null,
   };
+}
+
+export function getLatestQR(): { qr: string | null; at: Date | null } {
+  return { qr: latestQR, at: latestQRAt };
 }
