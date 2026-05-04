@@ -307,8 +307,8 @@ router.get('/files/get', async (req, res) => {
     const name = String(req.query.name || '');
     const folder = await resolveFolder(id);
     if (!folder) return res.status(404).json({ error: 'folder not found' });
-    const decoded = decodeURIComponent(name);
-    const full = safeJoin(folder.dir, decoded);
+    // req.query.name ya viene decoded por Express
+    const full = safeJoin(folder.dir, name);
     if (!full || !fs.existsSync(full) || !fs.statSync(full).isFile()) {
       return res.status(404).json({ error: 'file not found' });
     }
@@ -316,7 +316,7 @@ router.get('/files/get', async (req, res) => {
     const mime = MIME[ext] || 'application/octet-stream';
     const buf = fs.readFileSync(full);
     const previewable = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.txt', '.csv', '.html'];
-    const disposition = previewable.includes(ext) ? `inline; filename="${encodeURIComponent(decoded)}"` : `attachment; filename="${encodeURIComponent(decoded)}"`;
+    const disposition = previewable.includes(ext) ? `inline; filename="${encodeURIComponent(name)}"` : `attachment; filename="${encodeURIComponent(name)}"`;
     res.set('Content-Type', mime);
     res.set('Content-Disposition', disposition);
     res.send(buf);
@@ -333,7 +333,8 @@ router.post('/files/delete', async (req, res) => {
     const name = String(req.query.name || '');
     const folder = await resolveFolder(id);
     if (!folder) return res.status(404).json({ error: 'folder not found' });
-    const full = safeJoin(folder.dir, decodeURIComponent(name));
+    // req.query.name ya viene decoded por Express, NO doble-decode
+    const full = safeJoin(folder.dir, name);
     if (full && fs.existsSync(full)) fs.unlinkSync(full);
     res.json({ ok: true });
   } catch (err) {
@@ -352,7 +353,7 @@ router.post('/files/rename', express.json(), async (req, res) => {
     const folder = await resolveFolder(id);
     if (!folder) return res.status(404).json({ error: 'folder not found' });
     const newSafe = sanitizeFilename(newName);
-    const oldFull = safeJoin(folder.dir, decodeURIComponent(name));
+    const oldFull = safeJoin(folder.dir, name);
     const newFull = safeJoin(folder.dir, newSafe);
     if (!oldFull || !newFull) return res.status(400).json({ error: 'Ruta inválida' });
     if (!fs.existsSync(oldFull)) return res.status(404).json({ error: 'Archivo no existe' });
@@ -377,11 +378,11 @@ router.post('/files/move', express.json(), async (req, res) => {
     const [from, to] = await Promise.all([resolveFolder(id), resolveFolder(toFolder)]);
     if (!from) return res.status(404).json({ error: 'Carpeta origen no existe' });
     if (!to) return res.status(404).json({ error: 'Carpeta destino no existe' });
-    const decoded = decodeURIComponent(name);
-    const fromFull = safeJoin(from.dir, decoded);
+    // req.query.name ya viene decoded por Express
+    const fromFull = safeJoin(from.dir, name);
     if (!fromFull || !fs.existsSync(fromFull)) return res.status(404).json({ error: 'Archivo no existe' });
     fs.mkdirSync(to.dir, { recursive: true });
-    const finalName = uniqueName(to.dir, decoded);
+    const finalName = uniqueName(to.dir, name);
     const toFull = path.join(to.dir, finalName);
     if (!toFull.startsWith(to.dir)) return res.status(400).json({ error: 'Ruta inválida' });
     fs.renameSync(fromFull, toFull);

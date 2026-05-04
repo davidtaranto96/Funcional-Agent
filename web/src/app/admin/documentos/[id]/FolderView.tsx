@@ -189,7 +189,8 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
       const res = await fetch(`/api/admin/folders/${folder.id}/files/${encodeURIComponent(name)}`, {
         method: 'POST', body: fd,
       });
-      if (!res.ok && res.status !== 303) throw new Error('Error');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Error');
       setFiles(fs => fs.filter(f => f.name !== name));
       setSelected(prev => {
         const next = new Set(prev);
@@ -197,8 +198,9 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
         return next;
       });
       showToast('Archivo borrado', 'ok');
-    } catch {
-      showToast('No se pudo borrar', 'err');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo borrar';
+      showToast(msg, 'err');
     }
   }
 
@@ -213,6 +215,8 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
     });
     if (!ok) return;
     let success = 0;
+    const failed: string[] = [];
+    const deleted: string[] = [];
     for (const name of names) {
       try {
         const fd = new FormData();
@@ -220,12 +224,26 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
         const res = await fetch(`/api/admin/folders/${folder.id}/files/${encodeURIComponent(name)}`, {
           method: 'POST', body: fd,
         });
-        if (res.ok || res.status === 303) success++;
-      } catch { /* skip */ }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.ok) {
+          success++;
+          deleted.push(name);
+        } else {
+          failed.push(`${name}: ${data?.error || 'error'}`);
+        }
+      } catch (err) {
+        failed.push(`${name}: ${err instanceof Error ? err.message : 'error'}`);
+      }
     }
-    setFiles(fs => fs.filter(f => !names.includes(f.name)));
+    // Solo sacamos del estado local los que SI se borraron
+    setFiles(fs => fs.filter(f => !deleted.includes(f.name)));
     setSelected(new Set());
-    showToast(`${success} de ${names.length} borrados`, success === names.length ? 'ok' : 'err');
+    if (failed.length > 0) {
+      console.error('[bulkDelete] failed:', failed);
+      showToast(`${success} borrados, ${failed.length} fallaron — revisá la consola`, 'err');
+    } else {
+      showToast(`${success} archivo${success === 1 ? '' : 's'} borrado${success === 1 ? '' : 's'}`, 'ok');
+    }
   }
 
   async function doRename() {
