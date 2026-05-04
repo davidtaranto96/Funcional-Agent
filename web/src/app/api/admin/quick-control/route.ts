@@ -15,7 +15,9 @@ export async function POST(req: NextRequest) {
         const phone = String(body.phone || '');
         const message = String(body.message || 'Test desde DT Systems · ' + new Date().toLocaleTimeString('es-AR'));
         if (!phone) return NextResponse.json({ ok: false, error: 'phone requerido' }, { status: 400 });
-        await wa.sendMessage(wa.normalizePhone(phone), message);
+        const normalized = wa.normalizePhone(phone);
+        if (!normalized) return NextResponse.json({ ok: false, error: 'phone inválido' }, { status: 400 });
+        await wa.sendMessage(normalized, message);
         return NextResponse.json({ ok: true, sentTo: phone });
       }
 

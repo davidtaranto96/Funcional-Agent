@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getFolderWithFiles, listAllFolders } from '@/lib/file-proxy';
+import { getFolderWithFiles, listAllFolders } from '@/lib/document-folders';
 import { FolderView } from './FolderView';
 
 export const dynamic = 'force-dynamic';

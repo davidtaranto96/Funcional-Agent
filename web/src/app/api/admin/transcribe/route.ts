@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { transcribeBuffer } from '@/lib/transcriber';
+import { transcribe } from '@/lib/transcriber';
 import { requireAuth } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const buf = Buffer.from(await file.arrayBuffer());
     if (buf.length > 10 * 1024 * 1024) return NextResponse.json({ error: 'too large', text: '' }, { status: 413 });
 
-    const text = await transcribeBuffer(buf, '.webm');
+    const text = await transcribe(buf, { mime: 'audio/webm' });
     return NextResponse.json({ text });
   } catch (err) {
     console.error('[admin-transcribe]', (err as Error).message);

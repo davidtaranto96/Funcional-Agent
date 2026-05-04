@@ -228,6 +228,7 @@ async function handleAdminCommand(cmd: string, text: string, appUrl: string): Pr
 async function processAudioInBackground(fromKey: string, mediaUrl: string) {
   let audioText = '';
   try {
+    // @ts-expect-error legacy Twilio path (mediaUrl) - Baileys usa buffers ahora
     audioText = (await transcribe(mediaUrl)) || '';
   } catch (err) {
     console.error('[bg-audio] transcribe error:', (err as Error).message);

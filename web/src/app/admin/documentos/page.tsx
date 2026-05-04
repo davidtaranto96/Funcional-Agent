@@ -1,4 +1,4 @@
-import { listAllFolders } from '@/lib/file-proxy';
+import { listAllFolders } from '@/lib/document-folders';
 import { DocumentosView } from './DocumentosView';
 
 export const dynamic = 'force-dynamic';
