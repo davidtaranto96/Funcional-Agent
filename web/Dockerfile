@@ -24,16 +24,12 @@ RUN npm prune --omit=dev && npm cache clean --force
 
 # Pre-crear subdirs del data volume (best-effort en build; el entrypoint los
 # reasegura en runtime DESPUES del volume mount de Railway)
-RUN mkdir -p /app/data/baileys-auth /app/data/demos /app/data/documents /app/data/project-files
-
-# Entrypoint corre como root para chown/chmod del volume DESPUES del mount.
-# Sin esto, Railway montea /app/data como root-owned y el proceso no puede escribir.
-RUN printf '#!/bin/sh\nset -e\nmkdir -p /app/data/baileys-auth /app/data/demos /app/data/documents /app/data/project-files 2>/dev/null || true\nchmod -R 777 /app/data 2>/dev/null || true\nexec node node_modules/next/dist/bin/next start -p ${PORT:-3000}\n' > /entrypoint.sh \
-    && chmod +x /entrypoint.sh
+RUN mkdir -p /app/data/baileys-auth /app/data/demos /app/data/documents /app/data/project-files \
+    && chmod +x /app/entrypoint.sh
 
 ENV NODE_ENV=production
 EXPOSE 3000
 
 # Corremos como root (sin USER node) — necesario para escribir al volume montado.
-# Riesgo aceptable: el container está aislado de Railway.
-ENTRYPOINT ["/entrypoint.sh"]
+# El entrypoint hace chmod 777 sobre /app/data DESPUES del mount.
+ENTRYPOINT ["/app/entrypoint.sh"]

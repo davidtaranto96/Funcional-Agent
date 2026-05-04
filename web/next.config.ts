@@ -2,8 +2,20 @@ import type { NextConfig } from 'next';
 
 const config: NextConfig = {
   reactStrictMode: true,
-  // Permite cargar pdfkit y libsql del lado server
-  serverExternalPackages: ['pdfkit', '@libsql/client', 'googleapis'],
+  // Paquetes que NO deben ser bundled por webpack — se cargan via require()
+  // en runtime desde node_modules. Critico para libs con native bindings o
+  // que romperían si webpack las procesa (ej. Baileys + ws).
+  serverExternalPackages: [
+    'pdfkit',
+    '@libsql/client',
+    'googleapis',
+    '@whiskeysockets/baileys',
+    'ws',
+    'pino',
+    'qrcode-terminal',
+    'sharp',
+    'libsignal',
+  ],
   experimental: {
     // Server actions con archivos grandes (audio uploads)
     serverActions: {

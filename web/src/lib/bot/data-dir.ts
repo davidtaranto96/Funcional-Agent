@@ -35,12 +35,33 @@ export function resolveDataDir(): string {
     try {
       // Intentar crear si no existe
       if (!fs.existsSync(dir)) {
-        try { fs.mkdirSync(dir, { recursive: true }); } catch { continue; }
+        try { fs.mkdirSync(dir, { recursive: true }); } catch { /* sigo, el chmod abajo puede salvar */ }
       }
-      // Test de escritura real
-      const testFile = path.join(dir, '.wp-write-test');
-      fs.writeFileSync(testFile, 'ok');
-      fs.unlinkSync(testFile);
+      // Si existe pero no podemos escribir, intentar chmod (si somos root)
+      if (fs.existsSync(dir)) {
+        try {
+          const testFile = path.join(dir, '.wp-write-test');
+          fs.writeFileSync(testFile, 'ok');
+          fs.unlinkSync(testFile);
+        } catch {
+          // EACCES — intentar chmod en runtime
+          try {
+            fs.chmodSync(dir, 0o777);
+            console.warn(`[data-dir] chmod 777 aplicado a ${dir}`);
+            // Re-test
+            const testFile = path.join(dir, '.wp-write-test');
+            fs.writeFileSync(testFile, 'ok');
+            fs.unlinkSync(testFile);
+          } catch (chmodErr) {
+            // Tampoco con chmod — saltar este dir
+            const ce = chmodErr as NodeJS.ErrnoException;
+            console.warn(`[data-dir] ✗ ${dir}: chmod tambien fallo (${ce.code})`);
+            continue;
+          }
+        }
+      } else {
+        continue;
+      }
       // ¡Funciona!
       cached = dir;
       const isFallback = dir === '/tmp/wpanalista-data';
