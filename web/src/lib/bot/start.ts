@@ -264,6 +264,10 @@ async function checkStaleConversations(): Promise<void> {
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 export async function startBot(): Promise<void> {
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('  WPanalista v5.1.0 — Single-service Next.js + Baileys');
+  console.log('  Build: ' + new Date().toISOString());
+  console.log('═══════════════════════════════════════════════════════');
   console.log('[bot] Inicializando DB...');
   await db.ensureInit();
 
