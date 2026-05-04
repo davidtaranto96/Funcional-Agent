@@ -24,10 +24,11 @@ async function handleAdminCommand(fromKey: string, text: string): Promise<string
   const appUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
   if (cmd === 'PENDIENTES') {
-    const pendientes = (await db.listAllClients()).filter((c: any) => c.demo_status === 'pending_review');
+    // Lite: hot path del bot, no necesitamos parsear history/timeline.
+    const pendientes = (await db.listAllClientsLite()).filter((c: any) => c.demo_status === 'pending_review');
     if (pendientes.length === 0) return '✅ No hay demos pendientes de revisión.';
     const lista = pendientes.map((c: any) => {
-      const nombre = c.report?.cliente?.nombre || c.phone;
+      const nombre = c.clientName || c.phone;
       return `• ${nombre}\n  ${appUrl}/admin/review/${encodeURIComponent(c.phone)}`;
     }).join('\n\n');
     return `📋 Demos pendientes (${pendientes.length}):\n\n${lista}`;
@@ -40,7 +41,7 @@ async function handleAdminCommand(fromKey: string, text: string): Promise<string
       targetPhone = parts.slice(1).join('').trim();
       if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
     } else {
-      const pendientes = (await db.listAllClients()).filter((c: any) => c.demo_status === 'pending_review');
+      const pendientes = (await db.listAllClientsLite()).filter((c: any) => c.demo_status === 'pending_review');
       if (pendientes.length === 0) return '⚠️ No hay demos pendientes para aprobar.';
       targetPhone = pendientes[0].phone;
     }
@@ -59,7 +60,7 @@ async function handleAdminCommand(fromKey: string, text: string): Promise<string
       targetPhone = parts.slice(1).join('').trim();
       if (!targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:${targetPhone}`;
     } else {
-      const pendientes = (await db.listAllClients()).filter((c: any) => c.demo_status === 'pending_review');
+      const pendientes = (await db.listAllClientsLite()).filter((c: any) => c.demo_status === 'pending_review');
       if (pendientes.length === 0) return '⚠️ No hay demos pendientes.';
       targetPhone = pendientes[0].phone;
     }
@@ -72,10 +73,10 @@ async function handleAdminCommand(fromKey: string, text: string): Promise<string
     const parts = text.trim().split(/\s+/);
     let targetPhone = parts.length > 1 ? parts.slice(1).join('').trim() : null;
     if (targetPhone && !targetPhone.startsWith('whatsapp:')) targetPhone = `whatsapp:+${targetPhone.replace(/[^0-9]/g, '')}`;
-    const all = await db.listAllClients();
+    const all = await db.listAllClientsLite();
     if (!targetPhone) {
       const resumen = all.slice(-5).map((c: any) => {
-        const nombre = c.report?.cliente?.nombre || c.phone;
+        const nombre = c.clientName || c.phone;
         return `• ${nombre} — etapa: ${c.stage} | demo: ${c.demo_status}`;
       }).join('\n');
       return `📊 Últimos 5 clientes:\n\n${resumen || 'Sin clientes aún.'}`;

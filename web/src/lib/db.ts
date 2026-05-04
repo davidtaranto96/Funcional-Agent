@@ -536,6 +536,45 @@ export async function listAllClientsLite(includeArchived = false): Promise<Conve
   });
 }
 
+// Para el Kanban /admin/clients: trae el report parseado completo pero deja
+// history/timeline/context vacios. El report es relativamente chico (~5KB),
+// pero history/timeline/context pueden ser cientos de KB por fila. Parsear
+// los 3 ultimos era el cuello.
+export async function listAllClientsForKanban(includeArchived = false): Promise<Conversation[]> {
+  await ensureInit();
+  const cols = 'phone, stage, client_stage, demo_status, report, updated_at, created_at, followup_sent, archived, drive_folder_id, demo_started_at';
+  const sql = includeArchived
+    ? `SELECT ${cols} FROM conversations ORDER BY updated_at DESC`
+    : `SELECT ${cols} FROM conversations WHERE archived = 0 OR archived IS NULL ORDER BY updated_at DESC`;
+  const result = await getDb().execute(sql);
+  return result.rows.map(r => {
+    const row = r as unknown as Record<string, unknown>;
+    let report: ConversationReport | null = null;
+    if (row.report && typeof row.report === 'string') {
+      try { report = JSON.parse(row.report) as ConversationReport; }
+      catch { /* report invalido, se trata como null */ }
+    }
+    return {
+      phone: String(row.phone || ''),
+      history: [],
+      stage: String(row.stage || 'greeting'),
+      context: {},
+      report,
+      followup_sent: Number(row.followup_sent || 0),
+      drive_folder_id: row.drive_folder_id ? String(row.drive_folder_id) : null,
+      demo_status: String(row.demo_status || 'none'),
+      client_stage: String(row.client_stage || 'lead'),
+      timeline: [],
+      notes: '',
+      demo_notes: '',
+      archived: Number(row.archived || 0),
+      demo_started_at: row.demo_started_at ? String(row.demo_started_at) : '',
+      updated_at: String(row.updated_at || ''),
+      created_at: row.created_at ? String(row.created_at) : '',
+    };
+  });
+}
+
 export async function getClientsByStage(clientStage: string): Promise<Conversation[]> {
   await ensureInit();
   const result = await getDb().execute({ sql: 'SELECT * FROM conversations WHERE client_stage = ? ORDER BY updated_at DESC', args: [clientStage] });
@@ -570,9 +609,14 @@ export async function resetConversation(phone: string): Promise<void> {
 
 // ─── Projects ─────────────────────────────────────────────────────────────
 
-export async function listProjects(): Promise<Project[]> {
+export async function listProjects(limit = 500): Promise<Project[]> {
   await ensureInit();
-  const result = await getDb().execute('SELECT * FROM projects ORDER BY updated_at DESC');
+  // LIMIT default 500 para evitar O(N) sin techo. Si en el futuro hay mas,
+  // se pasa un limit explicito o se pagina. Hoy raramente >50.
+  const result = await getDb().execute({
+    sql: 'SELECT * FROM projects ORDER BY updated_at DESC LIMIT ?',
+    args: [limit],
+  });
   return result.rows.map(r => parseProject(r as unknown as Record<string, unknown>));
 }
 
@@ -813,9 +857,12 @@ function parseInvoice(row: Record<string, unknown>): Invoice {
   };
 }
 
-export async function listInvoices(): Promise<Invoice[]> {
+export async function listInvoices(limit = 500): Promise<Invoice[]> {
   await ensureInit();
-  const result = await getDb().execute('SELECT * FROM invoices ORDER BY issue_date DESC, created_at DESC');
+  const result = await getDb().execute({
+    sql: 'SELECT * FROM invoices ORDER BY issue_date DESC, created_at DESC LIMIT ?',
+    args: [limit],
+  });
   return result.rows.map(r => parseInvoice(r as unknown as Record<string, unknown>));
 }
 

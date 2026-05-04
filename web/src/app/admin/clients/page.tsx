@@ -21,7 +21,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const search = (sp.q || '').trim();
   const stageFilter = sp.stage || '';
 
-  const clients = await db.listAllClients(showArchived);
+  // listAllClientsForKanban: trae el report parseado (que el Kanban si usa
+  // para mostrar nombre, email, ubicacion, rubro, tipo proyecto, etc) pero
+  // NO parsea history/timeline/context que pueden tener cientos de KB y no
+  // se renderean en el Kanban.
+  const clients = await db.listAllClientsForKanban(showArchived);
 
   // Stats — siempre sobre el set NO archivado
   const visible = showArchived ? clients.filter(c => !c.archived) : clients;
