@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 import { requireAuth } from '@/lib/session';
 import { resolveFolder, safeFilenameInDir } from '@/lib/document-folders';
 
@@ -23,15 +24,39 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string;
   const folder = await resolveFolder(id);
   if (!folder) return new NextResponse('Not found', { status: 404 });
   const full = safeFilenameInDir(folder.dir, decoded);
-  if (!full || !fs.existsSync(full) || !fs.statSync(full).isFile()) return new NextResponse('Not found', { status: 404 });
+  if (!full) return new NextResponse('Not found', { status: 404 });
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(full);
+    if (!stat.isFile()) return new NextResponse('Not found', { status: 404 });
+  } catch { return new NextResponse('Not found', { status: 404 }); }
+
   const ext = path.extname(full).toLowerCase();
   const mime = MIME[ext] || 'application/octet-stream';
-  const buf = fs.readFileSync(full);
   const previewable = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.txt', '.csv', '.html'];
   const disposition = previewable.includes(ext)
     ? `inline; filename="${encodeURIComponent(decoded)}"`
     : `attachment; filename="${encodeURIComponent(decoded)}"`;
-  return new NextResponse(buf, { status: 200, headers: { 'Content-Type': mime, 'Content-Disposition': disposition } });
+
+  // ETag basado en mtime+size: el browser puede cachear y mandar If-None-Match.
+  const etag = `"${stat.size}-${stat.mtimeMs.toString(36)}"`;
+  if (req.headers.get('if-none-match') === etag) {
+    return new NextResponse(null, { status: 304, headers: { ETag: etag } });
+  }
+
+  // Stream en vez de readFileSync: no carga 50MB en memoria, no bloquea event loop.
+  const nodeStream = fs.createReadStream(full);
+  const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream;
+  return new NextResponse(webStream, {
+    status: 200,
+    headers: {
+      'Content-Type': mime,
+      'Content-Disposition': disposition,
+      'Content-Length': stat.size.toString(),
+      'Cache-Control': 'private, max-age=300, must-revalidate',
+      ETag: etag,
+    },
+  });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string; name: string }> }) {

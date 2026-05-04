@@ -198,7 +198,8 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
         return next;
       });
       showToast('Archivo borrado', 'ok');
-      router.refresh();
+      // No router.refresh(): el optimistic update local ya es completo. El sidebar
+      // de DocumentosView se re-rendereara al volver via Link prefetch.
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'No se pudo borrar';
       showToast(msg, 'err');
@@ -215,10 +216,8 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
       variant: 'danger',
     });
     if (!ok) return;
-    let success = 0;
-    const failed: string[] = [];
-    const deleted: string[] = [];
-    for (const name of names) {
+    // Paralelo: 10 archivos = 1 RTT round-trip aprox, no 10 secuenciales.
+    const results = await Promise.all(names.map(async name => {
       try {
         const fd = new FormData();
         fd.append('action', 'delete');
@@ -226,26 +225,22 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
           method: 'POST', body: fd,
         });
         const data = await res.json().catch(() => ({}));
-        if (res.ok && data?.ok) {
-          success++;
-          deleted.push(name);
-        } else {
-          failed.push(`${name}: ${data?.error || 'error'}`);
-        }
+        if (res.ok && data?.ok) return { ok: true as const, name };
+        return { ok: false as const, name, error: data?.error || 'error' };
       } catch (err) {
-        failed.push(`${name}: ${err instanceof Error ? err.message : 'error'}`);
+        return { ok: false as const, name, error: err instanceof Error ? err.message : 'error' };
       }
-    }
-    // Solo sacamos del estado local los que SI se borraron
+    }));
+    const deleted = results.filter(r => r.ok).map(r => r.name);
+    const failed = results.filter(r => !r.ok);
     setFiles(fs => fs.filter(f => !deleted.includes(f.name)));
     setSelected(new Set());
     if (failed.length > 0) {
       console.error('[bulkDelete] failed:', failed);
-      showToast(`${success} borrados, ${failed.length} fallaron — revisá la consola`, 'err');
+      showToast(`${deleted.length} borrados, ${failed.length} fallaron — revisá la consola`, 'err');
     } else {
-      showToast(`${success} archivo${success === 1 ? '' : 's'} borrado${success === 1 ? '' : 's'}`, 'ok');
+      showToast(`${deleted.length} archivo${deleted.length === 1 ? '' : 's'} borrado${deleted.length === 1 ? '' : 's'}`, 'ok');
     }
-    router.refresh();
   }
 
   async function doRename() {
@@ -265,7 +260,7 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
       setRenameOpen(null);
       setRenameValue('');
       showToast('Renombrado', 'ok');
-      router.refresh();
+      // No router.refresh(): optimistic update local cubre todo lo visible.
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error';
       showToast(msg, 'err');
@@ -275,24 +270,24 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
   async function doMove() {
     if (!moveOpen || !moveTarget) return;
     const names = moveOpen;
-    let success = 0;
-    for (const name of names) {
+    // Paralelo: N moves = 1 round-trip aprox.
+    const results = await Promise.all(names.map(async name => {
       try {
         const fd = new FormData();
         fd.append('toFolder', moveTarget);
         const res = await fetch(`/api/admin/folders/${folder.id}/files/${encodeURIComponent(name)}/move`, {
           method: 'POST', body: fd,
         });
-        if (res.ok) success++;
-      } catch { /* skip */ }
-    }
-    setFiles(fs => fs.filter(f => !names.includes(f.name)));
+        return res.ok ? { ok: true as const, name } : { ok: false as const, name };
+      } catch { return { ok: false as const, name }; }
+    }));
+    const moved = results.filter(r => r.ok).map(r => r.name);
+    setFiles(fs => fs.filter(f => !moved.includes(f.name)));
     setMoveOpen(null);
     setMoveTarget('');
     setSelected(new Set());
     const targetFolder = otherFolders.find(o => o.id === moveTarget);
-    showToast(`${success} archivo${success === 1 ? '' : 's'} movido${success === 1 ? '' : 's'} a ${targetFolder?.name || 'carpeta'}`, 'ok');
-    router.refresh();
+    showToast(`${moved.length} archivo${moved.length === 1 ? '' : 's'} movido${moved.length === 1 ? '' : 's'} a ${targetFolder?.name || 'carpeta'}`, 'ok');
   }
 
   // Drag & drop
