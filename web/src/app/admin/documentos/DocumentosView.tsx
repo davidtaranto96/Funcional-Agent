@@ -313,6 +313,9 @@ function FolderCard({ f, deletable }: { f: FolderListing; deletable?: boolean })
             type="submit"
             onClick={async e => {
               e.preventDefault();
+              // CRITICO: capturar el form ANTES del await porque React recicla
+              // los SyntheticEvents y e.currentTarget queda null despues
+              const form = e.currentTarget.closest('form') as HTMLFormElement | null;
               const ok = await confirmDialog({
                 title: `¿Borrar "${f.name}"?`,
                 description: f.fileCount > 0
@@ -321,7 +324,7 @@ function FolderCard({ f, deletable }: { f: FolderListing; deletable?: boolean })
                 confirmLabel: 'Sí, borrar',
                 variant: 'danger',
               });
-              if (ok) (e.currentTarget.closest('form') as HTMLFormElement)?.submit();
+              if (ok) form?.submit();
             }}
             className="grid place-items-center w-7 h-7 rounded-md bg-card/80 backdrop-blur border border-[var(--border)] text-muted-foreground hover:text-[var(--red)] hover:bg-[oklch(0.62_0.22_27_/_0.15)] hover:border-[var(--red)] transition-all opacity-60 group-hover:opacity-100"
             aria-label="Borrar carpeta"
