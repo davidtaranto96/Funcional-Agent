@@ -198,6 +198,7 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
         return next;
       });
       showToast('Archivo borrado', 'ok');
+      router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'No se pudo borrar';
       showToast(msg, 'err');
@@ -244,6 +245,7 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
     } else {
       showToast(`${success} archivo${success === 1 ? '' : 's'} borrado${success === 1 ? '' : 's'}`, 'ok');
     }
+    router.refresh();
   }
 
   async function doRename() {
@@ -263,6 +265,7 @@ export function FolderView({ folder, files: initialFiles, otherFolders }: Props)
       setRenameOpen(null);
       setRenameValue('');
       showToast('Renombrado', 'ok');
+      router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error';
       showToast(msg, 'err');

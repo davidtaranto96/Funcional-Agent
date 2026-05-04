@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Folder, Plus, Home, MessageCircle, FolderKanban, Search } from 'lucide-react';
 import { confirmDialog } from '@/components/admin/ConfirmModal';
+import { showToast } from '@/components/ui/toast';
 import type { FolderListing } from '@/lib/document-folders';
 
 interface Stats {
@@ -22,6 +24,7 @@ interface Props {
 }
 
 export function DocumentosView({ custom, projects, demos, stats }: Props) {
+  const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -152,33 +155,7 @@ export function DocumentosView({ custom, projects, demos, stats }: Props) {
                 Cancelar
               </button>
             </div>
-            <form
-              method="POST"
-              action="/api/admin/folders/create"
-              className="grid grid-cols-1 md:grid-cols-[1fr_80px_1fr_auto] gap-3 items-end"
-            >
-              <Field label="Nombre">
-                <input name="name" required className={inputCls} placeholder="Ej. Contratos" />
-              </Field>
-              <Field label="Color">
-                <input
-                  name="color"
-                  type="color"
-                  defaultValue="#fbbf24"
-                  className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-input)] cursor-pointer"
-                />
-              </Field>
-              <Field label="Descripción (opcional)">
-                <input name="description" className={inputCls} />
-              </Field>
-              <button
-                type="submit"
-                className="h-9 px-4 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all"
-                style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
-              >
-                <Plus className="inline w-3.5 h-3.5 mr-1" /> Crear
-              </button>
-            </form>
+            <CreateFolderForm onCreated={() => { setShowNew(false); router.refresh(); }} />
           </div>
         )}
 
@@ -283,7 +260,38 @@ function Section({ title, icon, count, children }: { title: string; icon: React.
 }
 
 function FolderCard({ f, deletable }: { f: FolderListing; deletable?: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
   const fileLabel = f.fileCount === 0 ? 'Vacía' : `${f.fileCount} archivo${f.fileCount === 1 ? '' : 's'}`;
+
+  async function handleDelete() {
+    const ok = await confirmDialog({
+      title: `¿Borrar "${f.name}"?`,
+      description: f.fileCount > 0
+        ? `Esta carpeta tiene ${f.fileCount} archivo${f.fileCount === 1 ? '' : 's'}. Se borrarán también. Esta acción no se puede deshacer.`
+        : 'Esta acción no se puede deshacer.',
+      confirmLabel: 'Sí, borrar',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/folders/${f.id}/delete`, { method: 'POST', redirect: 'manual' });
+      // El endpoint devuelve 303 redirect — lo aceptamos como exito
+      if (res.ok || res.status === 0 || res.type === 'opaqueredirect') {
+        showToast(`Carpeta "${f.name}" borrada`, 'ok');
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data?.error || 'No se pudo borrar', 'err');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error', 'err');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="relative group">
       <Link
@@ -304,37 +312,18 @@ function FolderCard({ f, deletable }: { f: FolderListing; deletable?: boolean })
         </div>
       </Link>
       {deletable && (
-        <form
-          method="POST"
-          action={`/api/admin/folders/${f.id}/delete`}
-          className="absolute top-1.5 right-1.5"
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={busy}
+          className="absolute top-1.5 right-1.5 grid place-items-center w-7 h-7 rounded-md bg-card/80 backdrop-blur border border-[var(--border)] text-muted-foreground hover:text-[var(--red)] hover:bg-[oklch(0.62_0.22_27_/_0.15)] hover:border-[var(--red)] transition-all opacity-60 group-hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="Borrar carpeta"
+          title="Borrar carpeta"
         >
-          <button
-            type="submit"
-            onClick={async e => {
-              e.preventDefault();
-              // CRITICO: capturar el form ANTES del await porque React recicla
-              // los SyntheticEvents y e.currentTarget queda null despues
-              const form = e.currentTarget.closest('form') as HTMLFormElement | null;
-              const ok = await confirmDialog({
-                title: `¿Borrar "${f.name}"?`,
-                description: f.fileCount > 0
-                  ? `Esta carpeta tiene ${f.fileCount} archivo${f.fileCount === 1 ? '' : 's'}. Se borrarán también. Esta acción no se puede deshacer.`
-                  : 'Esta acción no se puede deshacer.',
-                confirmLabel: 'Sí, borrar',
-                variant: 'danger',
-              });
-              if (ok) form?.submit();
-            }}
-            className="grid place-items-center w-7 h-7 rounded-md bg-card/80 backdrop-blur border border-[var(--border)] text-muted-foreground hover:text-[var(--red)] hover:bg-[oklch(0.62_0.22_27_/_0.15)] hover:border-[var(--red)] transition-all opacity-60 group-hover:opacity-100"
-            aria-label="Borrar carpeta"
-            title="Borrar carpeta"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-            </svg>
-          </button>
-        </form>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+          </svg>
+        </button>
       )}
     </div>
   );
@@ -348,5 +337,56 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-1.5">{label}</span>
       {children}
     </label>
+  );
+}
+
+function CreateFolderForm({ onCreated }: { onCreated: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const fd = new FormData(e.currentTarget);
+      const res = await fetch('/api/admin/folders/create', { method: 'POST', body: fd, redirect: 'manual' });
+      if (res.ok || res.status === 0 || res.type === 'opaqueredirect') {
+        showToast('Carpeta creada', 'ok');
+        onCreated();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data?.error || 'No se pudo crear', 'err');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error', 'err');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-[1fr_80px_1fr_auto] gap-3 items-end">
+      <Field label="Nombre">
+        <input name="name" required className={inputCls} placeholder="Ej. Contratos" />
+      </Field>
+      <Field label="Color">
+        <input
+          name="color"
+          type="color"
+          defaultValue="#fbbf24"
+          className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-input)] cursor-pointer"
+        />
+      </Field>
+      <Field label="Descripción (opcional)">
+        <input name="description" className={inputCls} />
+      </Field>
+      <button
+        type="submit"
+        disabled={busy}
+        className="h-9 px-4 rounded-md bg-primary text-white text-[12px] font-semibold hover:brightness-110 transition-all disabled:opacity-50"
+        style={{ boxShadow: '0 2px 10px var(--accent-glow)' }}
+      >
+        <Plus className="inline w-3.5 h-3.5 mr-1" /> {busy ? 'Creando…' : 'Crear'}
+      </button>
+    </form>
   );
 }
