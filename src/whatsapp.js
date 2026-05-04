@@ -197,10 +197,18 @@ async function startWhatsApp(onIncomingMessage) {
 
   const authDir = ensureAuthDir();
 
-  // Si tuvimos varios 405 seguidos, las creds estan corruptas o sesion vieja.
+  // Escape hatch manual: setear BAILEYS_RESET=1 en Railway env vars y redeploy
+  // fuerza limpiar las credenciales en el siguiente startup. Util si el bot esta
+  // atascado en un loop de errores y queres empezar de cero.
+  if (process.env.BAILEYS_RESET === '1') {
+    console.warn('[whatsapp] BAILEYS_RESET=1 detectado — limpiando auth state ANTES de conectar');
+    clearAuthDir(authDir);
+  }
+
+  // Si tuvimos 2 codigos 405 seguidos, las creds estan corruptas o sesion vieja.
   // Limpiamos el auth state para forzar QR fresco.
-  if (consecutive405 >= 3) {
-    console.warn('[whatsapp] 3+ codigos 405 consecutivos — limpiando auth state para forzar QR fresco');
+  if (consecutive405 >= 2) {
+    console.warn(`[whatsapp] ${consecutive405} codigos 405 consecutivos — limpiando auth state para forzar QR fresco`);
     clearAuthDir(authDir);
     consecutive405 = 0;
   }
@@ -253,20 +261,23 @@ async function startWhatsApp(onIncomingMessage) {
     }
 
     if (connection === 'close') {
-      const code = lastDisconnect?.error?.output?.statusCode;
+      const err = lastDisconnect?.error;
+      const code = err?.output?.statusCode;
+      const errMsg = err?.message || err?.data?.reason || 'unknown';
+      const errData = err?.data ? JSON.stringify(err.data).slice(0, 200) : '';
       const shouldReconnect = code !== DisconnectReason.loggedOut;
       if (code === 405) consecutive405++;
-      console.warn(`[whatsapp] ⚠️ Conexión cerrada (code=${code}, reconnect=${shouldReconnect}, 405streak=${consecutive405})`);
+      console.warn(`[whatsapp] ⚠️ Conexión cerrada (code=${code}, msg="${errMsg}", reconnect=${shouldReconnect}, 405streak=${consecutive405})`);
+      if (errData) console.warn(`[whatsapp]   error.data: ${errData}`);
       sock = null;
       connecting = false;
       if (shouldReconnect) {
-        // Backoff exponencial cortito (3s, 5s, 8s...)
         const delay = Math.min(15000, 3000 + consecutive405 * 2000);
         setTimeout(() => startWhatsApp(onIncomingMessage).catch(err => {
           console.error('[whatsapp] Error en reconexión:', err.message);
         }), delay);
       } else {
-        console.error('[whatsapp] ❌ Sesión inválida (loggedOut). Borrá data/baileys-auth/ y reescaneá el QR.');
+        console.error('[whatsapp] ❌ Sesión inválida (loggedOut). Setea BAILEYS_RESET=1 en Railway y redeploya, o borra data/baileys-auth/ a mano.');
       }
     }
   });
