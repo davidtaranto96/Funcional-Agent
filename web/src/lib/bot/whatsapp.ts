@@ -280,12 +280,27 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }: any) => {
-    if (type !== 'notify') return;
+    console.log(`[whatsapp] 📨 messages.upsert type=${type} count=${messages?.length || 0}`);
+    if (type !== 'notify') {
+      console.log(`[whatsapp]   ⚠ skip: type !== notify (es "${type}")`);
+      return;
+    }
     for (const m of messages) {
       try {
-        if (m.key.fromMe) continue;
-        if (m.key.remoteJid?.endsWith('@g.us')) continue;
-        if (!m.key.remoteJid?.endsWith('@s.whatsapp.net')) continue;
+        const jid = m.key?.remoteJid || 'unknown';
+        if (m.key.fromMe) {
+          console.log(`[whatsapp]   ⚠ skip: fromMe (${jid})`);
+          continue;
+        }
+        if (jid.endsWith('@g.us')) {
+          console.log(`[whatsapp]   ⚠ skip: grupo (${jid})`);
+          continue;
+        }
+        if (!jid.endsWith('@s.whatsapp.net')) {
+          console.log(`[whatsapp]   ⚠ skip: jid raro (${jid})`);
+          continue;
+        }
+        console.log(`[whatsapp]   ✓ procesando mensaje de ${jid}`);
 
         const fromKey = jidToDbKey(m.key.remoteJid);
         if (!fromKey) continue;

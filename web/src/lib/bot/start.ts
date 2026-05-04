@@ -108,7 +108,13 @@ async function handleAdminCommand(fromKey: string, text: string): Promise<string
 
 // ── Procesador principal de mensajes entrantes ──────────────────────────────
 async function processIncomingMessage({ fromKey, text, audioBuffer, audioMime, hasMedia }: IncomingMessage): Promise<void> {
-  console.log(`[wa] From=${fromKey} text="${(text || '').substring(0, 80)}" audio=${!!audioBuffer} media=${hasMedia}`);
+  console.log(`[wa] ▶ INCOMING From=${fromKey} text="${(text || '').substring(0, 80)}" audio=${!!audioBuffer} media=${hasMedia}`);
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('[wa] ❌ ANTHROPIC_API_KEY no configurada — el agente no puede responder');
+    try { await sendMessage(fromKey, 'Hola! Sistema en mantenimiento, te respondo en un rato.'); } catch (e: any) { console.error('[wa] sendMessage fallback fallo:', e.message); }
+    return;
+  }
 
   let actualText = (text || '').trim();
 
@@ -140,12 +146,18 @@ async function processIncomingMessage({ fromKey, text, audioBuffer, audioMime, h
     return;
   }
 
+  console.log(`[wa] ▶ llamando handleMessage para ${fromKey}, text="${actualText.slice(0, 60)}"`);
   let result: any;
   try {
     result = await handleMessage(fromKey, actualText);
+    console.log(`[wa] ◀ handleMessage OK, stage=${result.stage}, replyLen=${(result.reply || '').length}`);
   } catch (err: any) {
-    console.error('[wa] Error en agente:', err);
-    await sendMessage(fromKey, 'Perdón, tuve un error. ¿Podés intentar de nuevo?');
+    console.error('[wa] ❌ Error en agente:', err?.message || err, err?.stack?.split('\n').slice(0, 3).join(' | '));
+    try {
+      await sendMessage(fromKey, 'Perdón, tuve un error. ¿Podés intentar de nuevo?');
+    } catch (sendErr: any) {
+      console.error('[wa] ❌❌ tampoco pude mandar mensaje de error:', sendErr?.message);
+    }
     return;
   }
 
@@ -189,8 +201,14 @@ async function processIncomingMessage({ fromKey, text, audioBuffer, audioMime, h
     }
   }
 
-  console.log(`[wa] -> ${fromKey}: "${result.reply.substring(0, 120)}..."`);
-  await sendMessage(fromKey, result.reply);
+  console.log(`[wa] ▶ enviando reply a ${fromKey} (${result.reply.length} chars): "${result.reply.substring(0, 120)}..."`);
+  try {
+    await sendMessage(fromKey, result.reply);
+    console.log(`[wa] ✅ reply enviado OK a ${fromKey}`);
+  } catch (sendErr: any) {
+    console.error(`[wa] ❌ sendMessage fallo:`, sendErr?.message, sendErr?.stack?.split('\n')[0]);
+    return;
+  }
 
   // Background work
   if (result.stage === 'done' && result.previousStage === 'confirming') {
