@@ -241,30 +241,60 @@ export async function init() {
     )
   `);
 
-  // Migraciones idempotentes
-  for (const sql of [
-    `ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0`,
-    `ALTER TABLE conversations ADD COLUMN drive_folder_id TEXT`,
-    `ALTER TABLE conversations ADD COLUMN demo_status TEXT DEFAULT 'none'`,
-    `ALTER TABLE conversations ADD COLUMN client_stage TEXT DEFAULT 'lead'`,
-    `ALTER TABLE conversations ADD COLUMN timeline TEXT DEFAULT '[]'`,
-    `ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''`,
-    `ALTER TABLE conversations ADD COLUMN demo_notes TEXT DEFAULT ''`,
-    `ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0`,
-    `ALTER TABLE conversations ADD COLUMN demo_started_at TEXT DEFAULT ''`,
-    `ALTER TABLE conversations ADD COLUMN bot_paused INTEGER DEFAULT 0`,
-    `ALTER TABLE conversations ADD COLUMN lead_score TEXT DEFAULT ''`,
-    `ALTER TABLE conversations ADD COLUMN lead_score_reason TEXT DEFAULT ''`,
-    `ALTER TABLE conversations ADD COLUMN lead_score_at TEXT DEFAULT ''`,
-    `ALTER TABLE conversations ADD COLUMN nickname TEXT DEFAULT ''`,
-    `ALTER TABLE projects ADD COLUMN updates_log TEXT DEFAULT '[]'`,
-    `ALTER TABLE projects ADD COLUMN is_personal INTEGER DEFAULT 0`,
-    `ALTER TABLE projects ADD COLUMN deadline TEXT`,
-    `ALTER TABLE projects ADD COLUMN category TEXT DEFAULT 'cliente'`,
-    `ALTER TABLE projects ADD COLUMN client_id TEXT DEFAULT ''`,
-  ]) {
-    try { await db.execute(sql); } catch { /* columna ya existe */ }
+  // Migraciones idempotentes — chequeamos columnas existentes con PRAGMA antes
+  // de hacer ALTER, asi evitamos el log feo "unexpected error in init queries"
+  // que tira Turso cuando la columna ya existe (aunque el error queda atrapado
+  // por el try/catch igualmente).
+  async function existingColumns(table: string): Promise<Set<string>> {
+    try {
+      const r = await db.execute(`PRAGMA table_info(${table})`);
+      const cols = new Set<string>();
+      for (const row of r.rows) {
+        const name = (row as Record<string, unknown>).name;
+        if (typeof name === 'string') cols.add(name);
+      }
+      return cols;
+    } catch { return new Set(); }
   }
+
+  const convCols = await existingColumns('conversations');
+  const projCols = await existingColumns('projects');
+
+  const migrations: Array<{ table: string; col: string; cols: Set<string>; sql: string }> = [
+    { table: 'conversations', col: 'followup_sent',     cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN followup_sent INTEGER DEFAULT 0` },
+    { table: 'conversations', col: 'drive_folder_id',   cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN drive_folder_id TEXT` },
+    { table: 'conversations', col: 'demo_status',       cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN demo_status TEXT DEFAULT 'none'` },
+    { table: 'conversations', col: 'client_stage',      cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN client_stage TEXT DEFAULT 'lead'` },
+    { table: 'conversations', col: 'timeline',          cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN timeline TEXT DEFAULT '[]'` },
+    { table: 'conversations', col: 'notes',             cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN notes TEXT DEFAULT ''` },
+    { table: 'conversations', col: 'demo_notes',        cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN demo_notes TEXT DEFAULT ''` },
+    { table: 'conversations', col: 'archived',          cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0` },
+    { table: 'conversations', col: 'demo_started_at',   cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN demo_started_at TEXT DEFAULT ''` },
+    { table: 'conversations', col: 'bot_paused',        cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN bot_paused INTEGER DEFAULT 0` },
+    { table: 'conversations', col: 'lead_score',        cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN lead_score TEXT DEFAULT ''` },
+    { table: 'conversations', col: 'lead_score_reason', cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN lead_score_reason TEXT DEFAULT ''` },
+    { table: 'conversations', col: 'lead_score_at',     cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN lead_score_at TEXT DEFAULT ''` },
+    { table: 'conversations', col: 'nickname',          cols: convCols, sql: `ALTER TABLE conversations ADD COLUMN nickname TEXT DEFAULT ''` },
+    { table: 'projects',      col: 'updates_log',       cols: projCols, sql: `ALTER TABLE projects ADD COLUMN updates_log TEXT DEFAULT '[]'` },
+    { table: 'projects',      col: 'is_personal',       cols: projCols, sql: `ALTER TABLE projects ADD COLUMN is_personal INTEGER DEFAULT 0` },
+    { table: 'projects',      col: 'deadline',          cols: projCols, sql: `ALTER TABLE projects ADD COLUMN deadline TEXT` },
+    { table: 'projects',      col: 'category',          cols: projCols, sql: `ALTER TABLE projects ADD COLUMN category TEXT DEFAULT 'cliente'` },
+    { table: 'projects',      col: 'client_id',         cols: projCols, sql: `ALTER TABLE projects ADD COLUMN client_id TEXT DEFAULT ''` },
+  ];
+
+  let ranCount = 0;
+  for (const m of migrations) {
+    if (m.cols.has(m.col)) continue;  // ya existe, skip
+    try {
+      await db.execute(m.sql);
+      ranCount++;
+      console.log(`[db] migracion aplicada: ${m.table}.${m.col}`);
+    } catch (err) {
+      // Race: otra instance pudo haberla creado entre el PRAGMA y el ALTER
+      console.log(`[db] migracion ${m.table}.${m.col} fallo (probablemente race), skip`);
+    }
+  }
+  if (ranCount === 0) console.log('[db] schema al dia, sin migraciones nuevas');
 
   for (const sql of [
     `CREATE INDEX IF NOT EXISTS idx_conv_client_stage ON conversations(client_stage)`,
