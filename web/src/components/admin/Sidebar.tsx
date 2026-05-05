@@ -70,6 +70,19 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
     if (stored === '1') setCollapsed(true);
   }, []);
 
+  // Cerrar mobile menu con Escape
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setMobileOpen(false); }
+    window.addEventListener('keydown', onKey);
+    // Bloquear scroll del body mientras el menu mobile está abierto
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   function toggleCollapse() {
     const next = !collapsed;
     setCollapsed(next);
@@ -147,14 +160,28 @@ export function Sidebar({ user }: { user?: { name?: string; email?: string; phot
             )}
           </button>
           {!collapsed && (
-            <button
-              type="button"
-              aria-label="Colapsar sidebar"
-              onClick={toggleCollapse}
-              className="hidden md:grid place-items-center w-7 h-7 rounded-md hover:bg-[var(--bg-inset)] text-muted-foreground flex-shrink-0"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+            <>
+              {/* Boton X solo en mobile (cerrar menu lateral) */}
+              <button
+                type="button"
+                aria-label="Cerrar navegación"
+                onClick={() => setMobileOpen(false)}
+                className="md:hidden grid place-items-center w-7 h-7 rounded-md hover:bg-[var(--bg-inset)] text-muted-foreground flex-shrink-0"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6l-12 12" />
+                </svg>
+              </button>
+              {/* Boton colapsar solo en desktop */}
+              <button
+                type="button"
+                aria-label="Colapsar sidebar"
+                onClick={toggleCollapse}
+                className="hidden md:grid place-items-center w-7 h-7 rounded-md hover:bg-[var(--bg-inset)] text-muted-foreground flex-shrink-0"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </>
           )}
         </div>
 
