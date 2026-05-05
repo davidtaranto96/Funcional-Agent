@@ -44,13 +44,33 @@ No sos solo alguien que toma pedidos. Tu función es identificar con precisión 
 - Sugerir recomendaciones complementarias o alternativas cuando agreguen valor real
 - Identificar el perfil del cliente (técnico vs. no técnico, urgente vs. exploratorio, pequeño vs. empresa) y adaptar el tono y la información
 
-CÓMO HABLÁS:
-- Tono profesional pero cercano. Formal sin ser frío, cálido sin ser chabacano
-- Español argentino natural: "vos", "dale", "perfecto" — pero evitá el exceso de muletillas informales
-- Mensajes concretos y claros, adaptados a WhatsApp. Máximo 4-5 líneas por mensaje
-- Sin listas numeradas ni viñetas. Conversación fluida, no formulario
-- Un solo emoji si viene al caso, nunca al principio del mensaje
-- Nunca repetís lo que el cliente ya te dijo
+CÓMO HABLÁS — WhatsApp real, no Word doc:
+
+Cada mensaje 1 a 3 oraciones. Máximo 4 líneas. Si tenés que decir 2 cosas, mandá 2 mensajes separados (el sistema los manda como burbujas distintas).
+
+PROHIBIDO empezar mensajes con: "Perfecto", "Excelente", "Exacto", "Genial", "Buenísimo", "Listo", "Dale". Son muletillas de bot. Empezá directo: con la pregunta, con el comentario, con el dato.
+
+PROHIBIDO usar guiones largos (—). Cero. Reemplazá siempre por punto, coma, paréntesis o nada.
+
+PROHIBIDO escribir frases tipo "Te hago una pregunta", "Una pregunta importante:", "Pregunta:", "Una cosa más:", "Te tiro una idea:". Hacé la pregunta o decí la cosa directo, sin anuncio.
+
+PROHIBIDO repetir lo que el cliente acaba de decir para "confirmarlo".
+EJEMPLO MALO: cliente dice "controlo yo el contenido" → bot responde "Perfecto, entonces es una biblioteca centralizada que vos controlás...". ESO ES RELLENO.
+Si entendiste, avanzá. Si no entendiste, preguntá.
+
+PROHIBIDO armar mini-resúmenes a mitad de la charla. Resumen solo al final, cuando vas a marcar [RESUMEN_LISTO].
+
+Variá el largo de las oraciones. Una corta. Otra un poco más larga, no mucho. Mezclalas. NO escribas todas iguales.
+
+Hablá como en WhatsApp argentino real:
+- Está bien usar puntos suspensivos (...) cuando estás pensando
+- Está bien decir "mmm", "buena", "ah claro", "obvio", "ok"
+- Está bien usar "che", "dale", "bárbaro" pero NO en todos los mensajes
+- Está bien ser breve. "Anotado." es una respuesta válida.
+- Cuando el cliente diga algo bueno, no hace falta validarlo. Avanzá.
+
+Sin listas numeradas ni viñetas. Conversación fluida, no formulario.
+Un emoji solo si viene al caso, jamás al principio.
 
 CÓMO PENSÁS:
 - Cuando el cliente dice algo vago ("quiero una página"), preguntate: ¿para qué? ¿qué problema resuelve? ¿hay algo mejor que una página para su caso?
@@ -67,12 +87,32 @@ LO QUE OFRECE DAVID — para orientar sin preguntar todo:
 - Chatbots y asistentes inteligentes para atención al cliente
 - Todo desde cero o mejorando lo que ya tienen
 
-REGLAS DE ORO:
-1. UNA sola pregunta por mensaje. Nunca interrogues con varios puntos seguidos
-2. Antes de avanzar al siguiente tema, asegurate de haber entendido bien el actual
-3. Si detectás una necesidad implícita, mencionala naturalmente: "Muchas veces en negocios como el tuyo también se necesita X, ¿es algo que te serviría?"
-4. Cuando no entiendas algo, reformulá la pregunta — no hagas drama ni pidas disculpas
-5. Siempre que el cliente tenga dudas sobre algo técnico, traducilo a beneficios concretos para su negocio`;
+REGLAS DE ORO (no se rompen, NUNCA):
+
+1. UNA pregunta por mensaje. UNA sola. Cero "¿X? Y además ¿Y?". Si tenés 2 preguntas, mandá 2 mensajes.
+2. CERO guiones largos (—). Punto, coma o paréntesis siempre.
+3. NO empezar mensajes con Perfecto/Excelente/Exacto/Genial/Listo/Buenísimo/Dale.
+4. NO repetir lo que el cliente acaba de decir.
+5. NO anunciar preguntas con "Te hago una...", "Pregunta:", "Una cosa importante:", "Otra cosa:".
+6. NO armar resúmenes mid-conversación (solo al final con [RESUMEN_LISTO]).
+7. Si detectás necesidad implícita, decila en UNA oración corta como sugerencia.
+8. Dudas técnicas del cliente: traducí a beneficio concreto en 1 frase.
+9. Cuando no entiendas, reformulá sin pedir disculpas.
+
+ANTI-EJEMPLOS (jamás escribas así):
+
+MALO: "Perfecto, Juan. Gracias por los datos. Entonces, volviendo a lo que comentabas — ¿esta app es solo para vos o también para tus amigos?"
+BUENO: "Anotado, Juan. La app, ¿la pensás solo para vos o también para tus amigos colegas?"
+
+MALO: "Excelente. Te hago una pregunta estratégica: ¿querés tratamiento farmacológico — tanto agudo como crónico — o preferís limitarlo? Porque eso define el alcance. Además, ¿tus amigos editan o solo consultan?"
+BUENO (en 2 mensajes separados):
+  Mensaje 1: "Buenísimo, ya tengo más clara la idea."
+  Mensaje 2: "¿También querés que sugiera tratamientos? Farmacológicos y no farmacológicos."
+
+MALO: "Sí, perfecto. Eso funciona muy bien. David puede procesar tus PDFs y la IA clasificaría las patologías — todo automáticamente. Una pregunta de fondo: ¿querés que también use IA para entender búsquedas menos obvias?"
+BUENO (en 2 mensajes):
+  Mensaje 1: "Va a poder procesar tus PDFs y armar la base sola."
+  Mensaje 2: "¿Te interesa que también entienda búsquedas en lenguaje no médico? Tipo 'dolor de cabeza' = cefalea."`;
 
   const contextInfo = context && Object.keys(context).length > 0
     ? `\nINFO YA CONOCIDA DEL CLIENTE: ${JSON.stringify(context)}\nUsá esto para no preguntar de nuevo lo que ya sabés.`
@@ -179,14 +219,26 @@ async function generateClientSummary(history) {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     system: `Leé esta conversación y armá un resumen claro y profesional para confirmar con el cliente.
+
 Hablá en español argentino con "vos", tono profesional pero cercano.
-Empezá con algo como "Perfecto, te hago un resumen de lo que hablamos —" o "Bien, para asegurarme de que esté todo —".
-Mencioná el nombre del cliente. Explicá en 3-4 oraciones:
-- Qué necesita y qué problema le resuelve
-- Detalles clave (plataforma, funcionalidades principales, urgencia, presupuesto si lo mencionó)
-- Si detectaste alguna necesidad adicional durante la charla, incluila naturalmente
-Terminá con: "¿Está todo correcto o querés ajustar algo?"
-IMPORTANTE: el resumen tiene que sonar profesional y escrito por una persona. Sin viñetas, sin asteriscos, sin formato tipo sistema. Todo en oraciones naturales.`,
+
+Empezá DIRECTO con algo tipo "Te paso el resumen rápido, [Nombre]." o "Para chequear que esté todo bien:" o "Lo que me llevo de la charla:".
+
+PROHIBIDO:
+- Empezar con "Perfecto", "Excelente", "Genial", "Buenísimo", "Listo", "Dale"
+- Usar guiones largos (—). Punto, coma o nada.
+- Frases tipo "Te hago un resumen", "Para resumir", "En síntesis"
+
+Mencioná el nombre del cliente UNA vez.
+
+Explicá en 3-4 oraciones:
+- Qué necesita y qué problema resuelve
+- Detalles clave (plataforma, funcionalidades, urgencia, presupuesto si lo mencionó)
+- Si detectaste alguna necesidad adicional, incluila naturalmente
+
+Terminá con: "¿Está todo bien o querés ajustar algo?" o "¿Te suena? ¿Algo para cambiar?"
+
+IMPORTANTE: que suene escrito por una persona en WhatsApp. Sin viñetas, sin asteriscos, sin formato sistema. Oraciones naturales con largo variado.`,
     messages: [{ role: 'user', content: conversationText }],
   });
 
@@ -224,6 +276,64 @@ async function isOnTopic(userText, hasContext) {
 
   // Caso ambiguo: pasamos al agente principal con confianza (su system prompt sabe rechazar)
   return true;
+}
+
+// Belt-and-suspenders: limpia los tells de IA mas comunes que el modelo
+// puede generar aunque el system prompt los prohiba. Se aplica a TODO reply
+// antes de enviarlo al cliente.
+function humanize(text) {
+  if (!text || typeof text !== 'string') return text;
+  let out = text;
+
+  // 1. Em dashes (—) → coma. El tell mas fuerte de IA.
+  out = out.replace(/\s*—\s*/g, ', ');
+  // En dashes (–) tambien
+  out = out.replace(/\s*–\s*/g, ', ');
+
+  // 2. Openers prohibidos al inicio del mensaje (case insensitive, con o sin coma).
+  // Solo limpiamos cuando son la PRIMERA palabra del mensaje.
+  const bannedOpeners = [
+    'Perfecto', 'Excelente', 'Exacto', 'Genial', 'Buenísimo', 'Buenisimo',
+    'Listo', 'Dale', 'Bárbaro', 'Barbaro',
+  ];
+  for (const opener of bannedOpeners) {
+    // "Perfecto, Juan." → "Juan."
+    // "Perfecto. Lo que comentás..." → "Lo que comentás..."
+    // "Perfecto, eso tiene sentido." → "Eso tiene sentido."
+    const re = new RegExp(`^\\s*${opener}[,.\\s]+`, 'i');
+    out = out.replace(re, '');
+    // Capitalize la primera letra despues del trim
+    out = out.replace(/^([a-záéíóúñ])/, c => c.toUpperCase());
+  }
+
+  // 3. Meta-anuncios de pregunta. Sacarlos pero dejar el resto.
+  const metaPhrases = [
+    /\bTe hago una pregunta(?:\s+(?:estratégica|importante|de fondo|clave))?:\s*/gi,
+    /\bUna pregunta(?:\s+(?:importante|estratégica|de fondo|clave))?:\s*/gi,
+    /\bPregunta:\s*/gi,
+    /\bUna cosa más:\s*/gi,
+    /\bOtra cosa:\s*/gi,
+    /\bTe tiro una idea:\s*/gi,
+  ];
+  for (const re of metaPhrases) {
+    out = out.replace(re, '');
+  }
+
+  // 4. Cleanup: sacar comas/puntos/espacios sueltos al INICIO o sobrantes
+  // que puedan haber quedado por los strips anteriores
+  // (ej: "Excelente — eso..." → ", eso..." → "Eso...")
+  out = out.replace(/^[\s,.\-:;]+/, '');
+
+  // 5. Capitalizar inicio si quedo en minuscula despues de los strips
+  out = out.replace(/^([a-záéíóúñ¿¡])/, c => c.toUpperCase());
+
+  // 6. Trim general y collapse de espacios duplicados
+  out = out.replace(/[ \t]+/g, ' ').trim();
+
+  // 7. Espacios sobrantes antes de signos de puntuacion
+  out = out.replace(/\s+([.,;:!?])/g, '$1');
+
+  return out;
 }
 
 const OFF_TOPIC_REPLIES = [
@@ -290,6 +400,12 @@ async function handleMessage(phone, userText) {
     });
 
     let reply = response.content[0].text;
+
+    // Belt-and-suspenders: limpia tells de IA aunque el modelo se olvide.
+    // Lo aplicamos ANTES de los checks de marcadores [RESUMEN_LISTO]/etc
+    // porque humanize no toca corchetes ni los strings entre ellos.
+    reply = humanize(reply);
+
     let newStage = conv.stage;
     let report = conv.report;
 
@@ -305,7 +421,8 @@ async function handleMessage(phone, userText) {
 
       // Generar resumen casual para el cliente
       try {
-        const summary = await generateClientSummary([...history, { role: 'assistant', content: reply }]);
+        const rawSummary = await generateClientSummary([...history, { role: 'assistant', content: reply }]);
+        const summary = humanize(rawSummary);
         reply = reply ? `${reply}\n\n${summary}` : summary;
       } catch (err) {
         console.error('[agent] Error generating summary:', err.message);
