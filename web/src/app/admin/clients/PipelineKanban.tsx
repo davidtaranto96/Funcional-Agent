@@ -218,8 +218,8 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
         />
       </form>
 
-      {/* Stage filter pills */}
-      <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+      {/* Stage filter pills (con scroll horizontal en mobile) */}
+      <div className="flex items-center gap-1.5 mb-2 -mx-4 md:mx-0 px-4 md:px-0 overflow-x-auto md:overflow-visible md:flex-wrap pb-1">
         <FilterPill href={buildHref({ view, sort, search, showArchived, stage: '' })} active={!stageFilter || stageFilter === 'all'} count={stageCounts.all}>
           Todos
         </FilterPill>
@@ -237,9 +237,12 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
             </span>
           </FilterPill>
         ))}
-        {/* Display toggles (solo en kanban) */}
+      </div>
+
+      {/* Display toggles + counter (segunda fila en mobile, ml-auto en desktop) */}
+      <div className="flex items-center gap-1 mb-3 md:mb-4 justify-end">
         {view === 'kanban' && (
-          <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-1">
             <KanbanToggle
               active={compact}
               onClick={() => setCompact(c => !c)}
@@ -272,7 +275,7 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
 
       {/* View */}
       {view === 'kanban' ? (
-        <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-4">
+        <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-4 snap-x snap-mandatory md:snap-none scroll-smooth">
           <div className="flex gap-2 min-w-max">
             {visibleStages.map(stageKey => {
               const stage = STAGES.find(s => s.key === stageKey)!;
@@ -303,9 +306,11 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
                 );
               }
 
-              const colWidth = compact ? 'w-[220px]' : 'w-[280px]';
+              const colWidth = compact
+                ? 'w-[85vw] sm:w-[230px] md:w-[220px]'
+                : 'w-[88vw] sm:w-[280px]';
               return (
-                <div key={stageKey} className={`${colWidth} flex-shrink-0`}>
+                <div key={stageKey} className={`${colWidth} flex-shrink-0 snap-start md:snap-align-none`}>
                   <div className="flex items-center justify-between px-1 mb-2 h-[28px]">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: stage.dot, boxShadow: `0 0 8px ${stage.dot}` }} />
