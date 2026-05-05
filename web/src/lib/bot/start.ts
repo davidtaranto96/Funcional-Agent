@@ -150,6 +150,36 @@ async function processIncomingMessage({ fromKey, fromJid, text, audioBuffer, aud
     return;
   }
 
+  // Bot pausado para esta conversacion: guardamos el mensaje en history (para
+  // que David lo vea desde el admin web) pero NO respondemos. David toma
+  // control via el panel del cliente.
+  try {
+    const paused = await db.isBotPaused(fromKey);
+    if (paused) {
+      console.log(`[wa] ⏸ bot pausado para ${fromKey} — guardo mensaje sin responder`);
+      const conv = await db.getConversation(fromKey);
+      const history = conv?.history || [];
+      history.push({ role: 'user', content: actualText, ts: new Date().toISOString() });
+      await db.upsertConversation(fromKey, {
+        history,
+        stage: conv?.stage || 'greeting',
+        context: conv?.context || {},
+        report: conv?.report || null,
+      });
+      // Notif para que David sepa que entro un mensaje en una conversacion pausada
+      db.addNotification({
+        type: 'info',
+        title: `Mensaje nuevo (modo manual)`,
+        body: actualText.slice(0, 200),
+        phone: fromKey,
+      }).catch(() => {});
+      return;
+    }
+  } catch (err: any) {
+    console.error('[wa] error chequeando bot_paused:', err.message);
+    // Si falla el check, dejamos que el bot siga respondiendo (fail open)
+  }
+
   console.log(`[wa] ▶ llamando handleMessage para ${fromKey}, text="${actualText.slice(0, 60)}"`);
   let result: any;
   try {

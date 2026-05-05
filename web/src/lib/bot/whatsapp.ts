@@ -28,10 +28,17 @@ function getAuthDir(): string {
 }
 const logger = pino({ level: 'warn' });
 
-let sock: any = null;
 let connecting = false;
 let lastConnectedAt: Date | null = null;
 let consecutive405 = 0;
+
+// sock vive en globalThis: el socket de Baileys es un objeto en memoria, pero
+// el module se puede cargar en bundles separados (instrumentation.ts vs API
+// routes). globalThis es lo unico compartido entre instances en el mismo
+// proceso Node. Sin esto, sendMessage desde una API route ve sock=null.
+type SockGlobal = { __wpSock?: any };
+function getSock(): any { return (globalThis as unknown as SockGlobal).__wpSock || null; }
+function setSock(s: any): void { (globalThis as unknown as SockGlobal).__wpSock = s; }
 
 // Latest QR string emitido por Baileys — expuesto via /api/auth/whatsapp-qr
 // para que se pueda escanear desde el browser sin tener que mirar logs ASCII.
@@ -140,6 +147,7 @@ function splitMessage(text: string, maxLen = 4000): string[] {
 }
 
 export async function sendMessage(to: string, body: string): Promise<void> {
+  const sock = getSock();
   if (!sock) { console.error('[whatsapp] sendMessage llamado sin conexión activa'); return; }
   // Si nos pasan un JID raw (contiene @), lo usamos tal cual. Esto es clave
   // para chats @lid: si reconstruimos a @s.whatsapp.net el mensaje no llega.
@@ -158,6 +166,7 @@ export async function sendMessage(to: string, body: string): Promise<void> {
 }
 
 export async function sendMediaMessage(to: string, body: string, mediaUrlOrPath: string | string[]): Promise<void> {
+  const sock = getSock();
   if (!sock) { console.error('[whatsapp] sendMediaMessage sin conexión'); return; }
   const jid = dbKeyToJid(to);
   if (!jid) return;
@@ -236,7 +245,7 @@ export type IncomingMessage = {
 };
 
 export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) => Promise<void>): Promise<void> {
-  if (connecting || sock) return;
+  if (connecting || getSock()) return;
   connecting = true;
 
   const authDir = ensureAuthDir();
@@ -263,7 +272,7 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
     console.warn('[whatsapp] No pude fetchear version, default Baileys:', err.message);
   }
 
-  sock = makeWASocket({
+  const sock = makeWASocket({
     auth: state,
     logger,
     version,
@@ -273,6 +282,7 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
   });
+  setSock(sock);
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -306,7 +316,7 @@ export async function startWhatsApp(onIncomingMessage: (msg: IncomingMessage) =>
       setConnected(false);
       console.warn(`[whatsapp] ⚠️ Cerrada (code=${code}, msg="${errMsg}", reconnect=${shouldReconnect}, 405streak=${consecutive405})`);
       if (errData) console.warn(`[whatsapp]   error.data: ${errData}`);
-      sock = null;
+      setSock(null);
       connecting = false;
       if (shouldReconnect) {
         const delay = Math.min(15000, 3000 + consecutive405 * 2000);

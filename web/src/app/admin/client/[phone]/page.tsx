@@ -10,6 +10,7 @@ import {
 import { STAGES } from '@/lib/constants';
 import { phoneSlug, timeAgo } from '@/lib/utils';
 import { AnalyzeConversation } from './AnalyzeConversation';
+import { ManualControl } from './ManualControl';
 
 export const dynamic = 'force-dynamic';
 
@@ -327,6 +328,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
               </p>
             </Card>
           )}
+
+          {/* Manual control: pausar bot + caja para responder desde el admin */}
+          <ManualControl phone={decoded} initialPaused={conv.bot_paused === 1} />
 
           {/* Conversación */}
           <Card title={`Conversación (${(conv.history || []).length} mensajes)`}>

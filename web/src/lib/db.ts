@@ -37,6 +37,7 @@ export interface Conversation {
   notes: string;
   demo_notes: string;
   archived: number;
+  bot_paused: number;
   demo_started_at: string;
   created_at?: string;
   updated_at?: string;
@@ -247,6 +248,7 @@ export async function init() {
     `ALTER TABLE conversations ADD COLUMN demo_notes TEXT DEFAULT ''`,
     `ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0`,
     `ALTER TABLE conversations ADD COLUMN demo_started_at TEXT DEFAULT ''`,
+    `ALTER TABLE conversations ADD COLUMN bot_paused INTEGER DEFAULT 0`,
     `ALTER TABLE projects ADD COLUMN updates_log TEXT DEFAULT '[]'`,
     `ALTER TABLE projects ADD COLUMN is_personal INTEGER DEFAULT 0`,
     `ALTER TABLE projects ADD COLUMN deadline TEXT`,
@@ -314,6 +316,7 @@ function parseConv(row: Record<string, unknown>): Conversation {
     notes: String(row.notes || ''),
     demo_notes: String(row.demo_notes || ''),
     archived: Number(row.archived || 0),
+    bot_paused: Number(row.bot_paused || 0),
     demo_started_at: String(row.demo_started_at || ''),
     created_at: row.created_at as string | undefined,
     updated_at: row.updated_at as string | undefined,
@@ -542,7 +545,7 @@ export async function listAllClientsLite(includeArchived = false): Promise<Conve
 // los 3 ultimos era el cuello.
 export async function listAllClientsForKanban(includeArchived = false): Promise<Conversation[]> {
   await ensureInit();
-  const cols = 'phone, stage, client_stage, demo_status, report, updated_at, created_at, followup_sent, archived, drive_folder_id, demo_started_at';
+  const cols = 'phone, stage, client_stage, demo_status, report, updated_at, created_at, followup_sent, archived, drive_folder_id, demo_started_at, bot_paused';
   const sql = includeArchived
     ? `SELECT ${cols} FROM conversations ORDER BY updated_at DESC`
     : `SELECT ${cols} FROM conversations WHERE archived = 0 OR archived IS NULL ORDER BY updated_at DESC`;
@@ -568,6 +571,7 @@ export async function listAllClientsForKanban(includeArchived = false): Promise<
       notes: '',
       demo_notes: '',
       archived: Number(row.archived || 0),
+      bot_paused: Number(row.bot_paused || 0),
       demo_started_at: row.demo_started_at ? String(row.demo_started_at) : '',
       updated_at: String(row.updated_at || ''),
       created_at: row.created_at ? String(row.created_at) : '',
@@ -584,6 +588,41 @@ export async function getClientsByStage(clientStage: string): Promise<Conversati
 export async function archiveConversation(phone: string): Promise<void> {
   await ensureInit();
   await getDb().execute({ sql: `UPDATE conversations SET archived = 1, updated_at = datetime('now') WHERE phone = ?`, args: [phone] });
+}
+
+// ─── Bot pause/resume ─────────────────────────────────────────────────────
+
+export async function setBotPaused(phone: string, paused: boolean): Promise<void> {
+  await ensureInit();
+  await getDb().execute({
+    sql: `UPDATE conversations SET bot_paused = ?, updated_at = datetime('now') WHERE phone = ?`,
+    args: [paused ? 1 : 0, phone],
+  });
+}
+
+export async function isBotPaused(phone: string): Promise<boolean> {
+  await ensureInit();
+  const result = await getDb().execute({
+    sql: `SELECT bot_paused FROM conversations WHERE phone = ?`,
+    args: [phone],
+  });
+  if (!result.rows.length) return false;
+  return Number((result.rows[0] as Record<string, unknown>).bot_paused || 0) === 1;
+}
+
+// Para que el "Apendice de mensaje manual de David" quede en el history.
+// role: 'assistant' para que se vea como respuesta del bot (visualmente
+// no se distingue), pero metadata 'manual: true' por si despues queremos
+// diferenciar.
+export async function appendManualMessage(phone: string, content: string): Promise<void> {
+  await ensureInit();
+  const conv = await getConversation(phone);
+  const history = conv?.history || [];
+  history.push({ role: 'assistant', content, ts: new Date().toISOString() });
+  await getDb().execute({
+    sql: `UPDATE conversations SET history = ?, updated_at = datetime('now') WHERE phone = ?`,
+    args: [JSON.stringify(history), phone],
+  });
 }
 
 export async function unarchiveConversation(phone: string): Promise<void> {
