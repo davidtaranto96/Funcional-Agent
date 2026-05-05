@@ -8,10 +8,11 @@ import {
   Eye, MapPin, Briefcase, Mail, Calendar,
 } from 'lucide-react';
 import { STAGES } from '@/lib/constants';
-import { phoneSlug, timeAgo } from '@/lib/utils';
+import { phoneSlug, timeAgo, formatPhoneDisplay, isLidKey, clientDisplayName } from '@/lib/utils';
 import { AnalyzeConversation } from './AnalyzeConversation';
 import { ManualControl } from './ManualControl';
 import { LeadScoreCard } from './LeadScoreCard';
+import { NicknameEditor } from './NicknameEditor';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
   const hasWA = fs.existsSync(path.join(localDir, 'whatsapp.html'));
   const hasPDF = fs.existsSync(path.join(localDir, 'propuesta.pdf'));
 
-  const nombre = conv.report?.cliente?.nombre || decoded;
+  // Display name con cascada de prioridades:
+  // 1. nickname (alias manual de David)
+  // 2. nombre del reporte del bot
+  // 3. phone formateado (o "LID #xxx" si es LID puro)
+  const reportName = conv.report?.cliente?.nombre || null;
+  const nombre = clientDisplayName({ nickname: conv.nickname, reportName, phone: decoded });
+  const phoneDisplay = formatPhoneDisplay(decoded);
+  const isLid = isLidKey(decoded);
   const cliente = conv.report?.cliente || {};
   const proyecto = conv.report?.proyecto || {};
   const requisitos = conv.report?.requisitos || {};
@@ -50,7 +58,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
 
   const stage = STAGES.find(s => s.key === conv.client_stage);
   const demoMeta = DEMO_STATUS_META[conv.demo_status] || DEMO_STATUS_META.none;
-  const waUrl = `https://wa.me/${decoded.replace(/\D/g, '')}`;
+  // wa.me solo funciona con numero real. Si es LID puro, no podemos abrir
+  // chat externo (el cel real no esta expuesto). Para responder se usa el
+  // panel manual que envia via Baileys directamente al JID @lid.
+  const waUrl = isLid ? null : `https://wa.me/${decoded.replace(/\D/g, '')}`;
 
   return (
     <div className="max-w-[1200px] mx-auto">
@@ -76,7 +87,23 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
           </div>
           <div className="min-w-0">
             <h1 className="text-[20px] font-bold tracking-tight text-foreground leading-tight">{nombre}</h1>
-            <div className="mono text-[12px] text-muted-foreground mt-0.5">{decoded}</div>
+            <div className="mono text-[12px] text-muted-foreground mt-0.5 flex items-center gap-2">
+              <span>{phoneDisplay}</span>
+              {isLid && (
+                <span
+                  className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-[var(--bg-inset)] text-muted-foreground border border-[var(--border)]"
+                  title="WhatsApp todavía no nos pasó el número real (formato @lid de multi-device). El bot puede responder igual al cliente, pero no tenemos su teléfono visible."
+                >
+                  sin número
+                </span>
+              )}
+            </div>
+            <NicknameEditor
+              phone={decoded}
+              currentName={conv.nickname || nombre}
+              hasReportName={!!reportName}
+              hasNickname={!!conv.nickname}
+            />
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {stage && (
                 <span
@@ -118,14 +145,23 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
-          <a
-            href={waUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[oklch(0.62_0.16_160_/_0.13)] text-[var(--green)] text-[12px] font-medium hover:bg-[oklch(0.62_0.16_160_/_0.20)] transition-colors"
-          >
-            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-          </a>
+          {waUrl ? (
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[oklch(0.62_0.16_160_/_0.13)] text-[var(--green)] text-[12px] font-medium hover:bg-[oklch(0.62_0.16_160_/_0.20)] transition-colors"
+            >
+              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+            </a>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[var(--bg-inset)] text-muted-foreground text-[12px] font-medium cursor-not-allowed"
+              title="No tenemos el número real (LID). Para responder usá el panel de abajo."
+            >
+              <MessageCircle className="w-3.5 h-3.5" /> Sin nº
+            </span>
+          )}
           {conv.demo_status === 'pending_review' && (
             <Link
               href={`/admin/review/${encodeURIComponent(decoded)}`}

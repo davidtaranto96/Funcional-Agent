@@ -7,7 +7,7 @@ import { Search, MessageCircle, ArrowRight, FolderPlus, Archive, Eye } from 'luc
 import { STAGES, type StageKey } from '@/lib/constants';
 import { showToast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/admin/ConfirmModal';
-import { timeAgo } from '@/lib/utils';
+import { timeAgo, clientDisplayName } from '@/lib/utils';
 import { Drawer } from '@/components/admin/Drawer';
 import type { Conversation } from '@/lib/db';
 
@@ -236,7 +236,11 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
                     className="bg-[var(--bg-inset)] rounded-[var(--r-md)] p-2 min-h-[400px] space-y-2 border border-dashed border-transparent hover:border-[var(--border-strong)] transition-colors"
                   >
                     {items.map(c => {
-                      const nombre = c.report?.cliente?.nombre || c.phone;
+                      const nombre = clientDisplayName({
+                        nickname: c.nickname,
+                        reportName: c.report?.cliente?.nombre,
+                        phone: c.phone,
+                      });
                       const initial = nombre.charAt(0).toUpperCase();
                       const isPending = c.demo_status === 'pending_review';
                       const tipo = c.report?.proyecto?.tipo;
@@ -347,7 +351,11 @@ function ListView({ clients, onSelect }: { clients: Conversation[]; onSelect: (c
         <tbody>
           {clients.map(c => {
             const stage = STAGES.find(s => s.key === c.client_stage);
-            const nombre = c.report?.cliente?.nombre || c.phone;
+            const nombre = clientDisplayName({
+              nickname: c.nickname,
+              reportName: c.report?.cliente?.nombre,
+              phone: c.phone,
+            });
             const steps = processSteps(c);
             const done = steps.filter(s => s.done).length;
             const pct = Math.round((done / steps.length) * 100);

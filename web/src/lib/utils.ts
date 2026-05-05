@@ -19,6 +19,44 @@ export function phoneSlug(phone: string | null | undefined): string {
   return (phone || '').replace(/[^0-9]/g, '');
 }
 
+// La key de WhatsApp puede venir en 3 formatos:
+//   whatsapp:+5493875454070     → numero clasico
+//   whatsapp:lid:64295677214803 → LID (formato 2024+, no es phone real)
+//   numero raw                  → fallback
+// Esta funcion devuelve un display amigable para mostrar en UI.
+export function formatPhoneDisplay(key: string | null | undefined): string {
+  if (!key) return '—';
+  if (key.startsWith('whatsapp:lid:')) {
+    const id = key.slice('whatsapp:lid:'.length);
+    // Mostramos los ultimos 4 digitos del LID como "id corto"
+    return `LID #${id.slice(-4)}`;
+  }
+  if (key.startsWith('whatsapp:+')) {
+    return key.slice('whatsapp:'.length);  // +5493875454070
+  }
+  if (key.startsWith('whatsapp:')) {
+    return '+' + key.slice('whatsapp:'.length).replace(/[^0-9]/g, '');
+  }
+  return key;
+}
+
+// Devuelve true si la key es un LID (sin numero real conocido).
+export function isLidKey(key: string | null | undefined): boolean {
+  return !!key && key.startsWith('whatsapp:lid:');
+}
+
+// Display name con cascada de prioridades:
+//   nickname (alias manual de David)  >  nombre del reporte  >  phone formateado
+export function clientDisplayName(args: {
+  nickname?: string | null;
+  reportName?: string | null;
+  phone: string | null | undefined;
+}): string {
+  if (args.nickname && args.nickname.trim()) return args.nickname.trim();
+  if (args.reportName && args.reportName.trim()) return args.reportName.trim();
+  return formatPhoneDisplay(args.phone);
+}
+
 export function timeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return '—';
   const d = dateStr + (dateStr.endsWith('Z') ? '' : 'Z');

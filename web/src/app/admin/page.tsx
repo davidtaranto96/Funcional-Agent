@@ -3,7 +3,7 @@ import { STAGES, type StageKey } from '@/lib/constants';
 import { KPICard } from '@/components/admin/KPICard';
 import { DashboardHeader } from '@/components/admin/DashboardHeader';
 import { Badge } from '@/components/ui/badge';
-import { timeAgo, formatARS } from '@/lib/utils';
+import { timeAgo, formatARS, clientDisplayName } from '@/lib/utils';
 import Link from 'next/link';
 import {
   Eye, AlertTriangle, Calendar, Receipt, FileCheck, MessageCircle, FolderKanban,
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
       const isDemo = c.demo_status === 'sent' || c.demo_status === 'pending_review' || c.demo_status === 'approved';
       return {
         type: (isDemo ? 'demo' : 'lead') as ActivityEvent['type'],
-        title: c.clientName || c.phone,
+        title: clientDisplayName({ nickname: c.nickname, reportName: c.clientName, phone: c.phone }),
         sub: stage?.label || c.client_stage,
         href: `/admin/client/${encodeURIComponent(c.phone)}`,
         ts: c.updated_at || '',
@@ -234,7 +234,7 @@ export default async function DashboardPage() {
               <span key={c.phone}>
                 {i > 0 && ' · '}
                 <Link href={`/admin/review/${encodeURIComponent(c.phone)}`} className="underline">
-                  {c.clientName || c.phone}
+                  {clientDisplayName({ nickname: c.nickname, reportName: c.clientName, phone: c.phone })}
                 </Link>
               </span>
             ))}
@@ -477,7 +477,7 @@ interface NextAction {
 }
 
 function computeNextAction(args: {
-  pendingReview: { phone: string; clientName: string | null }[];
+  pendingReview: { phone: string; clientName: string | null; nickname: string }[];
   enrichedInvoices: { id: string; status: string; client_name: string; number: string; amount: number; due_date: string }[];
   projects: { id: string; title: string; tasks: { text: string; done?: boolean; due_date?: string }[] }[];
   todayISO: string;
@@ -498,7 +498,7 @@ function computeNextAction(args: {
   if (args.pendingReview.length > 0) {
     const c = args.pendingReview[0];
     return {
-      title: `Revisar demo: ${c.clientName || c.phone}`,
+      title: `Revisar demo: ${clientDisplayName({ nickname: c.nickname, reportName: c.clientName, phone: c.phone })}`,
       sub: 'El bot generó el demo. Aprobá o pedí cambios antes de enviar al cliente.',
       cta: 'Revisar',
       href: `/admin/review/${encodeURIComponent(c.phone)}`,
