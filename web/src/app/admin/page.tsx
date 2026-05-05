@@ -71,6 +71,29 @@ export default async function DashboardPage() {
     return { ...s, count, pct };
   });
 
+  // Lead score breakdown
+  const hotLeads = clients.filter(c => c.lead_score === 'hot');
+  const warmLeads = clients.filter(c => c.lead_score === 'warm');
+  const coldLeads = clients.filter(c => c.lead_score === 'cold');
+  const unscored = clients.filter(c => !c.lead_score);
+
+  // Conversion rate del funnel: cuantos llegan a meeting o won
+  const reachedMeeting = clients.filter(c =>
+    c.client_stage === 'negotiating' || c.client_stage === 'won'
+  ).length;
+  const reachedWon = clients.filter(c => c.client_stage === 'won').length;
+  const conversionToMeeting = clients.length > 0 ? Math.round((reachedMeeting / clients.length) * 100) : 0;
+  const conversionToWon = clients.length > 0 ? Math.round((reachedWon / clients.length) * 100) : 0;
+
+  // Drop-off: que stages tienen mas leads "estancados" hace tiempo
+  const todayMs = Date.now();
+  const stuck = clients.filter(c => {
+    if (c.client_stage === 'won' || c.client_stage === 'lost' || c.client_stage === 'dormant') return false;
+    if (!c.updated_at) return false;
+    const lastMs = new Date(c.updated_at.replace(' ', 'T') + 'Z').getTime();
+    return (todayMs - lastMs) > 5 * 86400000; // mas de 5 dias sin movimiento
+  }).length;
+
   // Tu próxima acción (en orden de prioridad)
   const nextAction = computeNextAction({ pendingReview, enrichedInvoices, projects, todayISO });
 
@@ -317,6 +340,86 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* Row 1.5: Métricas del funnel — leads scoreados + conversion + drop-off */}
+      {clients.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          {/* Lead scores breakdown */}
+          <div className="bg-card rounded-[var(--r-lg)] border border-[var(--border)] shadow-[var(--shadow-soft)] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13px] font-semibold text-foreground">Lead scoring</span>
+              <span className="mono text-[10px] text-muted-foreground">{clients.length} totales</span>
+            </div>
+            <div className="space-y-2">
+              <ScoreBar label="HOT"  count={hotLeads.length}  total={clients.length} color="oklch(0.62 0.22 27)"  />
+              <ScoreBar label="WARM" count={warmLeads.length} total={clients.length} color="oklch(0.74 0.16 75)"  />
+              <ScoreBar label="COLD" count={coldLeads.length} total={clients.length} color="oklch(0.62 0.16 200)" />
+              <ScoreBar label="Sin scorear" count={unscored.length} total={clients.length} color="var(--text-3)" />
+            </div>
+            {hotLeads.length > 0 && (
+              <Link
+                href="/admin/clients"
+                className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--red)] hover:underline"
+              >
+                <span className="w-1 h-1 rounded-full bg-[var(--red)]" />
+                {hotLeads.length} hot lead{hotLeads.length === 1 ? '' : 's'} para atender ahora
+              </Link>
+            )}
+          </div>
+
+          {/* Conversion rates */}
+          <div className="bg-card rounded-[var(--r-lg)] border border-[var(--border)] shadow-[var(--shadow-soft)] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13px] font-semibold text-foreground">Conversión</span>
+              <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="text-[11px] text-muted-foreground">Lead → Reunión</span>
+                  <span className="mono text-[16px] font-bold text-foreground">{conversionToMeeting}%</span>
+                </div>
+                <div className="h-1 rounded-sm bg-[var(--bg-inset)] overflow-hidden">
+                  <div className="h-full rounded-sm" style={{ width: `${Math.max(conversionToMeeting, 2)}%`, background: 'oklch(0.62 0.18 250)' }} />
+                </div>
+                <span className="mono text-[10px] text-muted-foreground">{reachedMeeting} de {clients.length}</span>
+              </div>
+              <div>
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="text-[11px] text-muted-foreground">Lead → Cerrado (won)</span>
+                  <span className="mono text-[16px] font-bold text-foreground">{conversionToWon}%</span>
+                </div>
+                <div className="h-1 rounded-sm bg-[var(--bg-inset)] overflow-hidden">
+                  <div className="h-full rounded-sm" style={{ width: `${Math.max(conversionToWon, 2)}%`, background: 'oklch(0.62 0.16 160)' }} />
+                </div>
+                <span className="mono text-[10px] text-muted-foreground">{reachedWon} de {clients.length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Drop-off / leads estancados */}
+          <div className="bg-card rounded-[var(--r-lg)] border border-[var(--border)] shadow-[var(--shadow-soft)] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13px] font-semibold text-foreground">Atención requerida</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between py-1">
+                <span className="text-[12px] text-foreground">{'Leads estancados (>5d)'}</span>
+                <span className="mono text-[14px] font-bold" style={{ color: stuck > 0 ? 'oklch(0.74 0.16 75)' : 'var(--text-3)' }}>{stuck}</span>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-[12px] text-foreground">Demos pendientes</span>
+                <span className="mono text-[14px] font-bold" style={{ color: pendingReview.length > 0 ? 'oklch(0.74 0.16 75)' : 'var(--text-3)' }}>{pendingReview.length}</span>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-[12px] text-foreground">Facturas vencidas</span>
+                <span className="mono text-[14px] font-bold" style={{ color: overdueCount > 0 ? 'var(--red)' : 'var(--text-3)' }}>{overdueCount}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Row 2: Proyectos activos */}
       {topProjects.length > 0 && (
         <div className="bg-card rounded-[var(--r-lg)] border border-[var(--border)] shadow-[var(--shadow-soft)]">
@@ -472,6 +575,26 @@ function buildLast4Weeks(invoices: { paid_at: string; amount: number; currency: 
     if (b) b.v += inv.amount;
   }
   return buckets;
+}
+
+function ScoreBar({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-[11px] font-semibold text-foreground" style={{ color: count > 0 ? color : 'var(--text-3)' }}>{label}</span>
+        <span className="mono text-[11px] text-muted-foreground">
+          <span className="text-foreground font-semibold">{count}</span> · {pct}%
+        </span>
+      </div>
+      <div className="h-1 rounded-sm bg-[var(--bg-inset)] overflow-hidden">
+        <div
+          className="h-full rounded-sm transition-all"
+          style={{ width: `${Math.max(pct, count > 0 ? 4 : 0)}%`, background: color }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function MiniBars({ data }: { data: { label: string; v: number }[] }) {

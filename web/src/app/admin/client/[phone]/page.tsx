@@ -11,8 +11,15 @@ import { STAGES } from '@/lib/constants';
 import { phoneSlug, timeAgo } from '@/lib/utils';
 import { AnalyzeConversation } from './AnalyzeConversation';
 import { ManualControl } from './ManualControl';
+import { LeadScoreCard } from './LeadScoreCard';
 
 export const dynamic = 'force-dynamic';
+
+const LEAD_SCORE_META: Record<string, { label: string; color: string }> = {
+  hot:  { label: 'HOT',  color: 'oklch(0.62 0.22 27)'  },
+  warm: { label: 'WARM', color: 'oklch(0.74 0.16 75)'  },
+  cold: { label: 'COLD', color: 'oklch(0.62 0.16 200)' },
+};
 
 const DEMO_STATUS_META: Record<string, { label: string; color: string }> = {
   none:           { label: 'Sin demo',         color: 'oklch(0.5 0.05 250)' },
@@ -92,6 +99,19 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
               >
                 Demo: {demoMeta.label}
               </span>
+              {conv.lead_score && (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider rounded px-2 py-1"
+                  style={{
+                    background: `color-mix(in oklch, ${LEAD_SCORE_META[conv.lead_score].color} 14%, transparent)`,
+                    color: LEAD_SCORE_META[conv.lead_score].color,
+                  }}
+                  title={conv.lead_score_reason || 'Sin razón guardada'}
+                >
+                  <span className="w-1 h-1 rounded-full" style={{ background: LEAD_SCORE_META[conv.lead_score].color }} />
+                  Lead {LEAD_SCORE_META[conv.lead_score].label}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -328,6 +348,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
               </p>
             </Card>
           )}
+
+          {/* Lead score card */}
+          <LeadScoreCard
+            phone={decoded}
+            score={conv.lead_score}
+            reason={conv.lead_score_reason}
+            scoredAt={conv.lead_score_at}
+          />
 
           {/* Manual control: pausar bot + caja para responder desde el admin */}
           <ManualControl phone={decoded} initialPaused={conv.bot_paused === 1} />

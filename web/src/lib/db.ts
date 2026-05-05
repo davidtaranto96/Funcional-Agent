@@ -38,6 +38,9 @@ export interface Conversation {
   demo_notes: string;
   archived: number;
   bot_paused: number;
+  lead_score: string;          // 'hot' | 'warm' | 'cold' | ''
+  lead_score_reason: string;
+  lead_score_at: string;
   demo_started_at: string;
   created_at?: string;
   updated_at?: string;
@@ -249,6 +252,9 @@ export async function init() {
     `ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0`,
     `ALTER TABLE conversations ADD COLUMN demo_started_at TEXT DEFAULT ''`,
     `ALTER TABLE conversations ADD COLUMN bot_paused INTEGER DEFAULT 0`,
+    `ALTER TABLE conversations ADD COLUMN lead_score TEXT DEFAULT ''`,
+    `ALTER TABLE conversations ADD COLUMN lead_score_reason TEXT DEFAULT ''`,
+    `ALTER TABLE conversations ADD COLUMN lead_score_at TEXT DEFAULT ''`,
     `ALTER TABLE projects ADD COLUMN updates_log TEXT DEFAULT '[]'`,
     `ALTER TABLE projects ADD COLUMN is_personal INTEGER DEFAULT 0`,
     `ALTER TABLE projects ADD COLUMN deadline TEXT`,
@@ -317,6 +323,9 @@ function parseConv(row: Record<string, unknown>): Conversation {
     demo_notes: String(row.demo_notes || ''),
     archived: Number(row.archived || 0),
     bot_paused: Number(row.bot_paused || 0),
+    lead_score: String(row.lead_score || ''),
+    lead_score_reason: String(row.lead_score_reason || ''),
+    lead_score_at: String(row.lead_score_at || ''),
     demo_started_at: String(row.demo_started_at || ''),
     created_at: row.created_at as string | undefined,
     updated_at: row.updated_at as string | undefined,
@@ -509,12 +518,15 @@ export interface ConversationLite {
   created_at: string;
   clientName: string | null;
   projectType: string | null;
+  lead_score: string;
+  lead_score_reason: string;
 }
 
 export async function listAllClientsLite(includeArchived = false): Promise<ConversationLite[]> {
   await ensureInit();
   const cols = `
     phone, stage, client_stage, demo_status, followup_sent, archived, updated_at, created_at,
+    lead_score, lead_score_reason,
     json_extract(report, '$.cliente.nombre') as clientName,
     json_extract(report, '$.proyecto.tipo') as projectType
   `;
@@ -533,6 +545,8 @@ export async function listAllClientsLite(includeArchived = false): Promise<Conve
       archived: Number(row.archived || 0),
       updated_at: String(row.updated_at || ''),
       created_at: String(row.created_at || ''),
+      lead_score: String(row.lead_score || ''),
+      lead_score_reason: String(row.lead_score_reason || ''),
       clientName: row.clientName ? String(row.clientName) : null,
       projectType: row.projectType ? String(row.projectType) : null,
     };
@@ -545,7 +559,7 @@ export async function listAllClientsLite(includeArchived = false): Promise<Conve
 // los 3 ultimos era el cuello.
 export async function listAllClientsForKanban(includeArchived = false): Promise<Conversation[]> {
   await ensureInit();
-  const cols = 'phone, stage, client_stage, demo_status, report, updated_at, created_at, followup_sent, archived, drive_folder_id, demo_started_at, bot_paused';
+  const cols = 'phone, stage, client_stage, demo_status, report, updated_at, created_at, followup_sent, archived, drive_folder_id, demo_started_at, bot_paused, lead_score, lead_score_reason, lead_score_at';
   const sql = includeArchived
     ? `SELECT ${cols} FROM conversations ORDER BY updated_at DESC`
     : `SELECT ${cols} FROM conversations WHERE archived = 0 OR archived IS NULL ORDER BY updated_at DESC`;
@@ -572,6 +586,9 @@ export async function listAllClientsForKanban(includeArchived = false): Promise<
       demo_notes: '',
       archived: Number(row.archived || 0),
       bot_paused: Number(row.bot_paused || 0),
+      lead_score: String(row.lead_score || ''),
+      lead_score_reason: String(row.lead_score_reason || ''),
+      lead_score_at: String(row.lead_score_at || ''),
       demo_started_at: row.demo_started_at ? String(row.demo_started_at) : '',
       updated_at: String(row.updated_at || ''),
       created_at: row.created_at ? String(row.created_at) : '',
@@ -608,6 +625,16 @@ export async function isBotPaused(phone: string): Promise<boolean> {
   });
   if (!result.rows.length) return false;
   return Number((result.rows[0] as Record<string, unknown>).bot_paused || 0) === 1;
+}
+
+// ─── Lead scoring ────────────────────────────────────────────────────────
+
+export async function setLeadScore(phone: string, score: 'hot' | 'warm' | 'cold', reason: string): Promise<void> {
+  await ensureInit();
+  await getDb().execute({
+    sql: `UPDATE conversations SET lead_score = ?, lead_score_reason = ?, lead_score_at = datetime('now'), updated_at = datetime('now') WHERE phone = ?`,
+    args: [score, reason, phone],
+  });
 }
 
 // Para que el "Apendice de mensaje manual de David" quede en el history.

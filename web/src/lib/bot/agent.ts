@@ -7,7 +7,7 @@ const anthropic = new Anthropic();
 // Lock por teléfono para evitar race conditions con mensajes rápidos
 const locks = new Map();
 
-function buildSystemPrompt(stage, context) {
+function buildSystemPrompt(stage, context, memory) {
   const persona = `Sos el asistente comercial de David Taranto, desarrollador freelance de Salta, Argentina. David crea soluciones digitales a medida: páginas web, sistemas de gestión, tiendas online, automatizaciones, apps — lo que el negocio necesite.
 
 QUIÉN SOS:
@@ -234,6 +234,23 @@ Bot: "¿Qué esperás que la página te resuelva? ¿Que te encuentren en Google,
     ? `\nINFO YA CONOCIDA DEL CLIENTE: ${JSON.stringify(context)}\nUsá esto para no preguntar de nuevo lo que ya sabés.`
     : '';
 
+  // Memoria de conversaciones previas: cuando un cliente que ya hablo antes
+  // vuelve despues de un tiempo, le agregamos contexto al prompt para que el
+  // bot lo reconozca y retome desde donde dejaron.
+  const memoryBlock = memory
+    ? `\n\nMEMORIA DE CONVERSACIONES PREVIAS (este cliente YA habló con vos antes):
+${memory}
+
+INSTRUCCIONES PARA MANEJAR EL RETORNO:
+- El primer mensaje, RECONOCELO: "Hola [Nombre]! ¿Cómo andás? Hace un tiempo
+  no hablábamos." (sin sonar a base de datos, sin "Veo que tu última conversación
+  fue el día X").
+- Si dejaron algo a medio hacer, ofrecele retomar: "¿Querés retomar lo de [tema] o
+  arrancamos algo nuevo?"
+- NO le hagas re-decir info que ya tenés (nombre, negocio, email).
+- Si paso mucho tiempo, validá: "¿Sigue en pie lo del proyecto X o cambió algo?"`
+    : '';
+
   const phases = {
     greeting: `FASE: PRIMER CONTACTO
 Saludá de forma profesional y cálida. Presentate como parte del equipo de David.
@@ -363,7 +380,61 @@ Ya hay una reunión agendada con David. El cliente está a un paso de arrancar s
 Mantené el tono profesional y entusiasta — el proyecto está por arrancar`,
   };
 
-  return `${persona}${contextInfo}\n\n${phases[stage]}`;
+  return `${persona}${contextInfo}${memoryBlock}\n\n${phases[stage]}`;
+}
+
+// Construye un resumen del historico previo para inyectar al prompt cuando el
+// cliente vuelve despues de un tiempo. Devuelve null si no hay nada que valga.
+function buildMemoryBlock(conv) {
+  if (!conv) return null;
+  const history = conv.history || [];
+  if (history.length < 4) return null;  // muy poca charla, no vale la pena
+
+  // Si el ultimo mensaje fue hace MENOS de 7 dias, esta "fresco" — no hace
+  // falta memoria, el bot ya lo va a tener en el history que mandamos.
+  const lastTs = conv.updated_at;
+  if (lastTs) {
+    const lastMs = new Date(lastTs.includes('T') ? lastTs : lastTs.replace(' ', 'T') + 'Z').getTime();
+    const days = (Date.now() - lastMs) / 86400000;
+    if (days < 7) return null;
+  }
+
+  const parts = [];
+  const nombre = conv.report?.cliente?.nombre || conv.context?.nombre;
+  if (nombre) parts.push(`- Nombre: ${nombre}`);
+
+  const tipo = conv.report?.proyecto?.tipo;
+  const desc = conv.report?.proyecto?.descripcion;
+  if (tipo) parts.push(`- Tipo de proyecto charlado: ${tipo}`);
+  if (desc) parts.push(`- Descripcion del proyecto: ${desc.slice(0, 200)}`);
+
+  const lastEvent = (conv.timeline || []).slice(-1)[0];
+  if (lastEvent) parts.push(`- Ultima accion en su timeline: ${lastEvent.event}${lastEvent.note ? ` (${lastEvent.note.slice(0, 100)})` : ''}`);
+
+  if (conv.demo_status && conv.demo_status !== 'none') {
+    parts.push(`- Estado de su demo: ${conv.demo_status}`);
+  }
+  if (conv.client_stage && conv.client_stage !== 'lead') {
+    parts.push(`- Etapa comercial: ${conv.client_stage}`);
+  }
+
+  // Ultima frase del cliente (puede dar contexto del por que se desconecto)
+  const lastUserMsg = [...history].reverse().find(m => m.role === 'user');
+  if (lastUserMsg) parts.push(`- Ultimo mensaje de el/ella: "${lastUserMsg.content.slice(0, 150)}"`);
+
+  if (parts.length === 0) return null;
+
+  // Calcular hace cuánto fue
+  let timeAgo = '';
+  if (lastTs) {
+    const lastMs = new Date(lastTs.includes('T') ? lastTs : lastTs.replace(' ', 'T') + 'Z').getTime();
+    const days = Math.floor((Date.now() - lastMs) / 86400000);
+    if (days < 30) timeAgo = ` (hace ${days} días)`;
+    else if (days < 365) timeAgo = ` (hace ${Math.floor(days / 30)} meses)`;
+    else timeAgo = ` (hace mas de un año)`;
+  }
+
+  return `Ultima vez que hablaron${timeAgo}:\n${parts.join('\n')}`;
 }
 
 // Genera un resumen casual del proyecto para mostrar al cliente
@@ -550,7 +621,11 @@ async function handleMessage(phone, userText) {
       }
     }
 
-    const systemPrompt = buildSystemPrompt(conv.stage, conv.context);
+    // Memoria cross-conversation: si el cliente vuelve despues de >7 dias y
+    // ya hubo charla previa significativa, le inyectamos un bloque de contexto
+    // al system prompt para que el bot lo reconozca naturalmente.
+    const memoryBlock = buildMemoryBlock(conv);
+    const systemPrompt = buildSystemPrompt(conv.stage, conv.context, memoryBlock);
     const trimmed = trimHistory(history);
 
     const response = await anthropic.messages.create({

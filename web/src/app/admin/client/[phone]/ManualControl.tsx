@@ -2,8 +2,21 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bot, Hand, Send, Loader2, MessageSquare } from 'lucide-react';
+import { Bot, Hand, Send, Loader2, MessageSquare, Zap } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
+
+// Templates de respuesta rapida. Editables aqui mismo, o moverlas a settings
+// si crece la lista. Cada template puede tener placeholder {nombre} que el
+// componente reemplaza con el nombre del cliente al pegar (futuro).
+const QUICK_REPLIES: Array<{ label: string; text: string }> = [
+  { label: '👀 Lo veo y te confirmo', text: 'Lo estoy viendo, en un rato te confirmo.' },
+  { label: '⏰ Estoy en reunión', text: 'Estoy en una reunión, te respondo apenas salga.' },
+  { label: '📋 Mañana propuesta', text: 'Mañana te paso la propuesta detallada con presupuesto y tiempos.' },
+  { label: '📞 Llamada esta semana', text: '¿Tenés un horario para una llamada corta esta semana? 30 min para afinar todo.' },
+  { label: '✅ Avanzamos', text: 'Listo, avanzamos. Te paso los próximos pasos.' },
+  { label: '💰 Pasame email', text: 'Pasame un email así te mando el presupuesto formal.' },
+  { label: '🤔 Necesito más info', text: 'Para armarte algo concreto necesito un par de datos más, te pregunto:' },
+];
 
 interface Props {
   phone: string;
@@ -136,6 +149,29 @@ export function ManualControl({ phone, initialPaused }: Props) {
           Escribí acá y se envía por WhatsApp al cliente. Queda en el historial como si lo hubiera mandado el bot.
           {!paused && ' Tip: pausá el bot antes para evitar que conteste mientras vos escribís.'}
         </p>
+
+        {/* Quick replies — pegan el texto en el textarea */}
+        <div className="mb-2">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Zap className="w-3 h-3 text-muted-foreground" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Respuestas rápidas</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_REPLIES.map(qr => (
+              <button
+                key={qr.label}
+                type="button"
+                onClick={() => setText(qr.text)}
+                disabled={sending}
+                className="inline-flex items-center text-[10.5px] font-medium px-2 py-1 rounded bg-[var(--bg-inset)] border border-[var(--border)] text-foreground hover:bg-[var(--bg-card-2)] hover:border-[var(--border-strong)] transition-colors disabled:opacity-50"
+                title={qr.text}
+              >
+                {qr.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}

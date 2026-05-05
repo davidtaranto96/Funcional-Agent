@@ -166,13 +166,21 @@ async function processIncomingMessage({ fromKey, fromJid, text, audioBuffer, aud
         context: conv?.context || {},
         report: conv?.report || null,
       });
-      // Notif para que David sepa que entro un mensaje en una conversacion pausada
+      // Notif en admin web
+      const clientName = conv?.report?.cliente?.nombre || fromKey;
       db.addNotification({
         type: 'info',
         title: `Mensaje nuevo (modo manual)`,
         body: actualText.slice(0, 200),
         phone: fromKey,
       }).catch(() => {});
+      // Notif por email (con cooldown de 10min interno)
+      (async () => {
+        try {
+          const { notifyManualMessage } = await import('./notify');
+          await notifyManualMessage(fromKey, clientName, actualText);
+        } catch (e: any) { console.error('[bg] notify manual:', e?.message); }
+      })();
       return;
     }
   } catch (err: any) {
@@ -242,6 +250,29 @@ async function processIncomingMessage({ fromKey, fromJid, text, audioBuffer, aud
   } catch (sendErr: any) {
     console.error(`[wa] ❌ sendMessage fallo:`, sendErr?.message, sendErr?.stack?.split('\n')[0]);
     return;
+  }
+
+  // Trigger lead scoring en background cuando la conversacion alcanza estados
+  // maduros donde ya hay info suficiente para evaluar.
+  const SCORABLE_STAGES = ['confirming', 'done', 'awaiting_feedback', 'awaiting_slot', 'meeting_scheduled'];
+  if (SCORABLE_STAGES.includes(result.stage)) {
+    (async () => {
+      try {
+        const { scoreConversation } = await import('./scoring');
+        const score = await scoreConversation(fromKey);
+        console.log(`[wa] 🎯 lead score: ${score.score} (${score.reason.slice(0, 80)})`);
+
+        // Si quedo HOT, mandar email a David (con cooldown propio)
+        if (score.score === 'hot') {
+          const conv = await db.getConversation(fromKey);
+          const clientName = conv?.report?.cliente?.nombre || fromKey;
+          const { notifyHotLead } = await import('./notify');
+          await notifyHotLead(fromKey, clientName, score.reason);
+        }
+      } catch (err: any) {
+        console.error('[bg] score:', err?.message);
+      }
+    })();
   }
 
   // Background work
