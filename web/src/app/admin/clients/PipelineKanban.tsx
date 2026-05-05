@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, MessageCircle, ArrowRight, FolderPlus, Archive, Eye } from 'lucide-react';
+import { Search, MessageCircle, ArrowRight, FolderPlus, Archive, Eye, Maximize2, Minimize2, EyeOff, Hand, Flame, Snowflake, Thermometer } from 'lucide-react';
 import { STAGES, type StageKey } from '@/lib/constants';
 import { showToast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/admin/ConfirmModal';
-import { timeAgo, clientDisplayName } from '@/lib/utils';
+import { timeAgo, clientDisplayName, formatPhoneDisplay, isLidKey } from '@/lib/utils';
 import { Drawer } from '@/components/admin/Drawer';
 import type { Conversation } from '@/lib/db';
 
@@ -20,7 +20,14 @@ interface Props {
   showArchived: boolean;
 }
 
-const VISIBLE_STAGES: StageKey[] = ['lead', 'qualified', 'demo_pending', 'demo_sent', 'negotiating', 'won'];
+const VISIBLE_STAGES_FULL: StageKey[] = ['lead', 'qualified', 'demo_pending', 'demo_sent', 'negotiating', 'won', 'lost'];
+const VISIBLE_STAGES_ACTIVE: StageKey[] = ['lead', 'qualified', 'demo_pending', 'demo_sent', 'negotiating'];
+
+const SCORE_META: Record<string, { Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; color: string }> = {
+  hot:  { Icon: Flame,       color: 'oklch(0.62 0.22 27)'  },
+  warm: { Icon: Thermometer, color: 'oklch(0.74 0.16 75)'  },
+  cold: { Icon: Snowflake,   color: 'oklch(0.62 0.16 200)' },
+};
 
 // "Steps" del proceso (mirror del legacy processSteps).
 function processSteps(c: Conversation) {
@@ -44,6 +51,26 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
   const [search, setSearch] = useState(initialSearch);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const colRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Display preferences (persisted in localStorage)
+  const [compact, setCompact] = useState(false);
+  const [hideEmpty, setHideEmpty] = useState(false);
+  const [hideClosed, setHideClosed] = useState(true);  // por default escondemos won/lost
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = JSON.parse(localStorage.getItem('pd-kanban-prefs') || '{}');
+      if (typeof saved.compact === 'boolean') setCompact(saved.compact);
+      if (typeof saved.hideEmpty === 'boolean') setHideEmpty(saved.hideEmpty);
+      if (typeof saved.hideClosed === 'boolean') setHideClosed(saved.hideClosed);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('pd-kanban-prefs', JSON.stringify({ compact, hideEmpty, hideClosed }));
+  }, [compact, hideEmpty, hideClosed]);
 
   useEffect(() => { setClients(initial); }, [initial]);
   useEffect(() => { setSearch(initialSearch); }, [initialSearch]);
@@ -134,16 +161,22 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
     return list;
   }, [clients, search, sort, stageFilter]);
 
+  // Stages visibles segun toggle hideClosed
+  const visibleStages = useMemo<StageKey[]>(() => {
+    return hideClosed ? VISIBLE_STAGES_ACTIVE : VISIBLE_STAGES_FULL;
+  }, [hideClosed]);
+
   const byStage = useMemo(() => {
     const m = new Map<string, Conversation[]>();
-    for (const stage of VISIBLE_STAGES) m.set(stage, []);
+    for (const stage of visibleStages) m.set(stage, []);
     for (const c of filteredClients) {
+      if (!visibleStages.includes(c.client_stage as StageKey)) continue;
       const list = m.get(c.client_stage) || [];
       list.push(c);
       m.set(c.client_stage, list);
     }
     return m;
-  }, [filteredClients]);
+  }, [filteredClients, visibleStages]);
 
   // Stage filter pills (counts del SET COMPLETO no filtrado por stage)
   const stageCounts = useMemo(() => {
@@ -204,27 +237,82 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
             </span>
           </FilterPill>
         ))}
-        <span className="ml-auto text-[11px] text-muted-foreground mono self-center">
-          {filteredClients.length} resultado{filteredClients.length !== 1 ? 's' : ''}
-        </span>
+        {/* Display toggles (solo en kanban) */}
+        {view === 'kanban' && (
+          <div className="flex items-center gap-1 ml-auto">
+            <KanbanToggle
+              active={compact}
+              onClick={() => setCompact(c => !c)}
+              icon={compact ? <Maximize2 className="w-3 h-3" /> : <Minimize2 className="w-3 h-3" />}
+              title={compact ? 'Vista cómoda' : 'Vista compacta'}
+            />
+            <KanbanToggle
+              active={hideEmpty}
+              onClick={() => setHideEmpty(c => !c)}
+              icon={<EyeOff className="w-3 h-3" />}
+              title={hideEmpty ? 'Mostrar columnas vacías' : 'Esconder columnas vacías'}
+            />
+            <KanbanToggle
+              active={hideClosed}
+              onClick={() => setHideClosed(c => !c)}
+              icon={<Archive className="w-3 h-3" />}
+              title={hideClosed ? 'Mostrar Ganados/Perdidos' : 'Esconder Ganados/Perdidos'}
+            />
+            <span className="text-[11px] text-muted-foreground mono self-center ml-2">
+              {filteredClients.length} resultado{filteredClients.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
+        {view !== 'kanban' && (
+          <span className="ml-auto text-[11px] text-muted-foreground mono self-center">
+            {filteredClients.length} resultado{filteredClients.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* View */}
       {view === 'kanban' ? (
         <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-4">
-          <div className="flex gap-3 min-w-max">
-            {VISIBLE_STAGES.map(stageKey => {
+          <div className="flex gap-2 min-w-max">
+            {visibleStages.map(stageKey => {
               const stage = STAGES.find(s => s.key === stageKey)!;
               const items = byStage.get(stageKey) || [];
+              const isEmpty = items.length === 0;
+
+              // Columna colapsada: solo barra delgada con label rotado
+              if (hideEmpty && isEmpty) {
+                return (
+                  <div key={stageKey} className="w-[40px] flex-shrink-0">
+                    <div className="flex flex-col items-center gap-2 px-1 mb-2 h-[28px] justify-center">
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: stage.dot }} />
+                    </div>
+                    <div
+                      data-stage={stageKey}
+                      ref={el => { if (el) colRefs.current.set(stageKey, el); }}
+                      className="bg-[var(--bg-inset)] rounded-[var(--r-md)] min-h-[400px] flex items-start justify-center pt-4 border border-dashed border-transparent hover:border-[var(--border-strong)] transition-colors"
+                      title={`${stage.label} (vacía) — arrastrá acá para mover`}
+                    >
+                      <span
+                        className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold whitespace-nowrap"
+                        style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                      >
+                        {stage.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
+              const colWidth = compact ? 'w-[220px]' : 'w-[280px]';
               return (
-                <div key={stageKey} className="w-[280px] flex-shrink-0">
-                  <div className="flex items-center justify-between px-1 mb-2">
-                    <div className="flex items-center gap-2">
+                <div key={stageKey} className={`${colWidth} flex-shrink-0`}>
+                  <div className="flex items-center justify-between px-1 mb-2 h-[28px]">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: stage.dot, boxShadow: `0 0 8px ${stage.dot}` }} />
-                      <span className="text-[12px] font-semibold text-foreground">{stage.label}</span>
+                      <span className="text-[12px] font-semibold text-foreground truncate">{stage.label}</span>
                     </div>
                     <span
-                      className="mono text-[10px] font-semibold text-muted-foreground rounded-full px-1.5 py-0.5"
+                      className="mono text-[10px] font-semibold text-muted-foreground rounded-full px-1.5 py-0.5 flex-shrink-0"
                       style={{ background: 'color-mix(in oklch, var(--bg-inset) 80%, transparent)' }}
                     >
                       {items.length}
@@ -233,51 +321,19 @@ export function PipelineKanban({ clients: initial, view, sort, search: initialSe
                   <div
                     data-stage={stageKey}
                     ref={el => { if (el) colRefs.current.set(stageKey, el); }}
-                    className="bg-[var(--bg-inset)] rounded-[var(--r-md)] p-2 min-h-[400px] space-y-2 border border-dashed border-transparent hover:border-[var(--border-strong)] transition-colors"
+                    className={`bg-[var(--bg-inset)] rounded-[var(--r-md)] ${compact ? 'p-1.5 space-y-1.5' : 'p-2 space-y-2'} min-h-[400px] border border-dashed border-transparent hover:border-[var(--border-strong)] transition-colors`}
                   >
-                    {items.map(c => {
-                      const nombre = clientDisplayName({
-                        nickname: c.nickname,
-                        reportName: c.report?.cliente?.nombre,
-                        phone: c.phone,
-                      });
-                      const initial = nombre.charAt(0).toUpperCase();
-                      const isPending = c.demo_status === 'pending_review';
-                      const tipo = c.report?.proyecto?.tipo;
-                      return (
-                        <button
-                          key={c.phone}
-                          type="button"
-                          data-phone={c.phone}
-                          onClick={() => setSelected(c)}
-                          className={`w-full text-left bg-card rounded-[var(--r-md)] p-3 cursor-grab active:cursor-grabbing border transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)] ${
-                            isPending ? 'border-[var(--amber)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'
-                          }`}
-                        >
-                          <div className="flex items-start gap-2 mb-2">
-                            <div
-                              className="w-7 h-7 rounded-full grid place-items-center text-[10px] font-bold flex-shrink-0 text-white"
-                              style={{ background: stage.dot }}
-                            >
-                              {initial}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[12px] font-medium text-foreground truncate">{nombre}</div>
-                              <div className="mono text-[10px] text-muted-foreground truncate">{c.phone}</div>
-                            </div>
-                          </div>
-                          {tipo && <div className="text-[11px] text-muted-foreground mb-1.5 truncate">{tipo}</div>}
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground">{timeAgo(c.updated_at)}</span>
-                            {isPending && (
-                              <span className="text-[10px] font-bold text-[var(--amber)] uppercase tracking-wider">Demo lista</span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {items.map(c => (
+                      <KanbanCard
+                        key={c.phone}
+                        client={c}
+                        stageDot={stage.dot}
+                        compact={compact}
+                        onClick={() => setSelected(c)}
+                      />
+                    ))}
                     {items.length === 0 && (
-                      <div className="text-center text-[10px] text-muted-foreground py-8 px-2">Arrastrá contactos acá</div>
+                      <div className="text-center text-[10px] text-muted-foreground py-8 px-2">Arrastrá acá</div>
                     )}
                   </div>
                 </div>
@@ -303,6 +359,116 @@ function buildHref(opts: { view: string; sort: string; search: string; showArchi
   if (opts.stage) params.set('stage', opts.stage);
   const q = params.toString();
   return `/admin/clients${q ? '?' + q : ''}`;
+}
+
+function KanbanToggle({ active, onClick, icon, title }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={`grid place-items-center w-7 h-7 rounded-md border transition-colors ${
+        active
+          ? 'bg-[var(--accent-dim)] border-[color-mix(in_oklch,var(--accent)_30%,transparent)] text-[var(--accent-strong)]'
+          : 'bg-[var(--bg-card-2)] border-transparent text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function KanbanCard({ client: c, stageDot, compact, onClick }: {
+  client: Conversation;
+  stageDot: string;
+  compact: boolean;
+  onClick: () => void;
+}) {
+  const nombre = clientDisplayName({
+    nickname: c.nickname,
+    reportName: c.report?.cliente?.nombre,
+    phone: c.phone,
+  });
+  const initial = nombre.charAt(0).toUpperCase();
+  const isPending = c.demo_status === 'pending_review';
+  const tipo = c.report?.proyecto?.tipo;
+  const phoneDisplay = formatPhoneDisplay(c.phone);
+  const lid = isLidKey(c.phone);
+  const score = c.lead_score;
+  const scoreMeta = score && SCORE_META[score];
+  const isPaused = c.bot_paused === 1;
+
+  // COMPACT: 1 línea con dot de stage + nombre + indicadores. Sin avatar circular.
+  if (compact) {
+    return (
+      <button
+        type="button"
+        data-phone={c.phone}
+        onClick={onClick}
+        className={`w-full text-left bg-card rounded-[var(--r-md)] px-2.5 py-2 cursor-grab active:cursor-grabbing border transition-all hover:shadow-[var(--shadow-soft)] ${
+          isPending ? 'border-[var(--amber)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'
+        }`}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {scoreMeta ? (
+            <scoreMeta.Icon className="w-3 h-3 flex-shrink-0" style={{ color: scoreMeta.color }} />
+          ) : (
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: stageDot }} />
+          )}
+          <span className="text-[12px] font-medium text-foreground truncate flex-1">{nombre}</span>
+          {isPaused && <Hand className="w-3 h-3 text-[var(--amber)] flex-shrink-0" />}
+          {isPending && <span className="text-[8px] font-bold text-[var(--amber)] uppercase tracking-wider flex-shrink-0">Demo</span>}
+        </div>
+        {(tipo || c.updated_at) && (
+          <div className="flex items-center justify-between gap-2 mt-1 pl-4">
+            <span className="text-[10px] text-muted-foreground truncate flex-1">{tipo || phoneDisplay}</span>
+            <span className="text-[9px] text-muted-foreground mono flex-shrink-0">{timeAgo(c.updated_at)}</span>
+          </div>
+        )}
+      </button>
+    );
+  }
+
+  // CÓMODO: layout más rico con avatar
+  return (
+    <button
+      type="button"
+      data-phone={c.phone}
+      onClick={onClick}
+      className={`w-full text-left bg-card rounded-[var(--r-md)] p-2.5 cursor-grab active:cursor-grabbing border transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)] ${
+        isPending ? 'border-[var(--amber)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'
+      }`}
+    >
+      <div className="flex items-start gap-2 mb-1.5">
+        <div
+          className="w-6 h-6 rounded-full grid place-items-center text-[10px] font-bold flex-shrink-0 text-white"
+          style={{ background: stageDot }}
+        >
+          {initial}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            <span className="text-[12px] font-medium text-foreground truncate flex-1">{nombre}</span>
+            {scoreMeta && <scoreMeta.Icon className="w-3 h-3 flex-shrink-0" style={{ color: scoreMeta.color }} />}
+            {isPaused && <Hand className="w-3 h-3 text-[var(--amber)] flex-shrink-0" />}
+          </div>
+          <div className="mono text-[9.5px] text-muted-foreground truncate">
+            {phoneDisplay}{lid && <span className="ml-1 opacity-60">(sin nº)</span>}
+          </div>
+        </div>
+      </div>
+      {tipo && <div className="text-[10.5px] text-muted-foreground mb-1 truncate pl-8">{tipo}</div>}
+      <div className="flex items-center justify-between pl-8">
+        <span className="text-[10px] text-muted-foreground">{timeAgo(c.updated_at)}</span>
+        {isPending && (
+          <span className="text-[9px] font-bold text-[var(--amber)] uppercase tracking-wider">Demo lista</span>
+        )}
+      </div>
+    </button>
+  );
 }
 
 function FilterPill({ href, active, count, color, children }: {
